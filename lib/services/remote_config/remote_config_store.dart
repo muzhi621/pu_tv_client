@@ -21,11 +21,17 @@ class RemoteConfigKeys {
 
 /// 本地持久化层。云端不可用时，这里就是唯一的配置来源。
 class RemoteConfigStore {
-  /// 编译期注入，避免把地址与令牌硬编码进源码：
+  /// 云端地址默认值：正式部署的 EdgeOne 配置服务。
+  ///
+  /// 需要换环境时用编译期覆盖，不鼓励改这里：
   /// flutter build apk --dart-define=PURE_LIVE_CONFIG_URL=https://... \
   ///                   --dart-define=PURE_LIVE_CONFIG_TOKEN=...
+  ///
+  /// 令牌默认为空：服务端若把 `CONFIG_READ_TOKEN` 留空即为公开读（推荐，配置本身
+  /// 不含敏感信息），这样 APK 开箱即用；需要读鉴权时再用 dart-define 注入。
+  static const String defaultEndpoint = 'https://tv.1008618.xyz';
   static const String compiledEndpoint =
-      String.fromEnvironment('PURE_LIVE_CONFIG_URL', defaultValue: '');
+      String.fromEnvironment('PURE_LIVE_CONFIG_URL', defaultValue: defaultEndpoint);
   static const String compiledToken =
       String.fromEnvironment('PURE_LIVE_CONFIG_TOKEN', defaultValue: '');
 

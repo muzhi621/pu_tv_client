@@ -1,8 +1,11 @@
 {
-  "version": "3.0.8",
-  "version_num": 130009,
-  "version_desc": "-Feature: 接入云端配置下发（站点可见性 / 导航菜单 / 启动弹窗 / 更新策略可在云端编辑并同步）\n-Fix: 修复 GitHub Actions 云端构建依赖，media_core 改为公开仓库固定 commit 依赖",
-  "prerelease":false,
-  "android_abis": ["armeabi-v7a", "arm64-v8a"],
+  "version": "3.0.9",
+  "version_num": 130010,
+  "version_desc": "-Feature: 内置云端配置服务地址，安装即可拉取站点显隐 / 导航 / 启动弹窗 / 更新策略\n-Perf: 默认只发 Impeller 变体，移除 x86_64，仅保留中文资源，安装包体积下降",
+  "prerelease": false,
+  "android_abis": [
+    "armeabi-v7a",
+    "arm64-v8a"
+  ],
   "download_url": "https://github.com/muzhi621/pu_tv_client/releases"
 }
