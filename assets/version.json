@@ -1,7 +1,7 @@
 {
-  "version": "3.0.9",
-  "version_num": 130010,
-  "version_desc": "-Feature: 内置云端配置服务地址，安装即可拉取站点显隐 / 导航 / 启动弹窗 / 更新策略\n-Perf: 默认只发 Impeller 变体，移除 x86_64，仅保留中文资源，安装包体积下降",
+  "version": "3.0.10",
+  "version_num": 130011,
+  "version_desc": "-Feature: 安装即联网拉取云端配置（地址与只读令牌已编译进包，无需任何设置）\n-Perf: 默认只发 Impeller 变体，移除 x86_64，仅保留中文资源",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",

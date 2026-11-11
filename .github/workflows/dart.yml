@@ -99,13 +99,26 @@ jobs:
 
       # 电视盒子绝大多数是 32 位系统（armeabi-v7a），少数 64 位系统设备用
       # arm64-v8a；x86_64 只服务模拟器与极少数 x86 盒子，不再发布。
+      #
+      # 云端配置地址与只读令牌通过 dart-define 编译进包：地址有代码内默认值，
+      # 令牌放 GitHub Secret（不写进公开仓库），未配置时为空 = 不发 Authorization 头。
       - name: 打包APK（Impeller 渲染器，默认唯一产物）
-        run: flutter build apk --release --flavor impeller --split-per-abi --target-platform android-arm,android-arm64 --android-skip-build-dependency-validation
+        run: >
+          flutter build apk --release --flavor impeller --split-per-abi
+          --target-platform android-arm,android-arm64
+          --android-skip-build-dependency-validation
+          --dart-define=PURE_LIVE_CONFIG_URL=${{ vars.PURE_LIVE_CONFIG_URL || 'https://tv.1008618.xyz' }}
+          --dart-define=PURE_LIVE_CONFIG_TOKEN=${{ secrets.PURE_LIVE_CONFIG_TOKEN }}
 
       # Skia 仅作兼容兜底：tag 发版不构建，手动触发时勾选 include_skia 才出包。
       - name: 打包APK（Skia 渲染器，按需）
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.include_skia == 'true' }}
-        run: flutter build apk --release --flavor skia --split-per-abi --target-platform android-arm,android-arm64 --android-skip-build-dependency-validation
+        run: >
+          flutter build apk --release --flavor skia --split-per-abi
+          --target-platform android-arm,android-arm64
+          --android-skip-build-dependency-validation
+          --dart-define=PURE_LIVE_CONFIG_URL=${{ vars.PURE_LIVE_CONFIG_URL || 'https://tv.1008618.xyz' }}
+          --dart-define=PURE_LIVE_CONFIG_TOKEN=${{ secrets.PURE_LIVE_CONFIG_TOKEN }}
 
       - name: 重命名 APK 文件
         run: |
