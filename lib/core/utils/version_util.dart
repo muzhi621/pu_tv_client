@@ -6,6 +6,7 @@ import 'package:pure_live/core/platform/race_http.dart';
 import 'package:pure_live/services/settings/settings.dart';
 import 'package:pure_live/core/utils/githup_mirror.dart';
 import 'package:pure_live/core/utils/platform_utils.dart';
+import 'package:pure_live/services/remote_config/remote_config.dart';
 
 /// Download URLs assembled from the release identity itself, following the
 /// names the Android release workflow uploads:
@@ -65,8 +66,12 @@ class VersionUtil {
   static PackageInfo? _packageInfo;
 
   /// Release repository for the TV build.
-  static const String updateOwner = 'liuchuancong';
-  static const String updateRepository = 'pure_live_TV';
+  ///
+  /// 本仓库是从 liuchuancong/pure_live_TV fork 出来的独立发行分支，更新检查、
+  /// Release API 与 raw 文件镜像必须指向自己的仓库，否则应用内更新会一直
+  /// 读取上游的 version.json，看不到本仓库发布的 APK。
+  static const String updateOwner = 'muzhi621';
+  static const String updateRepository = 'pu_tv_client';
   static final String projectUrl = 'https://github.com/$updateOwner/$updateRepository';
   static final String issuesUrl = '$projectUrl/issues';
   static const String githubUrl = 'https://github.com/liuchuancong';
@@ -76,11 +81,16 @@ class VersionUtil {
 
   static final String releaseUrl = 'https://api.github.com/repos/$updateOwner/$updateRepository/releases?per_page=30';
 
-  static final GitHubMirror mirror = GitHubMirror(owner: updateOwner, repo: updateRepository, branch: 'master');
+  static final GitHubMirror mirror = GitHubMirror(owner: updateOwner, repo: updateRepository, branch: 'main');
 
-  static List<String> get _versionUrls => SettingsService.to.appState.useGitHubOriginForUpdates
-      ? [mirror.rawUrl('assets/version.json')]
-      : mirror.mirrors('assets/version.json');
+  static List<String> get _versionUrls {
+    // 云端下发的是完整的 version.json URL 列表，优先于内置 GitHub 镜像。
+    final remote = RemoteConfigService.updateMirrorUrls;
+    if (remote.isNotEmpty) return remote;
+    return SettingsService.to.appState.useGitHubOriginForUpdates
+        ? [mirror.rawUrl('assets/version.json')]
+        : mirror.mirrors('assets/version.json');
+  }
 
   /// Whether a newer version exists. The Riverpod layer can watch this field or
   /// subscribe to onHasNewVersionChanged.
@@ -144,6 +154,12 @@ class VersionUtil {
   }
 
   Future<bool> _runCheckUpdate() async {
+    if (!RemoteConfigService.updateAutoCheck || !RemoteConfigService.shouldCheckUpdateNow()) {
+      _resetAfterFailedCheck();
+      return false;
+    }
+    await RemoteConfigService.markUpdateChecked();
+
     if (_cachedVersionJson != null) {
       try {
         _applyVersionData(_cachedVersionJson!);

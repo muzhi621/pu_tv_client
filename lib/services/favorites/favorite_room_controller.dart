@@ -399,6 +399,47 @@ class FavoriteRoomController extends _$FavoriteRoomController {
     _update(state.copyWith(hotAreasList: _normalizeDanmakuBlockValues(sites)));
   }
 
+  /// 云端下发的显式站点白名单（需求文档 FR-04）。
+  ///
+  /// 不复用 setHotAreasList：它会走屏蔽词归一化；更关键的是 build() 里的
+  /// _migrateSiteCatalog 会把 Sites.supportSites 全量补回，所以这里必须同时
+  /// 把 siteCatalogMigration 推到当前版本。空列表直接忽略，避免
+  /// global_room_push.dart 的 .first 抛错。
+  void applyRemoteSiteWhitelist(List<String> siteIds) {
+    final supported = Sites.supportSites.map((site) => site.id).toSet();
+    final seen = <String>{};
+    final normalized = <String>[];
+    for (final raw in siteIds) {
+      final id = raw.trim().toLowerCase();
+      if (!supported.contains(id) || Sites.isRetired(id)) continue;
+      if (seen.add(id)) normalized.add(id);
+    }
+    if (normalized.isEmpty) return;
+    var next = state.copyWith(
+      hotAreasList: normalized,
+      siteCatalogMigration: _siteCatalogVersion,
+    );
+    if (!normalized.contains(next.preferPlatform.trim().toLowerCase())) {
+      next = next.copyWith(preferPlatform: normalized.first);
+    }
+    _update(next);
+  }
+
+  /// 云端所有节回到 managed:false 时，恢复接管前的本地站点列表。
+  void restoreLocalSiteCatalog(List<String> siteIds, int migration) {
+    final supported = Sites.supportSites.map((site) => site.id).toSet();
+    final seen = <String>{};
+    final normalized = <String>[];
+    for (final raw in siteIds) {
+      final id = raw.trim().toLowerCase();
+      if (supported.contains(id) && seen.add(id)) normalized.add(id);
+    }
+    _update(state.copyWith(
+      hotAreasList: normalized.isEmpty ? List<String>.from(AppConsts.supportSites) : normalized,
+      siteCatalogMigration: migration,
+    ));
+  }
+
   bool toggleSiteEnabled(String siteId, bool enabled) {
     final id = siteId.trim().toLowerCase();
     final current = List<String>.from(state.hotAreasList);

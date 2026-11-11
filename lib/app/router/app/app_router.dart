@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pure_live/features/index.dart';
 import 'package:pure_live/modules/vod/index.dart';
+import 'package:pure_live/services/remote_config/remote_config.dart';
 import 'package:pure_live/modules/live/index.dart';
 import 'package:pure_live/modules/music/index.dart';
 import 'package:pure_live/modules/video/index.dart';
@@ -303,11 +304,14 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final location = state.uri.path;
 
-      if (isFirstInApp && location != AppRoutes.kAgreementPage) {
+      // requiredVersion 提升时重新征求同意；不翻 isFirstInApp，避免
+      // 备份/同步把已同意的 TV 弹回协议页。
+      final agreementRequired = RemoteConfigService.agreementRequired;
+      if ((isFirstInApp || agreementRequired) && location != AppRoutes.kAgreementPage) {
         return AppRoutes.kAgreementPage;
       }
 
-      if (!isFirstInApp && location == AppRoutes.kAgreementPage) {
+      if (!isFirstInApp && !agreementRequired && location == AppRoutes.kAgreementPage) {
         return AppRoutes.kInitial;
       }
 

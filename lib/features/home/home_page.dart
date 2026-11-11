@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dpad/dpad.dart';
 import 'package:pure_live/modules/vod/index.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -11,6 +13,7 @@ import 'package:pure_live/modules/live/areas/areas_page.dart';
 import 'package:pure_live/modules/music/music_section_view.dart';
 import 'package:pure_live/modules/video/video_section_view.dart';
 import 'package:pure_live/features/home/home_update_dialog.dart';
+import 'package:pure_live/features/home/remote_notice_dialog.dart';
 import 'package:pure_live/modules/live/history/history_page.dart';
 import 'package:pure_live/features/home/exit_confirm_dialog.dart';
 import 'package:pure_live/modules/live/search/tv_search_page.dart';
@@ -252,7 +255,9 @@ class _HomePageState extends ConsumerState<HomePage> {
     super.initState();
     // Shows the update dialog once per session, after the startup check.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) HomeUpdateDialog.maybeShow(context, ref);
+      if (!mounted) return;
+      unawaited(RemoteNoticeDialog.maybeShow(context));
+      unawaited(HomeUpdateDialog.maybeShow(context, ref));
     });
   }
 

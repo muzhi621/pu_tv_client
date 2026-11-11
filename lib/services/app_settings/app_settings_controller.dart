@@ -179,6 +179,47 @@ class AppSettingsController extends _$AppSettingsController {
     HivePrefUtil.setBool('enableNewWindowPlay', state.enableNewWindowPlay);
   }
 
+  /// 云端下发的导航白名单（需求文档 FR-05）。
+  ///
+  /// 必须写入显式完整数组：normalizeMenuIds 会把缺失的 known id 全部补回，
+  /// 而 _visibleMenuIds 把空列表解释为「全部默认序」，两者都与白名单语义冲突。
+  void applyRemoteNavigation({required List<String> railMenuIds, bool? sidebarExpanded}) {
+    final ids = <String>[];
+    for (final raw in railMenuIds) {
+      final id = raw.trim();
+      if (HomeMenu.fromId(id) != null && !ids.contains(id)) ids.add(id);
+    }
+    if (ids.isEmpty) return;
+    update(state.copyWith(
+      savedMenuIds: ids,
+      sidebarExpanded: sidebarExpanded ?? state.sidebarExpanded,
+    ));
+  }
+
+  /// 云端接管启动页与自动检查更新开关。走 update() 保证 state + Hive 一起写，
+  /// 否则后续 _persist() 会用旧 state 回写覆盖云端配置。
+  void applyRemoteStartupAndUpdate({bool? showSplashPage, bool? enableAutoCheckUpdate}) {
+    update(state.copyWith(
+      showSplashPage: showSplashPage ?? state.showSplashPage,
+      enableAutoCheckUpdate: enableAutoCheckUpdate ?? state.enableAutoCheckUpdate,
+    ));
+  }
+
+  /// 云端全部节退出接管时恢复本地用户设置。
+  void restoreLocalSettings({
+    required List<String> savedMenuIds,
+    required bool sidebarExpanded,
+    required bool showSplashPage,
+    required bool enableAutoCheckUpdate,
+  }) {
+    update(state.copyWith(
+      savedMenuIds: savedMenuIds,
+      sidebarExpanded: sidebarExpanded,
+      showSplashPage: showSplashPage,
+      enableAutoCheckUpdate: enableAutoCheckUpdate,
+    ));
+  }
+
   Map<String, dynamic> toJson() => state.toJson();
 
   void importFromJson(Map<String, dynamic> json) {

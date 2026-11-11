@@ -1,5 +1,6 @@
 import 'package:pure_live/exports/exports.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:pure_live/services/remote_config/remote_config.dart';
 import 'package:pure_live/modules/video/video_section.dart';
 
 import 'package:pure_live/services/menu_icons/menu_icon_controller.dart';
@@ -119,8 +120,15 @@ class AppMenuItem {
 List<AppMenuItem> sideMenuList(Ref ref) {
   final saved = ref.watch(appSettingsControllerProvider).savedMenuIds;
   final overrides = ref.watch(menuIconOverridesProvider);
-  final ids = saved.isEmpty ? HomeMenu.defaultOrder : AppSettingsController.normalizeMenuIds(saved);
-  return [for (final id in ids) ?_sideMenuItem(id, overrides)];
+  // 云端托管时用显式白名单，绝不走 normalizeMenuIds（它会补回所有 known id）。
+  final List<String> ids;
+  if (RemoteConfigService.navigationManaged) {
+    ids = <String>[for (final id in saved) if (HomeMenu.fromId(id) != null) id];
+  } else {
+    ids = saved.isEmpty ? HomeMenu.defaultOrder : AppSettingsController.normalizeMenuIds(saved);
+  }
+  final visible = ids.isEmpty ? HomeMenu.defaultOrder : ids;
+  return [for (final id in visible) ?_sideMenuItem(id, overrides)];
 }
 
 AppMenuItem? _sideMenuItem(String id, Map<String, IconData> overrides) {

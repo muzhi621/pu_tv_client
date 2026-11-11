@@ -5,7 +5,7 @@ import sys
 import os
 
 # GitHub Actions 中自动使用当前仓库，本地运行时默认使用维护分支仓库。
-REPOSITORY = os.environ.get("GITHUB_REPOSITORY", "liuchuancong/pure_live")
+REPOSITORY = os.environ.get("GITHUB_REPOSITORY", "muzhi621/pu_tv_client")
 UPSTREAM_REPOSITORY = "liuchuancong/pure_live_TV"
 OUTPUT_FILE = "assets/releases.json"
 PAGE_SIZE = 100

@@ -4,5 +4,5 @@
   "version_desc": "-Feature:修复斗鱼播放视频卡顿,优化弹幕",
   "prerelease":false,
   "android_abis": ["arm64-v8a", "armeabi-v7a", "x86_64"],
-  "download_url": "https://github.com/liuchuancong/pure_live_TV/releases"
+  "download_url": "https://github.com/muzhi621/pu_tv_client/releases"
 }

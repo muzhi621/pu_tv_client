@@ -54,19 +54,25 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "本次发布标签：$tag"
 
-      - name: 下载Android keystore
-        id: android_keystore
-        uses: timheuer/base64-to-file@v1.2
-        with:
-          fileName: key.jks
-          encodedString: ${{ secrets.KEYSTORE_BASE64 }}
-
-      - name: 创建key.properties
+      # 签名密钥是可选的。android/app/build.gradle.kts 在缺少 key.properties 时
+      # 会回退到 debug key，因此 fork 后不配置任何 secrets 也能构建出可安装的 APK；
+      # 配置了则使用自己的 release 签名。
+      - name: 配置Release签名（未配置密钥则回退debug签名）
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          echo "storeFile=${{ steps.android_keystore.outputs.filePath }}" > android/key.properties
-          echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> android/key.properties
-          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
-          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > android/key.jks
+            printf 'storeFile=%s\nstorePassword=%s\nkeyPassword=%s\nkeyAlias=%s\n' \
+              "$GITHUB_WORKSPACE/android/key.jks" "$STORE_PASSWORD" \
+              "$KEY_PASSWORD" "$KEY_ALIAS" > android/key.properties
+            echo "已启用 Release 签名"
+          else
+            echo "::notice::未配置 KEYSTORE_BASE64，本次使用 debug 签名（build.gradle.kts 自动回退）"
+          fi
 
       - name: 设置JAVA环境
         uses: actions/setup-java@v4

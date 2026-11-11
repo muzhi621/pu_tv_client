@@ -14,6 +14,7 @@ import 'package:pure_live/core/common/api_proxy_policy.dart';
 import 'package:pure_live/core/platform/local_network_access.dart';
 import 'package:pure_live/player/core/ingest_ffmpeg_registry.dart';
 import 'package:pure_live/player/core/ffmpeg_ingest_starter.dart';
+import 'package:pure_live/services/remote_config/remote_config.dart';
 
 class AppInitializer {
   static final AppInitializer _instance = AppInitializer._internal();
@@ -61,6 +62,12 @@ class AppInitializer {
 
     // Migrate legacy Hive keys into the v2 settings store.
     await LegacySettingsMigration.migrateIfNeeded();
+
+    // Cloud config must land AFTER the legacy migration (which would otherwise
+    // re-add every supported site) and BEFORE runApp (the agreement redirect and
+    // the side-menu list are decided on the first frame). Failures degrade to
+    // the cached document / built-in seed and never block startup.
+    await RemoteConfigService.bootstrap();
 
     // Restore the optional local log file before playback starts, so a release
     // build can be diagnosed from the device.

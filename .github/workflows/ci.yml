@@ -1,0 +1,60 @@
+name: ci
+
+# push / PR 只做快速验证：确认 media_core 的 git 依赖能被解析。
+# 真正打 6 个 release APK 由 dart.yml 在推送 v* 标签时执行。
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      full_build:
+        description: '额外编译一个 debug APK 做完整编译验证'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: 签出代码
+        uses: actions/checkout@v4
+
+      - name: 设置JAVA环境
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: "17"
+
+      - name: 设置Flutter环境
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: 打印工具链版本
+        run: flutter --version
+
+      # 这一步是本 CI 的核心：pubspec.yaml 里的 10 个 media_core_* 包已从
+      # 作者本机的 F:/media_core 绝对路径改为固定 commit 的 git 依赖，
+      # 只要这一步通过，clone 本仓库到任意机器都能还原依赖。
+      - name: 解析依赖
+        run: flutter pub get
+
+      # 上游仓库本身带少量 analyzer 提示，这里只产出诊断日志、不阻断流水线。
+      - name: 静态分析（诊断用，不阻断）
+        continue-on-error: true
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      # 手动触发时可选：真正编译一次，提前暴露 Dart / Gradle 编译错误，
+      # 避免为了验证构建而白白发布一个 Release。
+      - name: 完整编译验证（debug APK）
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.full_build == 'true' }}
+        run: flutter build apk --debug --flavor impeller --target-platform android-arm64

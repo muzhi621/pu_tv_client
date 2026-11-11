@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:pure_live/exports/package_export.dart';
 import 'package:pure_live/services/settings/settings.dart';
+import 'package:pure_live/services/remote_config/remote_config.dart';
 
 /// Home-page update dialog: shown once per session, after the startup check,
 /// with the version, changelog and a download entry.
@@ -11,6 +12,8 @@ class HomeUpdateDialog {
     if (_shownThisSession) return;
     _shownThisSession = true;
 
+    // 云端策略 silent = 不弹窗（force 在 P1 补齐不可关闭逻辑）。
+    if (RemoteConfigService.updatePrompt == 'silent') return;
     if (!SettingsService.to.appState.enableAutoCheckUpdate) return;
 
     // Waits for the startup check to say something. Sampling the verdict a beat

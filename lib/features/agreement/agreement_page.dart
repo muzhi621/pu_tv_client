@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:pure_live/exports/package_export.dart';
 import 'package:pure_live/app/router/app/app_router.dart';
 import 'package:pure_live/services/settings/settings.dart';
+import 'package:pure_live/services/remote_config/remote_config.dart';
 
 class AgreementPage extends StatelessWidget {
   const AgreementPage({super.key});
@@ -17,11 +19,19 @@ class AgreementPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                i18n('agreement_title'),
+                RemoteConfigService.agreementTitle.isEmpty
+                    ? i18n('agreement_title')
+                    : RemoteConfigService.agreementTitle,
                 textAlign: TextAlign.center,
                 style: AppTextStyles.t40.copyWith(fontWeight: FontWeight.w700),
               ),
               AppStyle.vGap40(context),
+              // 云端下发的补充协议正文；为空时保留内置条款。
+              if (RemoteConfigService.agreementBody.isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 28.0.sp),
+                  child: Text(RemoteConfigService.agreementBody, style: AppTextStyles.t28),
+                ),
               Flexible(
                 child: SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
@@ -66,6 +76,7 @@ class AgreementPage extends StatelessWidget {
                     title: i18n('agreement_accept'),
                     size: TvButtonSize.medium,
                     onTap: () {
+                      unawaited(RemoteConfigService.markAgreementAccepted());
                       SettingsService.to.startup.setIsFirstInApp(false);
                       const HomeRoute().go(context);
                     },

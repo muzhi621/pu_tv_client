@@ -1,3 +1,58 @@
+> ## 本仓库说明（fork 分支 · 请先看这里）
+>
+> 本仓库是 [liuchuancong/pure_live_TV](https://github.com/liuchuancong/pure_live_TV)
+> 在提交 `6a118663`（2026-10-06）上的 **fork + 云端配置下发改造版**，不是上游镜像。
+> 下文保留的徽章、版本说明与功能介绍均描述上游原项目；本分支的变更如下。
+>
+> | 项目 | 本仓库 |
+> |---|---|
+> | 仓库地址 | `https://github.com/muzhi621/pu_tv_client`（默认分支 `main`） |
+> | 配套云端库 | `https://github.com/muzhi621/pu_tv_cloud` —— 只下发配置，不承载播放流量 |
+> | 核心改造 | 站点可见性白名单、首页导航、开机弹窗、更新策略由云端分节托管；详见 [改造说明](docs/remote_config_integration.md) |
+> | 许可证 | `LICENSE` 首行是 **AGPL-3.0**（上游 README 徽章写的是 GPL-3.0，以 LICENSE 为准） |
+>
+> ### 依赖与构建
+>
+> - 上游 `pubspec.yaml` 的 10 个 `media_core_*` 依赖原本是作者本机的
+>   `F:/media_core/...` 绝对路径，别的机器与 CI 均无法解析。本仓库已改为指向公开仓库
+>   [liuchuancong/media_core](https://github.com/liuchuancong/media_core) 的固定提交
+>   `2a45d464`（与客户端基线同期），`flutter pub get` 可直接还原依赖。
+> - 本地构建需要 Flutter SDK（Dart `^3.12.0`）、Java 17、Android SDK（compileSdk 37、minSdk 26）：
+>
+>   ```bash
+>   flutter pub get
+>   flutter build apk --release --flavor impeller --split-per-abi \
+>     --target-platform android-arm,android-arm64,android-x64
+>   ```
+>
+> ### 用 GitHub Actions 打包并发布 Release
+>
+> | 触发 | 工作流 | 动作 |
+> |---|---|---|
+> | push / PR 到 `main` | `ci.yml` | 快速验证依赖解析，并产出静态分析诊断日志 |
+> | 推送 `v*` 标签 | `dart.yml` | 构建 2 渲染 flavor × 3 ABI 共 6 个 APK，发布 Release，并刷新 `assets/releases.json` |
+> | 手动运行 `ci.yml` 并勾选 `full_build` | `ci.yml` | 额外编译一个 debug APK，用于不打标签就验证完整编译 |
+>
+> **推送代码本身不会发版**，需要打标签：
+>
+> ```bash
+> git tag v3.0.8 && git push origin v3.0.8
+> ```
+>
+> 版本号与更新文案在 `assets/version.json`。签名密钥为可选项：在仓库
+> Settings → Secrets 配置 `KEYSTORE_BASE64`、`STORE_PASSWORD`、`KEY_PASSWORD`、
+> `KEY_ALIAS` 即使用自己的 release 签名；**不配置也能构建**，Gradle 会回退到
+> debug key（`android/app/build.gradle.kts` 已支持）。应用内更新检查、
+> Release API 与 raw 文件镜像均已指向本仓库的 `main` 分支。
+>
+> ### 云端配置接入
+>
+> 默认零影响：未配置服务地址时不发任何请求、不改动本地设置。通过
+> `--dart-define=PURE_LIVE_CONFIG_URL=<云端地址> --dart-define=PURE_LIVE_CONFIG_TOKEN=<只读令牌>`
+> 或对应的 Hive 键启用；TV 端只需要只读 Token。
+>
+> ---
+
 <div align="center">
 
 <img src="assets/icons/icon.png" width="150" alt="Pure Live TV 图标"/>

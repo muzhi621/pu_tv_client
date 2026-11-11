@@ -104,31 +104,66 @@ dependencies:
       url: https://github.com/guide-inc-org/guide-flutter_inappwebview.git
       path: flutter_inappwebview
       ref: 3e6c4c4a25340cd363af9d38891d88498b90be26
+  # 播放内核 media_core：上游是公开 monorepo liuchuancong/media_core。
+  # 原工程写的是作者本机的 F:/media_core 绝对路径，clone 到别的机器或
+  # GitHub Actions 后 flutter pub get 必然失败；这里固定在与客户端基线
+  # (6a118663, 2026-10-06 18:36 +08:00) 同期的最近一次提交，改为 git 依赖，
+  # 使仓库自包含、可复现。升级 media_core 时统一修改下面 10 个 ref 即可。
   media_core:
-    path: F:/media_core/packages/media_core
+    git:
+      url: https://github.com/liuchuancong/media_core.git
+      ref: 2a45d46422b134df546f13af2b86901b4be07ec7
+      path: packages/media_core
   media_core_media_kit:
-    path: F:/media_core/packages/media_core_media_kit
+    git:
+      url: https://github.com/liuchuancong/media_core.git
+      ref: 2a45d46422b134df546f13af2b86901b4be07ec7
+      path: packages/media_core_media_kit
   media_core_fvp:
-    path: F:/media_core/packages/media_core_fvp
+    git:
+      url: https://github.com/liuchuancong/media_core.git
+      ref: 2a45d46422b134df546f13af2b86901b4be07ec7
+      path: packages/media_core_fvp
   media_core_live:
-    path: F:/media_core/packages/media_core_live
+    git:
+      url: https://github.com/liuchuancong/media_core.git
+      ref: 2a45d46422b134df546f13af2b86901b4be07ec7
+      path: packages/media_core_live
   media_core_native:
-    path: F:/media_core/packages/media_core_native
+    git:
+      url: https://github.com/liuchuancong/media_core.git
+      ref: 2a45d46422b134df546f13af2b86901b4be07ec7
+      path: packages/media_core_native
   media_core_logging:
-    path: F:/media_core/packages/media_core_logging
+    git:
+      url: https://github.com/liuchuancong/media_core.git
+      ref: 2a45d46422b134df546f13af2b86901b4be07ec7
+      path: packages/media_core_logging
   media_core_better_player:
-    path: F:/media_core/packages/media_core_better_player
+    git:
+      url: https://github.com/liuchuancong/media_core.git
+      ref: 2a45d46422b134df546f13af2b86901b4be07ec7
+      path: packages/media_core_better_player
   media_core_ijk_player:
-    path: F:/media_core/packages/media_core_ijk_player
+    git:
+      url: https://github.com/liuchuancong/media_core.git
+      ref: 2a45d46422b134df546f13af2b86901b4be07ec7
+      path: packages/media_core_ijk_player
   media_core_ingest:
-    path: F:/media_core/packages/media_core_ingest
+    git:
+      url: https://github.com/liuchuancong/media_core.git
+      ref: 2a45d46422b134df546f13af2b86901b4be07ec7
+      path: packages/media_core_ingest
   # FFmpeg runtime for the DASH merge relay. media_core_ingest ships no binary
   # and the app injects one through the ingest registry; this is the same
   # FFmpegKit build the mobile sibling uses (no media_core_recording_ffmpeg
   # wrapper). Requires minSdk 26.
   ffmpeg_kit_extended_flutter: 0.6.2
   media_core_danmaku:
-    path: F:/media_core/packages/media_core_danmaku
+    git:
+      url: https://github.com/liuchuancong/media_core.git
+      ref: 2a45d46422b134df546f13af2b86901b4be07ec7
+      path: packages/media_core_danmaku
   # Imported directly by the wallpaper / background code (and available through
   # the media_core_media_kit adapter's re-export, which pins the same revision);
   # declared here because a direct import should come from a direct dependency.
