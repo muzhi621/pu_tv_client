@@ -3,8 +3,10 @@ import 'dart:ui' show PlatformDispatcher;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:pure_live/core/common/http_client.dart';
 import 'package:pure_live/core/utils/hive_pref_util.dart';
+import 'package:pure_live/modules/live/iptv/services/iptv_import_manager.dart';
 import 'package:pure_live/services/settings/settings.dart';
 import 'remote_config_model.dart';
 import 'remote_config_store.dart';
@@ -24,6 +26,10 @@ class RemoteConfigService {
   static bool _bootstrapped = false;
 
   static const Duration _networkTimeout = Duration(milliseconds: 1500);
+
+  /// 云端下发的 IPTV 源在终端固定写成一个播放列表，便于重复导入时覆盖。
+  static const String _cloudIptvProvider = 'cloud_iptv';
+  static String? _cachedAppVersion;
 
   static RemoteConfigDocument? get current => _current;
 
@@ -47,7 +53,7 @@ class RemoteConfigService {
       final cached = RemoteConfigStore.readDocument();
       if (cached != null) {
         _current = cached;
-        _apply(cached);
+        await _apply(cached);
       }
       await syncNow();
     } catch (error) {
@@ -65,7 +71,7 @@ class RemoteConfigService {
       if (document.revision < RemoteConfigStore.revision) return; // 防倒退
       await RemoteConfigStore.saveDocument(document);
       _current = document;
-      _apply(document);
+      await _apply(document);
     } catch (error) {
       debugPrint('[RemoteConfig] 同步失败，沿用本地配置: $error');
     }
@@ -74,10 +80,17 @@ class RemoteConfigService {
   static Future<RemoteConfigDocument?> _fetch(String endpoint, String token, int revision) async {
     final base = endpoint.replaceAll(RegExp(r'/+$'), '');
     try {
+      final version = await _appVersion();
+      final query = <String, dynamic>{
+        // 首次启动不带 since：新设备文档 revision 从 1 起，带 since=0 会命中 304。
+        if (revision > 0) 'since': revision,
+        'deviceId': RemoteConfigStore.deviceId,
+        if (version.isNotEmpty) 'appVersion': version,
+      };
       final response = await HttpClient.instance.dio
           .get<dynamic>(
             '$base/api/config',
-            queryParameters: <String, dynamic>{'since': revision},
+            queryParameters: query,
             options: Options(
               responseType: ResponseType.json,
               // 304 是预期的「未变更」，不能让 Dio 当成异常。
@@ -111,7 +124,7 @@ class RemoteConfigService {
   // 按节 apply：只改 managed:true 的节
   // ------------------------------------------------------------------
 
-  static void _apply(RemoteConfigDocument document) {
+  static Future<void> _apply(RemoteConfigDocument document) async {
     if (!HivePrefUtil.isInitialized) return;
 
     final anyManaged = document.sections.values.any(
@@ -160,6 +173,73 @@ class RemoteConfigService {
             : null,
       );
     }
+
+    // IPTV 频道列表写 Drift，必须在 runApp 之前完成。任何异常都不能阻断启动。
+    try {
+      await _applyIptv(document);
+    } catch (error) {
+      debugPrint('[RemoteConfig] IPTV 下发失败（沿用本地列表）: $error');
+    }
+  }
+
+
+  /// 读取包内版本号，仅用于云端设备列表展示；失败不影响启动。
+  static Future<String> _appVersion() async {
+    if (_cachedAppVersion != null) return _cachedAppVersion!;
+    try {
+      final raw = await rootBundle.loadString('assets/version.json');
+      final decoded = jsonDecode(raw);
+      _cachedAppVersion = decoded is Map ? (decoded['version'] ?? '').toString() : '';
+    } catch (_) {
+      _cachedAppVersion = '';
+    }
+    return _cachedAppVersion!;
+  }
+
+  /// 把云端 iptv 节写成本地播放列表。
+  ///
+  /// 复用 IptvImportManager 而不是裸写 Drift：这样能自动获得 M3U/TXT 解析、
+  /// 稳定频道 ID（收藏/隐藏不丢）、事务写入与失效频道清理。冷启动注入保证首帧
+  /// 的 IptvSite.getCategores() 读到的就是新数据，无需 invalidate provider。
+  static Future<void> _applyIptv(RemoteConfigDocument document) async {
+    final iptv = document.section('iptv');
+    if (iptv['managed'] != true) return;
+    final rawChannels = iptv['channels'];
+    if (rawChannels is! List || rawChannels.isEmpty) return;
+
+    // 冷启动会先用缓存文档 apply 一次、再 apply 新文档，用标记保证导入幂等。
+    final stamp = '${RemoteConfigStore.deviceId}:${document.revision}:${rawChannels.length}';
+    if (RemoteConfigStore.iptvStamp == stamp) return;
+
+    final grouped = <String, List<Map<String, String>>>{};
+    for (final item in rawChannels) {
+      if (item is! Map) continue;
+      final name = (item['name'] ?? '').toString().trim();
+      final url = (item['url'] ?? '').toString().trim();
+      if (name.isEmpty || url.isEmpty) continue;
+      final group = (item['group'] ?? '').toString().trim();
+      final key = group.isEmpty ? '未分组' : group;
+      grouped.putIfAbsent(key, () => <Map<String, String>>[])
+          .add(<String, String>{'name': name, 'url': url});
+    }
+    if (grouped.isEmpty) return;
+
+    // TXT genre 格式：分组行 + 名称,地址 行，与项目内置 TxtParser 完全兼容。
+    final buffer = StringBuffer();
+    grouped.forEach((group, channels) {
+      buffer.writeln('$group,#genre#');
+      for (final channel in channels) {
+        buffer.writeln('${channel['name']},${channel['url']}');
+      }
+    });
+
+    final ok = await IptvImportManager().importFromWebString(
+      buffer.toString(),
+      '$_cloudIptvProvider.txt',
+      forceUpdate: true,
+      showTips: false,
+    );
+    if (ok) await RemoteConfigStore.setIptvStamp(stamp);
   }
 
   static void _backupLocalOnce() {

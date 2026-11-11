@@ -1,7 +1,7 @@
 {
-  "version": "3.0.11",
-  "version_num": 130012,
-  "version_desc": "-Fix: 修正内置云端只读令牌，安装后即可正常拉取站点显隐 / 导航 / 启动弹窗 / 更新策略\\n-Fix: 云端导航管控不再丢失「收藏分区」「影视播放」菜单\\n-Perf: 默认只发 Impeller 变体，移除 x86_64，仅保留中文资源",
+  "version": "3.0.12",
+  "version_num": 130013,
+  "version_desc": "-New: 终端自动生成 UUID 上报，云端可逐台独立下发配置、改名与重置\\n-New: 云端 IPTV 源（M3U/TXT）随配置下发，自动写入本地播放列表 cloud_iptv\\n-Perf: 收敛为单 MPV 播放内核、表情 PNG 转 WebP、清理无效表情资源，安装包大幅缩小\\n-Perf: FFmpeg 改用 small 精简包，构建剥离 Dart 符号（--obfuscate --split-debug-info）",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",

@@ -1,7 +1,7 @@
 name: pure_live
 description: 纯粹直播,一款开源的第三方多平台直播聚合播放器.
 publish_to: none
-version: 3.0.11+12
+version: 3.0.12+13
 
 environment:
   sdk: ^3.12.0
@@ -108,7 +108,7 @@ dependencies:
   # 原工程写的是作者本机的 F:/media_core 绝对路径，clone 到别的机器或
   # GitHub Actions 后 flutter pub get 必然失败；这里固定在与客户端基线
   # (6a118663, 2026-10-06 18:36 +08:00) 同期的最近一次提交，改为 git 依赖，
-  # 使仓库自包含、可复现。升级 media_core 时统一修改下面 10 个 ref 即可。
+  # 使仓库自包含、可复现。升级 media_core 时统一修改下面 7 个 ref 即可（只保留 MPV 一套内核）。
   media_core:
     git:
       url: https://github.com/liuchuancong/media_core.git
@@ -119,11 +119,6 @@ dependencies:
       url: https://github.com/liuchuancong/media_core.git
       ref: 2a45d46422b134df546f13af2b86901b4be07ec7
       path: packages/media_core_media_kit
-  media_core_fvp:
-    git:
-      url: https://github.com/liuchuancong/media_core.git
-      ref: 2a45d46422b134df546f13af2b86901b4be07ec7
-      path: packages/media_core_fvp
   media_core_live:
     git:
       url: https://github.com/liuchuancong/media_core.git
@@ -139,16 +134,6 @@ dependencies:
       url: https://github.com/liuchuancong/media_core.git
       ref: 2a45d46422b134df546f13af2b86901b4be07ec7
       path: packages/media_core_logging
-  media_core_better_player:
-    git:
-      url: https://github.com/liuchuancong/media_core.git
-      ref: 2a45d46422b134df546f13af2b86901b4be07ec7
-      path: packages/media_core_better_player
-  media_core_ijk_player:
-    git:
-      url: https://github.com/liuchuancong/media_core.git
-      ref: 2a45d46422b134df546f13af2b86901b4be07ec7
-      path: packages/media_core_ijk_player
   media_core_ingest:
     git:
       url: https://github.com/liuchuancong/media_core.git
@@ -254,4 +239,4 @@ flutter:
 ffmpeg_kit_extended_config:
   type: base
   gpl: false
-  small: false
+  small: true

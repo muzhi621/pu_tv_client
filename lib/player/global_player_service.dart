@@ -10,9 +10,6 @@ import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatf
 import 'package:media_core/media_core.dart';
 import 'package:media_core_native/media_core_native.dart';
 import 'package:media_core_media_kit/media_core_media_kit.dart';
-import 'package:media_core_ijk_player/media_core_ijk_player.dart';
-import 'package:media_core_fvp/media_core_fvp.dart';
-import 'package:media_core_better_player/media_core_better_player.dart';
 import 'package:media_kit_video/media_kit_video.dart' as mkv;
 
 /// Host-owned media_kit (libmpv) configuration.
@@ -218,98 +215,6 @@ final class MediaKitHostConfig {
   }
 }
 
-/// Host-owned fvp (libmdk) configuration.
-///
-/// fvp is the Android backup engine: it ships a current FFmpeg plus the
-/// platform hardware decoders, so it recovers sources the bundled libmpv
-/// drops (legacy codec-id-12 HEVC FLV, for example). The adapter writes
-/// exactly what is passed here.
-final class FvpHostConfig {
-  const FvpHostConfig._();
-
-  /// Video decoder priority for the platform: hardware first with software
-  /// fallbacks, software-only when hardware decoding is off.
-  static List<String> videoDecoders({required bool hardware}) {
-    if (!hardware) return const <String>['FFmpeg', 'dav1d'];
-
-    final platform = defaultTargetPlatform;
-    if (platform == TargetPlatform.android) return const <String>['AMediaCodec', 'FFmpeg', 'dav1d'];
-    if (platform == TargetPlatform.iOS || platform == TargetPlatform.macOS) {
-      return const <String>['VT', 'FFmpeg', 'dav1d'];
-    }
-    if (platform == TargetPlatform.windows) {
-      return const <String>['MFT:d3d=11', 'D3D11', 'DXVA', 'FFmpeg', 'dav1d'];
-    }
-
-    return const <String>['VAAPI', 'VDPAU', 'FFmpeg', 'dav1d'];
-  }
-
-  /// Audio backends, or null where mdk's own default is fine.
-  ///
-  /// Android goes through OpenSL first: libmdk's AAudio output crashes on
-  /// dispose, stutters on devices with a coarse clock and dies on output
-  /// routing changes.
-  static List<String>? audioBackends() =>
-      defaultTargetPlatform == TargetPlatform.android ? const <String>['OpenSL', 'AudioTrack', 'AAudio'] : null;
-
-  static PlayerAdapter createAdapter(String id) {
-    final settings = SettingsService.to.playerState;
-
-    return FvpPlayerAdapter(
-      id: id,
-      capabilities: FvpPlayerAdapter.defaultCapabilities,
-      // `avio.http_proxy` is re-read at every engine creation (fvp builds a
-      // fresh player per source); a DIRECT policy resolves to '' which FFmpeg
-      // ignores. Empty for loopback inputs as well — see
-      // [PlaybackProxyPolicy.currentNativeUrl].
-      properties: <String, String>{
-        'avio.http_proxy': PlaybackProxyPolicy.currentNativeUrl(privateInput: false),
-      },
-      videoDecoders: videoDecoders(hardware: settings.enableCodec),
-      audioBackends: audioBackends(),
-    );
-  }
-}
-
-/// Host-owned ijkplayer (flv_lzc) configuration.
-///
-/// The adapter invents nothing: every option the old [FijkPlayerConfig]
-/// defaults carried is rebuilt here as a raw (domain, key, value) triple,
-/// applied by the adapter before every open.
-final class IjkHostConfig {
-  const IjkHostConfig._();
-
-  static PlayerAdapter createAdapter(String id) {
-    final settings = SettingsService.to.playerState;
-
-    return FlvLzcPlayerAdapter(
-      id: id,
-      capabilities: FlvLzcPlayerAdapter.defaultCapabilities,
-      options: <EngineOption>[
-        // player category
-        EngineOption('mediacodec', settings.enableCodec, domain: 'player'),
-        EngineOption('mediacodec-hevc', settings.enableCodec, domain: 'player'),
-        EngineOption('videotoolbox', settings.enableCodec, domain: 'player'),
-        const EngineOption('enable-accurate-seek', true, domain: 'player'),
-        const EngineOption('soundtouch', true, domain: 'player'),
-        const EngineOption('subtitle', true, domain: 'player'),
-        const EngineOption('an', false, domain: 'player'),
-
-        // host category
-        const EngineOption('request-screen-on', true, domain: 'host'),
-        const EngineOption('request-audio-focus', true, domain: 'host'),
-
-        // format category
-        const EngineOption('reconnect', true, domain: 'format'),
-        EngineOption('timeout', const Duration(seconds: 30).inMicroseconds, domain: 'format'),
-        const EngineOption('fflags', 'fastseek', domain: 'format'),
-        const EngineOption('rtsp_transport', 'tcp', domain: 'format'),
-        EngineOption('http_proxy', PlaybackProxyPolicy.currentNativeUrl(privateInput: false), domain: 'format'),
-      ],
-    );
-  }
-}
-
 /// Creates a media_kit adapter with the current settings.
 ///
 /// Registered under the app's historical backend id `mpv`
@@ -323,39 +228,6 @@ final class _MediaKitFactory implements PlayerAdapterFactory {
 
   @override
   bool supports(String id) => id == BackendIds.mediaKit || id.isEmpty;
-}
-
-/// Creates an fvp adapter with the current settings.
-final class _FvpFactory implements PlayerAdapterFactory {
-  const _FvpFactory();
-
-  @override
-  PlayerAdapter create(String id) => FvpHostConfig.createAdapter(id);
-
-  @override
-  bool supports(String id) => id == BackendIds.fvp || id.isEmpty;
-}
-
-/// Creates an ijkplayer (flv_lzc) adapter with the current settings.
-final class _FlvLzcFactory implements PlayerAdapterFactory {
-  const _FlvLzcFactory();
-
-  @override
-  PlayerAdapter create(String id) => IjkHostConfig.createAdapter(id);
-
-  @override
-  bool supports(String id) => id == BackendIds.fijk || id.isEmpty;
-}
-
-/// Creates a better_player adapter with the current settings.
-final class _BetterPlayerFactory implements PlayerAdapterFactory {
-  const _BetterPlayerFactory();
-
-  @override
-  PlayerAdapter create(String id) => BetterPlayerAdapter(id: id, capabilities: BetterPlayerAdapter.defaultCapabilities);
-
-  @override
-  bool supports(String id) => id == BackendIds.betterPlayer || id.isEmpty;
 }
 
 /// Media-core-backed global player service.
@@ -453,28 +325,14 @@ class GlobalPlayerService {
     // Register the engines this app ships. Priority encodes the
     // fallback preference: the default engine first, the rest by
     // platform strength.
-    kernel.registerBackend(_registrationOf(defaultEngine, priority: 100));
-    for (final engine in PlayerEngine.values) {
-      if (engine != defaultEngine) {
-        kernel.registerBackend(_registrationOf(engine, priority: 80));
-      }
-    }
+    // 只发一套播放内核（MPV）：其余三套的 native .so 是 APK 体积的最大来源。
+    kernel.registerBackend(_mpvRegistration(priority: 100));
 
     final facade = LivePlayerFacade(
       kernel,
       defaultEngine: defaultEngine,
-      onPreferredEngineChanged: (engine) {
-        // Re-register the whole set, not only the chosen engine. Raising the new
-        // preference to 100 while the previous one stayed at 100 left two
-        // registrations tied, and [PlayerAdapterSelector] resolved that tie by
-        // list order — so a second switch could keep running the kernel that was
-        // already active.
-        for (final PlayerEngine candidate in PlayerEngine.values) {
-          final registration = _registrationOf(candidate, priority: candidate == engine ? 100 : 80);
-          kernel.registry.unregister(registration.id);
-          kernel.registerBackend(registration);
-        }
-      },
+      // 单内核构建下没有可切换的 backend，保留回调签名即可。
+      onPreferredEngineChanged: (_) {},
     );
     _livePlayer = facade;
 
@@ -482,37 +340,16 @@ class GlobalPlayerService {
     log('GlobalPlayerService: initialized on media_core (default: ${defaultEngine.name})', name: 'GlobalPlayerService');
   }
 
-  PlayerAdapterRegistration _registrationOf(PlayerEngine engine, {required int priority}) {
-    switch (engine) {
-      case PlayerEngine.mediaKit:
-        return PlayerAdapterRegistration(
-          id: BackendIds.mediaKit,
-          factory: const _MediaKitFactory(),
-          capabilities: MediaKitPlayerAdapter.defaultCapabilities,
-          priority: priority,
-        );
-      case PlayerEngine.fijk:
-        return PlayerAdapterRegistration(
-          id: BackendIds.fijk,
-          factory: const _FlvLzcFactory(),
-          capabilities: FlvLzcPlayerAdapter.defaultCapabilities,
-          priority: priority,
-        );
-      case PlayerEngine.betterPlayer:
-        return PlayerAdapterRegistration(
-          id: BackendIds.betterPlayer,
-          factory: const _BetterPlayerFactory(),
-          capabilities: BetterPlayerAdapter.defaultCapabilities,
-          priority: priority,
-        );
-      case PlayerEngine.fvp:
-        return PlayerAdapterRegistration(
-          id: BackendIds.fvp,
-          factory: const _FvpFactory(),
-          capabilities: FvpPlayerAdapter.defaultCapabilities,
-          priority: priority,
-        );
-    }
+  /// 所有引擎偏好最终都落到唯一的 MPV backend。
+  /// 保留 PlayerEngine 枚举与 BackendIds 常量是为了让 UI / facade 的穷举
+  /// switch 继续编译通过；APK 里只链接 media_core_media_kit 一套 native 库。
+  PlayerAdapterRegistration _mpvRegistration({required int priority}) {
+    return PlayerAdapterRegistration(
+      id: BackendIds.mediaKit,
+      factory: const _MediaKitFactory(),
+      capabilities: MediaKitPlayerAdapter.defaultCapabilities,
+      priority: priority,
+    );
   }
 
   /// Global dispose - call this only when the app is destroyed.

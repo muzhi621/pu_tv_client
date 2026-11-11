@@ -317,12 +317,7 @@ class MusicControlBarState extends ConsumerState<MusicControlBar> {
       case _BarPanel.kernel:
         final String activeKey = MusicPlayerController.preferredBackend;
         return <({String label, VoidCallback apply, bool active})>[
-          for (final String key in const [
-            BackendIds.mediaKit,
-            BackendIds.fijk,
-            BackendIds.betterPlayer,
-            BackendIds.fvp,
-          ])
+          for (final String key in const [BackendIds.mediaKit])
             (
               label: switch (key) {
                 BackendIds.mediaKit => i18n('player_mpv'),

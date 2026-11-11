@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:pure_live/core/utils/hive_pref_util.dart';
+import 'package:uuid/uuid.dart';
 import 'remote_config_model.dart';
 
 /// 云端配置相关的 Hive 键（全部为新键，不与既有设置键冲突）。
@@ -15,6 +16,8 @@ class RemoteConfigKeys {
   static const String agreementAcceptedVersion = 'agreementAcceptedVersion';
   static const String noticeShownRevision = 'noticeShownRevision';
   static const String lastUpdateCheckAt = 'remoteConfigLastUpdateCheckAt';
+  static const String deviceId = 'remoteConfigDeviceId';
+  static const String lastIptvStamp = 'remoteConfigLastIptvStamp';
 
   const RemoteConfigKeys._();
 }
@@ -46,6 +49,26 @@ class RemoteConfigStore {
   static String get token {
     final stored = HivePrefUtil.getString(RemoteConfigKeys.token)?.trim() ?? '';
     return stored.isNotEmpty ? stored : compiledToken.trim();
+  }
+
+
+  /// 终端身份：首次启动生成 UUID v4 并持久化，之后每次拉配置都带上。
+  /// 云端据此为每台终端保存一份完整独立的配置文档。
+  static String get deviceId {
+    final saved = HivePrefUtil.getString(RemoteConfigKeys.deviceId)?.trim() ?? '';
+    if (saved.isNotEmpty) return saved;
+    final generated = const Uuid().v4();
+    // 与项目既有写法一致：Hive put 立即可读，无需 await。
+    HivePrefUtil.setString(RemoteConfigKeys.deviceId, generated);
+    return generated;
+  }
+
+  /// IPTV 导入幂等标记（deviceId:revision:channelCount）。
+  static String get iptvStamp =>
+      HivePrefUtil.getString(RemoteConfigKeys.lastIptvStamp) ?? '';
+
+  static Future<void> setIptvStamp(String value) async {
+    await HivePrefUtil.setString(RemoteConfigKeys.lastIptvStamp, value);
   }
 
   static RemoteConfigDocument? readDocument() {

@@ -106,7 +106,7 @@ jobs:
         run: >
           flutter build apk --release --flavor impeller --split-per-abi
           --target-platform android-arm,android-arm64
-          --android-skip-build-dependency-validation
+          --android-skip-build-dependency-validation --obfuscate --split-debug-info=${{ runner.temp }}/pu_tv_symbols
           --dart-define=PURE_LIVE_CONFIG_URL=${{ vars.PURE_LIVE_CONFIG_URL || 'https://tv.1008618.xyz' }}
           --dart-define=PURE_LIVE_CONFIG_TOKEN=${{ secrets.PURE_LIVE_CONFIG_TOKEN }}
 
@@ -116,7 +116,7 @@ jobs:
         run: >
           flutter build apk --release --flavor skia --split-per-abi
           --target-platform android-arm,android-arm64
-          --android-skip-build-dependency-validation
+          --android-skip-build-dependency-validation --obfuscate --split-debug-info=${{ runner.temp }}/pu_tv_symbols
           --dart-define=PURE_LIVE_CONFIG_URL=${{ vars.PURE_LIVE_CONFIG_URL || 'https://tv.1008618.xyz' }}
           --dart-define=PURE_LIVE_CONFIG_TOKEN=${{ secrets.PURE_LIVE_CONFIG_TOKEN }}
 

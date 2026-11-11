@@ -74,6 +74,11 @@ class PlayerSettingsController extends _$PlayerSettingsController {
   static PlayerSettingsModel _normalize(PlayerSettingsModel model) {
     return model.copyWith(
       videoFitIndex: normalizeVideoFitIndex(model.videoFitIndex),
+      // 单内核构建只注册 MPV。覆盖安装旧版时 Hive 里可能残留 fvp / ijk / exo
+      // 的 key，归一化到默认内核，避免读到一个未注册的 backend。
+      videoPlayerKey: PlayerConsts.engines.containsKey(model.videoPlayerKey)
+          ? model.videoPlayerKey
+          : PlayerConsts.defaultKey,
       preferResolution: PlayerConsts.normalizeResolutionKey(model.preferResolution),
       preferResolutionCellular: PlayerConsts.normalizeResolutionKey(model.preferResolutionCellular),
     );
