@@ -26,8 +26,10 @@ jobs:
     # Android only: nothing here needs the macOS toolchain, and a Linux runner
     # costs a tenth of a macOS minute and is usually faster for Gradle.
     runs-on: ubuntu-latest
-    # A stuck Gradle daemon or a flaky download must not burn an hour of runner time.
-    timeout-minutes: 60
+    # Two renderer flavors x three ABIs with R8 on a cold Gradle cache can take
+    # well over an hour on a fresh runner; keep a hard ceiling but give the first
+    # release build enough room to finish.
+    timeout-minutes: 90
     permissions:
       contents: write
 

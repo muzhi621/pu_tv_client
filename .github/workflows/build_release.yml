@@ -7,8 +7,11 @@ on:
   workflow_dispatch:
   workflow_call:
 
+# Called from build-android-Tv once the APKs are published. The caller grants
+# contents: write, and keeping the same value at workflow level makes the reused
+# token permissions explicit instead of relying on job-level inheritance.
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   # Static on purpose: a called workflow inherits the caller's `github.workflow`,
