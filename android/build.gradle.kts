@@ -6,16 +6,22 @@ import java.io.File
 // it ships inside the flv_lzc package, under its own android/libs Maven layout.
 // Gradle resolves the *app's* runtime classpath against the repositories of the
 // project that owns the configuration, so the plugin's own `repositories {}`
-// block cannot help here — the app has to declare that repository itself. The
-// path is read from the plugin project instead of a copy inside this repository,
-// so a version bump in the package is picked up automatically.
-val flvLibs = rootProject.project(":flv_lzc").projectDir.resolve("libs")
+// block cannot help here — the app has to declare that repository itself.
+//
+// flv_lzc arrives ONLY as a transitive dependency of the FVP backend. The
+// aggressive single-kernel build no longer ships that backend, so the Gradle
+// plugin project is absent; looking it up with project(...) would fail the
+// whole build with "Project with path ':flv_lzc' could not be found".
+// findProject + conditional keeps this file working for both configurations.
+val flvLibs = rootProject.findProject(":flv_lzc")?.projectDir?.resolve("libs")
 
 allprojects {
     repositories {
-        maven(flvLibs) {
-            content {
-                includeModule("io.github.flutterplayer", "fplayer-core")
+        flvLibs?.let { libs ->
+            maven(libs) {
+                content {
+                    includeModule("io.github.flutterplayer", "fplayer-core")
+                }
             }
         }
         google()
