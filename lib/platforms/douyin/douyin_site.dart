@@ -1,0 +1,943 @@
+import 'dart:convert';
+import 'dart:math' as math;
+
+import 'package:pure_live/exports/exports.dart';
+
+class DouyinSite implements LiveSite, LiveSiteRecordRoomResolver, LiveSiteRoomRefresher {
+  @override
+  String id = Sites.douyinSite;
+
+  @override
+  String name = 'Douyin Live';
+
+  @override
+  LiveDanmaku getDanmaku() => DouyinDanmaku();
+
+  static const String kDefaultReferer = "https://live.douyin.com";
+
+  static const String kDefaultAuthority = "live.douyin.com";
+
+  /// Cookie supplied by the user.
+  static String cookie = "";
+  static Future<String>? _anonymousCookieRequest;
+  static final String _anonymousUserUniqueId = generateAnonymousUserUniqueId();
+
+  Map<String, dynamic> headers = {
+    "Authority": kDefaultAuthority,
+    "Referer": kDefaultReferer,
+    "User-Agent": DouyinRequestParams.kDefaultUserAgent,
+  };
+
+  Future<Map<String, dynamic>> getRequestHeaders() async {
+    try {
+      if (cookie.isNotEmpty) {
+        return {...headers, "cookie": cookie};
+      } else if (SettingsService.to.cookieManager.douyinCookie.v.isNotEmpty) {
+        cookie = SettingsService.to.cookieManager.douyinCookie.v;
+        return {...headers, "cookie": cookie};
+      }
+
+      final anonymousCookie = await (_anonymousCookieRequest ??= _fetchAnonymousCookie());
+      _anonymousCookieRequest = null;
+      if (anonymousCookie.isNotEmpty) {
+        cookie = anonymousCookie;
+        return {...headers, "cookie": cookie};
+      }
+      return Map<String, dynamic>.from(headers);
+    } catch (e) {
+      _anonymousCookieRequest = null;
+      CoreLog.error(e);
+      return Map<String, dynamic>.from(headers);
+    }
+  }
+
+  Future<String> _fetchAnonymousCookie() async {
+    final response = await HttpClient.instance.get(
+      'https://live.douyin.com/',
+      queryParameters: const {'from_nav': '1'},
+      header: headers,
+    );
+    final setCookieValues = response.headers.map['set-cookie'] ?? const <String>[];
+    final pairs = <String>[];
+    for (final value in setCookieValues) {
+      final pair = value.split(';').first.trim();
+      if (pair.startsWith('ttwid=') || pair.startsWith('UIFID_TEMP=')) {
+        pairs.add(pair);
+      }
+    }
+    return pairs.join('; ');
+  }
+
+  Future<Map<String, dynamic>> getUserInfoByCookie(String cookie) async {
+    try {
+      final url = "https://live.douyin.com/webcast/user/me/";
+      final result = await HttpClient.instance.getJson(
+        url,
+        queryParameters: {"aid": DouyinRequestParams.aidValue},
+        header: {
+          "user-agent": DouyinRequestParams.kDefaultUserAgent,
+          'accept': 'application/json, text/plain, */*',
+          'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+          "Cookie": cookie,
+        },
+      );
+      if (result is Map<String, dynamic>) {
+        final data = result["data"];
+        if (data is Map<String, dynamic>) {
+          return data;
+        }
+      }
+      return {};
+    } catch (e) {
+      CoreLog.error(e);
+    }
+    return {};
+  }
+
+  String extractCategoryDataJson(String source) {
+    final startPattern = r'{\"pathname\":\"/\",\"categoryData\":';
+    int startIndex = source.indexOf(startPattern);
+    if (startIndex == -1) return '';
+    int openBraces = 0;
+    bool foundFirstBrace = false;
+    for (int i = startIndex; i < source.length; i++) {
+      if (source[i] == '{') {
+        openBraces++;
+        foundFirstBrace = true;
+      } else if (source[i] == '}') {
+        openBraces--;
+      }
+      if (foundFirstBrace && openBraces == 0) {
+        String rawData = source.substring(startIndex, i + 1);
+        return rawData.replaceAll('\\"', '"').replaceAll(r'\\', r'\');
+      }
+    }
+    return '';
+  }
+
+  @override
+  Future<List<LiveCategory>> getCategores(int page, int pageSize) async {
+    List<LiveCategory> categories = [];
+    var result = await HttpClient.instance.getText(
+      "https://live.douyin.com/",
+      queryParameters: {"from_nav": "1"},
+      header: await getRequestHeaders(),
+    );
+
+    String extracted = extractCategoryDataJson(result);
+    var renderDataJson = json.decode(extracted);
+    var data = renderDataJson["categoryData"];
+    for (var item in data) {
+      List<LiveArea> subs = [];
+      var id = '${item["partition"]["id_str"]},${item["partition"]["type"]}';
+      for (var subItem in item["sub_partition"]) {
+        var subCategory = LiveArea(
+          areaId: '${subItem["partition"]["id_str"]},${subItem["partition"]["type"]}',
+          typeName: item["partition"]["title"] ?? '',
+          areaType: id,
+          areaName: subItem["partition"]["title"] ?? '',
+          areaPic: "",
+          platform: Sites.douyinSite,
+        );
+        subs.add(subCategory);
+      }
+
+      var category = LiveCategory(children: subs, id: id, name: asT<String?>(item["partition"]["title"]) ?? "");
+      subs.insert(
+        0,
+        LiveArea(
+          areaId: category.id,
+          typeName: category.name,
+          areaType: category.id,
+          areaPic: "",
+          areaName: category.name,
+          platform: Sites.douyinSite,
+        ),
+      );
+      categories.add(category);
+    }
+    return categories;
+  }
+
+  @override
+  Future<List<LiveRoom>> getCategoryRooms(LiveArea category, {int page = 1, int pageSize = 30}) async {
+    var ids = category.areaId.split(',');
+    var partitionId = ids[0];
+    var partitionType = ids[1];
+
+    var queryParameters = {
+      "aid": '6383',
+      "app_name": "douyin_web",
+      "live_id": '1',
+      "device_platform": "web",
+      "language": "zh-CN",
+      "enter_from": "link_share",
+      "cookie_enabled": "true",
+      "screen_width": "1980",
+      "screen_height": "1080",
+      "browser_language": "zh-CN",
+      "browser_platform": "Win32",
+      "browser_name": "Edge",
+      "browser_version": "125.0.0.0",
+      "browser_online": "true",
+      "count": '15',
+      "offset": ((page - 1) * 15).toString(),
+      "partition": partitionId,
+      "partition_type": partitionType,
+      "req_from": '2',
+    };
+    var categoryRoomUrl = "https://live.douyin.com/webcast/web/partition/detail/room/v2/";
+    var targetUrl = DouyinUtils.buildRequestUrl(categoryRoomUrl, queryParameters);
+    var result = await HttpClient.instance.getJson(targetUrl, header: await getRequestHeaders());
+    var items = <LiveRoom>[];
+    for (var item in result["data"]["data"]) {
+      final room = item["room"];
+      final totalViewers = douyinTotalViewers(room);
+      final onlineViewers = douyinOnlineViewers(room);
+      final nativeAudience = totalViewers.isNotEmpty ? totalViewers : onlineViewers;
+      var roomItem = LiveRoom(
+        roomId: item["web_rid"],
+        title: room["title"].toString(),
+        cover: room["cover"]["url_list"][0].toString(),
+        nick: room["owner"]["nickname"].toString(),
+        liveStatus: LiveStatus.live,
+        avatar: room["owner"]["avatar_thumb"]["url_list"][0].toString(),
+        status: true,
+        platform: Sites.douyinSite,
+        area: item['tag_name'].toString(),
+        watching: nativeAudience,
+        totalViewers: totalViewers,
+        onlineViewers: onlineViewers,
+        audienceMetricType: totalViewers.isNotEmpty
+            ? AudienceMetricType.totalViewers
+            : AudienceMetricType.onlineViewers,
+      );
+      items.add(roomItem);
+    }
+    return items;
+  }
+
+  /// Room ids the recommend feed has already delivered.
+  ///
+  /// `webcast/feed` has no cursor, offset or page parameter: every request is a
+  /// fresh random draw. Asking for the next page therefore re-samples, and the
+  /// grid would append rooms it already shows — with the paging core filling a
+  /// window from stacked server pages that never ends. Ids are dropped as they
+  /// are delivered, a draw that brings nothing new ends the list, and page 1
+  /// (a refresh) starts the sampling over.
+  static final Set<String> _deliveredRecommendRoomIds = <String>{};
+
+  @override
+  Future<List<LiveRoom>> getRecommendRooms({int page = 1, int pageSize = 30}) async {
+    if (page <= 1) _deliveredRecommendRoomIds.clear();
+    try {
+      final result = await HttpClient.instance.getJson(
+        "https://live.douyin.com/webcast/feed/",
+        queryParameters: {
+          "aid": "6383",
+          "app_name": "douyin_web",
+          "need_map": "1",
+          "is_draw": "1",
+          "inner_from_drawer": "0",
+          "enter_source": "web_homepage_hot_web_live_card",
+          "source_key": "web_homepage_hot_web_live_card",
+        },
+        header: await getRequestHeaders(),
+      );
+      return parseRecommendRooms(
+        result,
+      ).where((room) => _deliveredRecommendRoomIds.add(room.roomId)).toList(growable: false);
+    } catch (e) {
+      throw Exception(e.toString());
+    }
+  }
+
+  /// Parses both generations of Douyin's anonymous feed response.
+  ///
+  /// The legacy response stored rooms at `data.data`. Since August 2026 the
+  /// endpoint returns `data` as a list of feed envelopes and puts the room in
+  /// each envelope's `data` field. Indexing that list with the string `data`
+  /// produced `type 'String' is not a subtype of type 'int' of 'index'` before
+  /// any card could be rendered.
+  @visibleForTesting
+  static List<LiveRoom> parseRecommendRooms(dynamic payload) {
+    final root = _asStringMap(payload);
+    if (root == null) throw const FormatException('Douyin feed response is not an object');
+
+    final statusCode = int.tryParse(root['status_code']?.toString() ?? '');
+    if (statusCode != null && statusCode != 0) {
+      throw StateError('Douyin feed rejected request: code=$statusCode');
+    }
+
+    dynamic rawRooms = root['data'];
+    if (rawRooms is Map) rawRooms = rawRooms['data'];
+    if (rawRooms is! List) throw const FormatException('Douyin feed room list is missing');
+
+    final rooms = <LiveRoom>[];
+    final seenRoomIds = <String>{};
+    for (final rawItem in rawRooms) {
+      final envelope = _asStringMap(rawItem);
+      if (envelope == null) continue;
+
+      final embedded = _decodeEmbeddedMap(envelope['data']);
+      final nestedRoom = _asStringMap(envelope['room']);
+      final room = <Map<String, dynamic>?>[
+        embedded,
+        nestedRoom,
+        envelope,
+      ].firstWhere((candidate) => candidate != null && _looksLikeRoom(candidate), orElse: () => null);
+      if (room == null) continue;
+
+      final owner = _asStringMap(room['owner']) ?? _asStringMap(envelope['owner']) ?? const <String, dynamic>{};
+      final roomId = _firstText([envelope['web_rid'], owner['web_rid'], room['web_rid'], room['id_str'], room['id']]);
+      if (roomId.isEmpty || !seenRoomIds.add(roomId)) continue;
+
+      final title = _firstText([room['title'], envelope['title'], owner['nickname']]);
+      final nick = _firstText([owner['nickname'], envelope['nickname']]);
+      final cover = _firstImageUrl([room['cover'], envelope['cover']]);
+      final avatar = _firstImageUrl([owner['avatar_thumb'], owner['avatar_large'], envelope['avatar_thumb']]);
+      final totalViewers = douyinTotalViewers(room);
+      final onlineViewers = douyinOnlineViewers(room);
+      final nativeAudience = totalViewers.isNotEmpty ? totalViewers : onlineViewers;
+
+      rooms.add(
+        LiveRoom(
+          roomId: roomId,
+          title: title,
+          cover: cover,
+          nick: nick,
+          platform: Sites.douyinSite,
+          area: _douyinFeedArea(envelope, room),
+          avatar: avatar,
+          watching: nativeAudience,
+          totalViewers: totalViewers,
+          onlineViewers: onlineViewers,
+          audienceMetricType: totalViewers.isNotEmpty
+              ? AudienceMetricType.totalViewers
+              : AudienceMetricType.onlineViewers,
+          status: true,
+          liveStatus: LiveStatus.live,
+          link: 'https://live.douyin.com/$roomId',
+        ),
+      );
+    }
+    return rooms;
+  }
+
+  static Map<String, dynamic>? _asStringMap(dynamic value) {
+    if (value is! Map) return null;
+    return value.map((key, entryValue) => MapEntry(key.toString(), entryValue));
+  }
+
+  static Map<String, dynamic>? _decodeEmbeddedMap(dynamic value) {
+    final direct = _asStringMap(value);
+    if (direct != null) return direct;
+    if (value is! String || !value.trimLeft().startsWith('{')) return null;
+    try {
+      return _asStringMap(json.decode(value));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static bool _looksLikeRoom(Map<String, dynamic> value) {
+    return value['owner'] is Map || value['title'] != null || value['id_str'] != null || value['stream_url'] is Map;
+  }
+
+  static String _firstText(Iterable<dynamic> candidates) {
+    for (final value in candidates) {
+      if (value == null || value is Map || value is Iterable && value is! String) continue;
+      final text = value.toString().trim();
+      if (text.isNotEmpty && text != 'null') return text;
+    }
+    return '';
+  }
+
+  static String _firstImageUrl(Iterable<dynamic> candidates) {
+    for (final value in candidates) {
+      final image = _asStringMap(value);
+      final urlList = image?['url_list'];
+      if (urlList is List) {
+        final url = _firstText(urlList);
+        if (url.isNotEmpty) return url;
+      }
+      final direct = _firstText([value]);
+      if (direct.startsWith('http://') || direct.startsWith('https://')) return direct;
+    }
+    return '';
+  }
+
+  static String _douyinFeedArea(Map<String, dynamic> envelope, Map<String, dynamic> room) {
+    final direct = _firstText([room['tag_name'], envelope['tag_name']]);
+    if (direct.isNotEmpty) return direct;
+
+    for (final source in [room['partition_road_map'], envelope['tags']]) {
+      if (source is! List) continue;
+      for (final rawTag in source) {
+        final tag = _asStringMap(rawTag);
+        if (tag == null) continue;
+        final text = _firstText([tag['title'], tag['name'], tag['tag_name']]);
+        if (text.isNotEmpty) return text;
+      }
+    }
+    return i18n('site_all');
+  }
+
+  @override
+  Future<LiveRoom> getRoomDetail(LiveRoom room) => _roomDetail(room.roomId, includeEntryExtras: true);
+
+  /// Cheap metadata path used by favourite-card refreshes.
+  ///
+  /// Same room lookup as [getRoomDetail], minus everything only an entry into
+  /// the room needs: no anonymous-cookie request (`getRequestHeaders` issues a
+  /// whole HTTP call to `live.douyin.com/` when the user has no cookie stored)
+  /// and no danmaku credentials. A card refresh reads status, title, cover and
+  /// audience, and the favourite merge keeps the stored danmaku and playback
+  /// fields untouched, so nothing observable is lost.
+  ///
+  /// Failures propagate. The favourite refresh treats a thrown lookup as "the
+  /// platform could not be asked" and keeps the stored snapshot, whereas an
+  /// offline-looking fallback room would rewrite a live followed room as offline.
+  @override
+  Future<LiveRoom> getRoomDetailForRefresh(LiveRoom room) => _roomDetail(room.roomId, includeEntryExtras: false);
+
+  @override
+  Future<LiveRoom> getRoomDetailForRecording(LiveRoom room) {
+    // Both the API and HTML paths propagate their final error and retain the
+    // stream_url envelope required to resolve every advertised sdk_key.
+    return getRoomDetail(room);
+  }
+
+  /// Resolves [roomId], which the platform stores either as a short web rid or
+  /// as a 19-digit room id.
+  Future<LiveRoom> _roomDetail(String roomId, {required bool includeEntryExtras}) async {
+    if (roomId.length <= 16) {
+      return await getRoomDetailByWebRid(roomId, includeEntryExtras: includeEntryExtras);
+    }
+    return await getRoomDetailByRoomId(roomId, includeEntryExtras: includeEntryExtras);
+  }
+
+  Future<LiveRoom> getRoomDetailByRoomId(String roomId, {bool includeEntryExtras = true}) async {
+    // Read the room info.
+    var roomData = await _getRoomDataByRoomId(roomId);
+
+    // Derive the web rid from the room info.
+    var webRid = roomData["data"]["room"]["owner"]["web_rid"].toString();
+
+    // Current web clients use a 19-digit anonymous visitor ID. Reuse one ID
+    // for the process so switching rooms does not create a new viewer identity.
+    var userUniqueId = _anonymousUserUniqueId;
+
+    var room = roomData["data"]["room"];
+    var owner = room["owner"];
+
+    final status = int.tryParse(room['status']?.toString() ?? '') ?? 0;
+
+    // roomId is single use: every new broadcast gets a fresh one, so fall back
+    // to the web rid whenever the room behind a roomId is no longer live.
+    if (status == 4) {
+      var result = await getRoomDetailByWebRid(webRid, includeEntryExtras: includeEntryExtras);
+      return result;
+    }
+
+    var roomStatus = status == 2;
+    final totalViewers = roomStatus ? douyinTotalViewers(room) : '';
+    final onlineViewers = roomStatus ? douyinOnlineViewers(room) : '';
+    final nativeAudience = totalViewers.isNotEmpty ? totalViewers : onlineViewers;
+    // Mainly here to collect the cookie the danmaku WebSocket needs, so a
+    // refresh — which does not build danmaku credentials — skips the request.
+    final danmakuCookie = includeEntryExtras
+        ? (await getRequestHeaders())["cookie"]?.toString() ?? ""
+        : "";
+
+    return LiveRoom(
+      roomId: webRid,
+      title: room["title"].toString(),
+      cover: roomStatus ? room["cover"]["url_list"][0].toString() : "",
+      nick: owner["nickname"].toString(),
+      avatar: owner["avatar_thumb"]["url_list"][0].toString(),
+      watching: nativeAudience,
+      totalViewers: totalViewers,
+      onlineViewers: onlineViewers,
+      audienceMetricType: totalViewers.isNotEmpty ? AudienceMetricType.totalViewers : AudienceMetricType.onlineViewers,
+      status: roomStatus,
+      link: "https://live.douyin.com/$webRid",
+      platform: Sites.douyinSite,
+      area: '',
+      liveStatus: roomStatus ? LiveStatus.live : LiveStatus.offline,
+      introduction: owner["signature"].toString(),
+      notice: "",
+      danmakuData: includeEntryExtras
+          ? DouyinDanmakuArgs(
+              webRid: webRid,
+              roomId: roomId,
+              userId: userUniqueId,
+              cookie: danmakuCookie,
+            )
+          : null,
+      data: room["stream_url"],
+    );
+  }
+
+  /// Loads room info through a web rid.
+  /// - [webRid] room rid
+  /// - [includeEntryExtras] false for a card refresh: see
+  ///   [getRoomDetailForRefresh].
+  /// - Returns the room info.
+  Future<LiveRoom> getRoomDetailByWebRid(String webRid, {bool includeEntryExtras = true}) async {
+    try {
+      var result = await _getRoomDetailByWebRidApi(webRid, includeEntryExtras: includeEntryExtras);
+      return result;
+    } catch (e) {
+      CoreLog.error(e);
+    }
+    return await _getRoomDetailByWebRidHtml(webRid, includeEntryExtras: includeEntryExtras);
+  }
+
+  /// Loads room info by calling the room API with a web rid.
+  /// - [webRid] room rid
+  /// - [includeEntryExtras] false for a card refresh: see
+  ///   [getRoomDetailForRefresh].
+  /// - Returns the room info.
+  Future<LiveRoom> _getRoomDetailByWebRidApi(String webRid, {bool includeEntryExtras = true}) async {
+    // Read the room info.
+    var data = await _getRoomDataByApi(webRid);
+
+    var roomData = data["data"][0];
+    var userData = data["user"];
+    var roomId = roomData["id_str"].toString();
+
+    var userUniqueId = _anonymousUserUniqueId;
+
+    var owner = roomData["owner"];
+
+    final roomStatus = int.tryParse(roomData['status']?.toString() ?? '') == 2;
+    final totalViewers = roomStatus ? douyinTotalViewers(roomData) : '';
+    final onlineViewers = roomStatus ? douyinOnlineViewers(roomData) : '';
+    final nativeAudience = totalViewers.isNotEmpty ? totalViewers : onlineViewers;
+
+    // Mainly here to collect the cookie the danmaku WebSocket needs, so a
+    // refresh — which does not build danmaku credentials — skips the request.
+    final danmakuCookie = includeEntryExtras
+        ? (await getRequestHeaders())["cookie"]?.toString() ?? ""
+        : "";
+    return LiveRoom(
+      roomId: webRid,
+      title: roomData["title"].toString(),
+      cover: roomStatus ? roomData["cover"]["url_list"][0].toString() : "",
+      nick: roomStatus ? owner["nickname"].toString() : userData["nickname"].toString(),
+      avatar: roomStatus
+          ? owner["avatar_thumb"]["url_list"][0].toString()
+          : userData["avatar_thumb"]["url_list"][0].toString(),
+      watching: nativeAudience,
+      totalViewers: totalViewers,
+      onlineViewers: onlineViewers,
+      audienceMetricType: totalViewers.isNotEmpty ? AudienceMetricType.totalViewers : AudienceMetricType.onlineViewers,
+      status: roomStatus,
+      liveStatus: roomStatus ? LiveStatus.live : LiveStatus.offline,
+      link: "https://live.douyin.com/$webRid",
+      platform: Sites.douyinSite,
+      area: '',
+      introduction: owner?["signature"]?.toString() ?? "",
+      notice: "",
+      danmakuData: includeEntryExtras
+          ? DouyinDanmakuArgs(
+              webRid: webRid,
+              roomId: roomId,
+              userId: userUniqueId,
+              cookie: danmakuCookie,
+            )
+          : null,
+      data: roomStatus ? roomData["stream_url"] : {},
+    );
+  }
+
+  /// Loads room info by fetching the room page and reading its HTML.
+  /// - [webRid] room rid
+  /// - [includeEntryExtras] false for a card refresh: see
+  ///   [getRoomDetailForRefresh].
+  /// - Returns the room info.
+  Future<LiveRoom> _getRoomDetailByWebRidHtml(String roomId, {bool includeEntryExtras = true}) async {
+    var detail = await _getRoomDataByHtml(roomId);
+    var webRid = roomId;
+
+    var realRoomId = detail["roomStore"]["roomInfo"]["room"]["id_str"].toString();
+    final rawUserUniqueId = detail["userStore"]["odin"]["user_unique_id"].toString();
+    var userUniqueId = RegExp(r'^\d{19}$').hasMatch(rawUserUniqueId) ? rawUserUniqueId : _anonymousUserUniqueId;
+    var roomInfo = detail["roomStore"]["roomInfo"]["room"];
+    var owner = roomInfo["owner"];
+    var anchor = detail["roomStore"]["roomInfo"]["anchor"];
+    final roomStatus = int.tryParse(roomInfo['status']?.toString() ?? '') == 2;
+    final totalViewers = roomStatus ? douyinTotalViewers(roomInfo) : '';
+    final onlineViewers = roomStatus ? douyinOnlineViewers(roomInfo) : '';
+    final nativeAudience = totalViewers.isNotEmpty ? totalViewers : onlineViewers;
+
+    // Mainly here to collect the cookie the danmaku WebSocket needs, so a
+    // refresh — which does not build danmaku credentials — skips the request.
+    final danmakuCookie = includeEntryExtras
+        ? (await getRequestHeaders())["cookie"]?.toString() ?? ""
+        : "";
+
+    return LiveRoom(
+      roomId: roomId,
+      title: roomInfo["title"].toString(),
+      cover: roomStatus ? roomInfo["cover"]["url_list"][0].toString() : "",
+      nick: roomStatus ? owner["nickname"].toString() : anchor["nickname"].toString(),
+      avatar: roomStatus
+          ? owner["avatar_thumb"]["url_list"][0].toString()
+          : anchor["avatar_thumb"]["url_list"][0].toString(),
+      watching: nativeAudience,
+      totalViewers: totalViewers,
+      onlineViewers: onlineViewers,
+      audienceMetricType: totalViewers.isNotEmpty ? AudienceMetricType.totalViewers : AudienceMetricType.onlineViewers,
+      liveStatus: roomStatus ? LiveStatus.live : LiveStatus.offline,
+      link: "https://live.douyin.com/$webRid",
+      area: '',
+      status: roomStatus,
+      platform: Sites.douyinSite,
+      introduction: roomInfo["title"].toString(),
+      notice: "",
+      danmakuData: includeEntryExtras
+          ? DouyinDanmakuArgs(
+              webRid: webRid,
+              roomId: realRoomId,
+              userId: userUniqueId,
+              cookie: danmakuCookie,
+            )
+          : null,
+      data: roomStatus ? roomInfo["stream_url"] : {},
+    );
+  }
+
+  /// Reads the unique user id.
+  /// - [webRid] room rid
+  // ignore: unused_element
+  Future<String> _getUserUniqueId(String webRid) async {
+    try {
+      var webInfo = await _getRoomDataByHtml(webRid);
+      return webInfo["userStore"]["odin"]["user_unique_id"].toString();
+    } catch (e) {
+      return _anonymousUserUniqueId;
+    }
+  }
+
+  /// A cookie is required before entering the room.
+  /// - [webRid] room rid
+  Future<String> _getWebCookie(String webRid) async {
+    var headResp = await HttpClient.instance.head("https://live.douyin.com/$webRid", header: headers);
+    var dyCookie = "";
+    headResp.headers["set-cookie"]?.forEach((element) {
+      var cookie = element.split(";")[0];
+      if (cookie.contains("ttwid")) {
+        dyCookie += "$cookie;";
+      }
+      if (cookie.contains("__ac_nonce")) {
+        dyCookie += "$cookie;";
+      }
+      if (cookie.contains("msToken")) {
+        dyCookie += "$cookie;";
+      }
+    });
+    return dyCookie;
+  }
+
+  /// Loads the room web payload through a web rid.
+  /// - [webRid] room rid
+  Future<Map> _getRoomDataByHtml(String webRid) async {
+    var dyCookie = await _getWebCookie(webRid);
+    var result = await HttpClient.instance.getText(
+      "https://live.douyin.com/$webRid",
+      queryParameters: {},
+      header: {
+        "Authority": kDefaultAuthority,
+        "Referer": kDefaultReferer,
+        "Cookie": dyCookie,
+        "User-Agent": DouyinRequestParams.kDefaultUserAgent,
+      },
+    );
+
+    var renderData = RegExp(r'\{\\"state\\":\{\\"appStore.*?\]\\n').firstMatch(result)?.group(0) ?? "";
+    var str = renderData.trim().replaceAll('\\"', '"').replaceAll(r"\\", r"\").replaceAll(']\\n', "");
+
+    var renderDataJson = json.decode(str);
+    return renderDataJson["state"];
+  }
+
+  /// Loads the room web payload through a web rid.
+  /// - [webRid] room rid
+  Future<Map> _getRoomDataByApi(String webRid) async {
+    var requestHeader = await getRequestHeaders();
+    var queryParams = {
+      'app_name': 'douyin_web',
+      'enter_from': 'web_live',
+      'live_id': '1',
+      'web_rid': webRid,
+      'is_need_double_stream': "false",
+    };
+    var targetUrl = DouyinUtils.buildRequestUrl("https://live.douyin.com/webcast/room/web/enter/", queryParams);
+    CoreLog.d("targetUrl: $targetUrl");
+    var result = await HttpClient.instance.getJson(targetUrl, header: requestHeader);
+
+    return result["data"];
+  }
+
+  /// Loads room info through a room id.
+  /// - [roomId] room id
+  Future<Map> _getRoomDataByRoomId(String roomId) async {
+    var result = await HttpClient.instance.getJson(
+      'https://webcast.amemv.com/webcast/room/reflow/info/',
+      queryParameters: {
+        "type_id": 0,
+        "live_id": 1,
+        "room_id": roomId,
+        "sec_user_id": "",
+        "version_code": "99.99.99",
+        "app_id": 6383,
+      },
+      header: await getRequestHeaders(),
+    );
+    return result;
+  }
+
+  @override
+  Future<List<LivePlayQuality>> getPlayQualites({required LiveRoom detail}) async {
+    return parseStreamQualities(detail.data);
+  }
+
+  /// Resolves Douyin qualities by their stable `sdk_key`.
+  ///
+  /// The former fallback converted URL maps to positional lists and paired
+  /// them using `length - level`. JSON map order is not a quality contract, so
+  /// multiple buttons could point at the same or the wrong stream. Both the
+  /// modern `stream_data.data` payload and legacy pull-url maps are now joined
+  /// by key, never by position.
+  @visibleForTesting
+  static List<LivePlayQuality> parseStreamQualities(dynamic rawStreamUrl) {
+    if (rawStreamUrl is! Map) return const <LivePlayQuality>[];
+    final liveCore = rawStreamUrl['live_core_sdk_data'];
+    final pullData = liveCore is Map ? liveCore['pull_data'] : null;
+    final options = pullData is Map ? pullData['options'] : null;
+    final optionQualities = options is Map && options['qualities'] is List
+        ? (options['qualities'] as List).whereType<Map>().toList(growable: false)
+        : const <Map>[];
+
+    Map<dynamic, dynamic> decodedStreams = const {};
+    final streamDataText = pullData is Map ? pullData['stream_data']?.toString().trim() ?? '' : '';
+    if (streamDataText.startsWith('{')) {
+      try {
+        final decoded = json.decode(streamDataText);
+        if (decoded is Map && decoded['data'] is Map) decodedStreams = decoded['data'] as Map;
+      } catch (error) {
+        CoreLog.error('Douyin stream_data decode failed: $error');
+      }
+    }
+
+    final flvMap = rawStreamUrl['flv_pull_url'] is Map
+        ? rawStreamUrl['flv_pull_url'] as Map
+        : const <dynamic, dynamic>{};
+    final hlsMap = rawStreamUrl['hls_pull_url_map'] is Map
+        ? rawStreamUrl['hls_pull_url_map'] as Map
+        : const <dynamic, dynamic>{};
+    final resolutionNames = rawStreamUrl['resolution_name'] is Map
+        ? rawStreamUrl['resolution_name'] as Map
+        : const <dynamic, dynamic>{};
+
+    final descriptors = <String, Map<dynamic, dynamic>>{};
+    for (final option in optionQualities) {
+      final key = option['sdk_key']?.toString().trim() ?? '';
+      if (key.isNotEmpty) descriptors.putIfAbsent(key.toLowerCase(), () => option);
+    }
+    for (final key in <dynamic>{...decodedStreams.keys, ...flvMap.keys, ...hlsMap.keys}) {
+      final text = key?.toString().trim() ?? '';
+      if (text.isNotEmpty) {
+        descriptors.putIfAbsent(text.toLowerCase(), () => <dynamic, dynamic>{'sdk_key': text});
+      }
+    }
+
+    final qualities = <LivePlayQuality>[];
+    for (final entry in descriptors.entries) {
+      final key = entry.key;
+      final descriptor = entry.value;
+      final urls = <String>[];
+      final stream = _caseInsensitiveMapValue(decodedStreams, key);
+      final main = stream is Map ? stream['main'] : null;
+      if (main is Map) {
+        _addPlayableUrl(urls, main['flv']);
+        _addPlayableUrl(urls, main['hls']);
+      }
+      _addPlayableUrl(urls, _caseInsensitiveMapValue(flvMap, key));
+      _addPlayableUrl(urls, _caseInsensitiveMapValue(hlsMap, key));
+      if (urls.isEmpty) continue;
+      // Douyin may publish an `ao` entry beside its video renditions. It is
+      // an audio-only pull URL (`only_audio=1`), not a selectable video
+      // quality. Exposing it in the quality menu produced a raw "ao" button
+      // and could leave the player without a video track after selection.
+      if (_isAudioOnlyVariant(key, urls)) continue;
+
+      final configuredName = descriptor['name']?.toString().trim() ?? '';
+      final resolutionName = _caseInsensitiveMapValue(resolutionNames, key)?.toString().trim() ?? '';
+      final sdkParams = _decodeSdkParams(main is Map ? main['sdk_params'] : null);
+      final bitRate =
+          int.tryParse(descriptor['v_bit_rate']?.toString() ?? '') ??
+          int.tryParse(sdkParams['vbitrate']?.toString() ?? '');
+      final resolution = descriptor['resolution']?.toString().trim().isNotEmpty == true
+          ? descriptor['resolution'].toString()
+          : sdkParams['resolution']?.toString();
+      final level = int.tryParse(descriptor['level']?.toString() ?? '') ?? 0;
+      final knownRank = _douyinQualityRank(key);
+      // `v_bit_rate` is a stream property, not the quality hierarchy. Source
+      // can legitimately have a lower instantaneous bitrate than a transcoded
+      // tier; SDK key/level therefore owns ordering and bitrate is metadata.
+      final sort = knownRank > 0
+          ? knownRank
+          : level > 0
+          ? level * 1000000
+          : bitRate ?? 0;
+      qualities.add(
+        LivePlayQuality(
+          quality: LiveQualityLabel.normalize(
+            platform: Sites.douyinSite,
+            rawLabel: configuredName.isNotEmpty
+                ? configuredName
+                : resolutionName.isNotEmpty
+                ? resolutionName
+                : key,
+            id: key,
+            bitrate: bitRate,
+            resolution: resolution,
+          ),
+          id: key.toLowerCase(),
+          sort: sort,
+          data: List<String>.unmodifiable(urls),
+        ),
+      );
+    }
+
+    qualities.sort((left, right) {
+      final rank = right.sort.compareTo(left.sort);
+      return rank != 0 ? rank : left.selectionId.toString().compareTo(right.selectionId.toString());
+    });
+
+    // Platform aliases can expose the same actual URL under both legacy
+    // (`FULL_HD1`) and modern (`uhd`) keys. Presenting both would claim a
+    // quality change even though the player receives an identical source.
+    final seenStreams = <String>{};
+    return qualities
+        .where((quality) {
+          final urls = (quality.data as List).map((url) => url.toString()).toList()..sort();
+          return seenStreams.add(urls.join('\u0000'));
+        })
+        .toList(growable: false);
+  }
+
+  static Map<dynamic, dynamic> _decodeSdkParams(dynamic raw) {
+    if (raw is Map) return raw;
+    final value = raw?.toString().trim() ?? '';
+    if (value.isEmpty) return const <dynamic, dynamic>{};
+    try {
+      final decoded = jsonDecode(value);
+      return decoded is Map ? decoded : const <dynamic, dynamic>{};
+    } catch (_) {
+      return const <dynamic, dynamic>{};
+    }
+  }
+
+  static dynamic _caseInsensitiveMapValue(Map<dynamic, dynamic> map, String key) {
+    final direct = map[key];
+    if (direct != null) return direct;
+    final normalized = key.toLowerCase();
+    for (final entry in map.entries) {
+      if (entry.key?.toString().toLowerCase() == normalized) return entry.value;
+    }
+    return null;
+  }
+
+  static void _addPlayableUrl(List<String> urls, dynamic value) {
+    final url = value?.toString().trim() ?? '';
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasScheme || !const {'http', 'https'}.contains(uri.scheme) || urls.contains(url)) return;
+    urls.add(url);
+  }
+
+  static bool _isAudioOnlyVariant(String key, List<String> urls) {
+    final token = key.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
+    if (const {'ao', 'audio', 'audioonly'}.contains(token)) return true;
+    if (urls.isEmpty) return false;
+    return urls.every((url) {
+      final uri = Uri.tryParse(url);
+      final value = uri?.queryParameters['only_audio']?.toLowerCase();
+      return value == '1' || value == 'true';
+    });
+  }
+
+  static int _douyinQualityRank(String key) => switch (key.toUpperCase()) {
+    'ORIGION' || 'ORIGIN' => 6000000,
+    'FULL_HD1' || 'UHD' => 5000000,
+    'HD1' || 'HD' => 4000000,
+    'SD2' || 'SD' => 3000000,
+    'SD1' || 'LD' => 2000000,
+    'MD' => 1000000,
+    _ => 0,
+  };
+
+  @override
+  Future<List<String>> getPlayUrls({required LiveRoom detail, required LivePlayQuality quality}) async {
+    final data = quality.data;
+    return data is List ? data.map((url) => url.toString()).where((url) => url.isNotEmpty).toList(growable: false) : [];
+  }
+
+  @override
+  Future<List<LiveRoom>> searchRooms(String keyword, {int page = 1, int pageSize = 30}) async {
+    return await DouyinSearch.search(keyword, page: page, pageSize: pageSize);
+  }
+
+  @override
+  Future<List<LiveAnchorItem>> searchAnchors(String keyword, {int page = 1, int pageSize = 30}) async {
+    throw Exception(i18n('douyin_anchor_search_unsupported'));
+  }
+
+  @override
+  Future<bool> getLiveStatus(LiveRoom room) async {
+    var result = await getRoomDetail(room);
+    return result.status;
+  }
+
+  @override
+  Future<List<LiveSuperChatMessage>> getSuperChatMessage({required String roomId}) {
+    return Future.value(<LiveSuperChatMessage>[]);
+  }
+
+  // Builds a random hexadecimal string of the requested length.
+  String generateRandomString(int length) {
+    var random = math.Random.secure();
+    var values = List<int>.generate(length, (i) => random.nextInt(16));
+    StringBuffer stringBuffer = StringBuffer();
+    for (var item in values) {
+      stringBuffer.write(item.toRadixString(16));
+    }
+    return stringBuffer.toString();
+  }
+
+  /// Mirrors the numeric visitor-ID range produced by Douyin's current web
+  /// client: 7.3e18 (inclusive) through 8e18 (exclusive).
+  @visibleForTesting
+  static String generateAnonymousUserUniqueId({math.Random? random}) {
+    final source = random ?? math.Random.secure();
+    final value = StringBuffer('7')..write(3 + source.nextInt(7));
+    for (var i = 0; i < 17; i++) {
+      value.write(source.nextInt(10));
+    }
+    return value.toString();
+  }
+
+  // Builds a random number.
+  int generateRandomNumber(int length) {
+    var random = math.Random.secure();
+    var values = List<int>.generate(length, (i) => random.nextInt(10));
+    StringBuffer stringBuffer = StringBuffer();
+    for (var item in values) {
+      stringBuffer.write(item);
+    }
+    return int.tryParse(stringBuffer.toString()) ?? math.Random().nextInt(1000000000);
+  }
+}

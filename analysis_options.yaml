@@ -1,0 +1,20 @@
+include: package:flutter_lints/flutter.yaml
+analyzer:
+  errors:
+    invalid_annotation_target: ignore 
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
+    # Vendored plugin snapshots keep their upstream sources and only their
+    # Android registrars are patched; the app quality gate covers the code this
+    # repository maintains.
+    - plugins/built_in_kotlin/**
+    - plugins/flame_barrage/**
+    - third_party/**
+linter:
+  rules:

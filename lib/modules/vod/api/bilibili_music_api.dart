@@ -1,0 +1,253 @@
+import 'package:pure_live/modules/vod/api/bilibili_api_client.dart';
+import 'package:pure_live/modules/vod/models/models.dart';
+import 'package:pure_live/player/core/playback_header_resolver.dart';
+import 'package:pure_live/core/common/http_client.dart';
+
+/// The bilibili UGC endpoints the music mode reads.
+///
+/// Everything here runs against the *video* site (api.bilibili.com), not the
+/// live site, but it rides on the same stored bilibili cookie and the same WBI
+/// signer the live site maintains — one login serves both modes. The request
+/// plumbing lives in [BilibiliApiClient]; this file owns the playback and
+/// feed reads.
+///
+/// Two risk-control lessons from the reference TV client are baked in:
+/// - playurl uses the plain `/x/player/playurl` endpoint, never the WBI one
+///   (the signed variant trips `v_voucher` after a couple of plays);
+/// - guest requests carry the anonymous-preview params instead of a login.
+class BilibiliMusicApi {
+  BilibiliMusicApi._();
+
+  static final BilibiliMusicApi instance = BilibiliMusicApi._();
+
+  final BilibiliApiClient _client = BilibiliApiClient.instance;
+
+  /// The headers the CDN asks for when fetching the media streams themselves.
+  ///
+  /// Delegates to the central per-platform policy ([PlaybackHeaderResolver]):
+  /// same cookie + buvid fallback and UA as live playback, only the Referer is
+  /// the video page. Guests keep playing through the anonymous buvid cookie.
+  Future<Map<String, String>> streamHeaders(String bvid) {
+    return PlaybackHeaderResolver.resolveVod(bvid: bvid);
+  }
+
+  Map<String, String> _guestParams() => const {
+    'web_location': '1315873',
+    'gaia_source': 'pre-load',
+    'isGaiaAvoided': 'true',
+    'try_look': '1',
+  };
+
+  /// The music region leaderboard. Guest-friendly, no paging (fixed list).
+  Future<List<MusicArchive>> getMusicRanking() => getRegionRanking(rid: 3);
+
+  /// Any region's leaderboard (`ranking/v2?rid=`) — the guest-readable
+  /// endpoint the region browser and the ranking tabs ride on.
+  Future<List<MusicArchive>> getRegionRanking({required int rid}) async {
+    final result = await HttpClient.instance.getJson(
+      'https://api.bilibili.com/x/web-interface/ranking/v2',
+      queryParameters: {'rid': '$rid', 'type': 'all'},
+      header: await _client.headers(),
+    );
+    if (result['code'] != 0) {
+      throw Exception('ranking failed: ${result['code']} ${result['message']}');
+    }
+    final list = (result['data']?['list'] as List?) ?? const [];
+    return [for (final item in list) MusicArchive.fromRankingJson(item)];
+  }
+
+  /// A region's recommended video feed (`region/feed/rcmd`) — newBV's region
+  /// list, the plain (non-WBI) endpoint. Paged by `display_id` (starts at 1); an
+  /// empty `archives` answers the end of the feed.
+  Future<List<MusicArchive>> getRegionFeed({required int tid, required int page}) async {
+    final result = await HttpClient.instance.getJson(
+      'https://api.bilibili.com/x/web-interface/region/feed/rcmd',
+      queryParameters: {
+        'display_id': '$page',
+        'request_cnt': '15',
+        'from_region': '$tid',
+        'device': 'web',
+        'plat': '30',
+      },
+      header: await _client.headers(),
+    );
+    if (result['code'] != 0) {
+      throw Exception('region feed failed: ${result['code']} ${result['message']}');
+    }
+    final list = (result['data']?['archives'] as List?) ?? const [];
+    return [for (final item in list) MusicArchive.fromRegionFeedJson(item)];
+  }
+
+  /// The general popular feed, paged. Guest-friendly.
+  Future<List<MusicArchive>> getPopularVideos({required int page, int pageSize = 12}) async {
+    final result = await HttpClient.instance.getJson(
+      'https://api.bilibili.com/x/web-interface/popular',
+      queryParameters: {'pn': page.toString(), 'ps': pageSize.toString()},
+      header: await _client.headers(),
+    );
+    if (result['code'] != 0) {
+      throw Exception('popular failed: ${result['code']} ${result['message']}');
+    }
+    final list = (result['data']?['list'] as List?) ?? const [];
+    return [for (final item in list) MusicArchive.fromRankingJson(item)];
+  }
+
+  /// The personalized recommendation feed, paged through `fresh_idx` (WBI).
+  Future<List<MusicArchive>> getRecommendFeed({required int page, int pageSize = 12}) async {
+    const baseUrl = 'https://api.bilibili.com/x/web-interface/wbi/index/top/feed/rcmd';
+    final url =
+        '$baseUrl?fresh_type=4&ps=$pageSize&fresh_idx=$page&fresh_idx_1h=$page&platform=web'
+        '&web_location=1430654&x-tra-code=20001';
+    final params = await _client.wbiSign(url);
+    final result = await HttpClient.instance.getJson(baseUrl, queryParameters: params, header: await _client.headers());
+    if (result['code'] != 0) {
+      throw Exception('recommend feed failed: ${result['code']} ${result['message']}');
+    }
+    final list = (result['data']?['item'] as List?) ?? const [];
+    return [for (final item in list) MusicArchive.fromRankingJson(item)];
+  }
+
+  /// Related archives of one video (the detail page's Related videos row).
+  Future<List<MusicArchive>> getRelatedVideos({required int aid, String bvid = ''}) async {
+    // The endpoint increasingly answers aid-only requests with an error or an
+    // empty list — bvid is what the web player sends. Entries routed in from
+    // some lists carry aid = 0, so bvid leads and aid covers the stragglers.
+    final attempts = <Map<String, String>>[
+      if (bvid.isNotEmpty) {'bvid': bvid},
+      if (aid > 0) {'aid': aid.toString()},
+    ];
+    Object? result;
+    for (final query in attempts) {
+      result = await HttpClient.instance.getJson(
+        'https://api.bilibili.com/x/web-interface/archive/related',
+        queryParameters: query,
+        header: await _client.headers(),
+      );
+      if (result is Map && result['code'] == 0) break;
+    }
+    if (result is! Map || result['code'] != 0) {
+      throw Exception('related failed: ${result is Map ? result['code'] : result}');
+    }
+    // The endpoint answered `data` as the bare list before, `data.list` today.
+    final dynamic data = result['data'];
+    final list = data is List ? data : (data?['list'] as List?) ?? const [];
+    return [for (final item in list) MusicArchive.fromRelatedJson(item)];
+  }
+
+  /// Video search (the same endpoint the search page uses, typed `video`).
+  ///
+  /// Requires the WBI signature; the referer switches to the search host.
+  /// Video search. [order] is the web's sort key (`totalrank`/`click`/
+  /// `pubdate`/`dm`/`stow`); [duration] is the length tier (0 = any, then
+  /// <10 / 10-30 / 30-60 / >60 minutes) — the filter dialog's two fields.
+  Future<List<MusicArchive>> searchVideos(
+    String keyword, {
+    int page = 1,
+    int pageSize = 20,
+    String order = 'totalrank',
+    int duration = 0,
+  }) async {
+    const baseUrl = 'https://api.bilibili.com/x/web-interface/wbi/search/type';
+    final url =
+        '$baseUrl?search_type=video&keyword=${Uri.encodeQueryComponent(keyword)}'
+        '&order=$order&page=$page&page_size=$pageSize&highlight=1&single_column=0'
+        '${duration > 0 ? '&duration=$duration' : ''}';
+    final params = await _client.wbiSign(url);
+    final result = await HttpClient.instance.getJson(
+      baseUrl,
+      queryParameters: params,
+      header: await _client.headers(referer: 'https://search.bilibili.com/'),
+    );
+    if (result['code'] != 0) {
+      throw Exception('music search failed: ${result['code']} ${result['message']}');
+    }
+    final list = (result['data']?['result'] as List?) ?? const [];
+    // Each archive arrives with one page-less stub; the archive page refetches
+    // the full part list before anything plays.
+    return [for (final item in list) if (item['type']?.toString() == 'video') MusicArchive.fromSearchJson(item)];
+  }
+
+  /// The archive detail (view API): metadata plus every part.
+  Future<MusicArchive> getArchiveDetail(String bvid) async {
+    final result = await HttpClient.instance.getJson(
+      'https://api.bilibili.com/x/web-interface/view',
+      queryParameters: {'bvid': bvid},
+      header: await _client.headers(),
+    );
+    if (result['code'] != 0) {
+      throw Exception('music archive detail failed: ${result['code']} ${result['message']}');
+    }
+    return MusicArchive.fromViewJson(result['data']);
+  }
+
+  /// Playback URLs for one part.
+  ///
+  /// Requests the DASH ladder (`fnval=4048` + `qn=127` + `fourk=1`) so a single
+  /// answer carries every entitled `dash.video` rendition + `dash.audio` — the
+  /// quality menu is built from `videoOptions` and a switch re-opens a sibling
+  /// rendition without another round-trip, exactly like the reference client.
+  /// The video/audio m4s pair is handed to the kernel as a composite source;
+  /// the media_kit adapter attaches the audio through MPV's `audio-files`
+  /// side channel. A paid-but-unpurchased answer has no `dash`, only a trial
+  /// `durl`, which still resolves to the single muxed mp4 (no ladder).
+  Future<MusicPlayUrls> getPlayUrls({required String bvid, required int cid}) async {
+    final params = <String, String>{
+      'bvid': bvid,
+      'cid': cid.toString(),
+      'qn': '127',
+      'fnval': '4048',
+      'fnver': '0',
+      'fourk': '1',
+      'platform': 'oc',
+      'otype': 'json',
+      if (!_client.loggedIn) ..._guestParams(),
+    };
+    final result = await HttpClient.instance.getJson(
+      'https://api.bilibili.com/x/player/playurl',
+      queryParameters: params,
+      header: await _client.headers(referer: 'https://www.bilibili.com/video/$bvid/'),
+    );
+    if (result['code'] != 0) {
+      throw Exception('music playurl failed: ${result['code']} ${result['message']}');
+    }
+    final data = result['data'] as Map<dynamic, dynamic>? ?? {};
+    final servedQuality = int.tryParse(data['quality']?.toString() ?? '') ?? 0;
+
+    final dashUrls = MusicPlayUrls.fromDashAnswer(data, servedQuality: servedQuality);
+    if (dashUrls != null) return dashUrls;
+
+    final durl = data['durl'] as List?;
+    if (durl != null && durl.isNotEmpty) {
+      final order = (durl.first['order'] ?? 1) as int;
+      // Multi-segment mp4 answers cannot be concatenated by the player; only
+      // the single-segment shape is playable, which is what this endpoint
+      // returns outside of very long paid previews.
+      if (durl.length == 1 || order > 1) {
+        return MusicPlayUrls(
+          videoUrl: durl.first['url']?.toString() ?? '',
+          quality: servedQuality,
+          isDash: false,
+        );
+      }
+    }
+    throw Exception('music playurl: no playable stream');
+  }
+
+  /// Human label for a bilibili quality id.
+  static String qualityLabel(int quality) {
+    return switch (quality) {
+      127 => '8K',
+      126 => '杜比视界',
+      125 => 'HDR',
+      120 => '4K',
+      116 => '1080P60',
+      112 => '1080P+',
+      80 => '1080P',
+      74 => '720P60',
+      64 => '720P',
+      32 => '480P',
+      16 => '360P',
+      _ => '',
+    };
+  }
+}

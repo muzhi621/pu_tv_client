@@ -1,0 +1,221 @@
+import 'package:pure_live/exports/exports.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
+
+part 'theme_settings_controller.g.dart';
+
+@riverpod
+class ThemeSettingsController extends _$ThemeSettingsController {
+  static ThemeSettingsController get to => SettingsService.to.theme;
+
+  static const String defaultThemeModeName = 'System';
+  static const String defaultLanguageName = '简体中文';
+
+  /// The grid gap is stored directly in design pixels; 32 reproduces the
+  /// historical look (the old model stored 6 behind a hidden 26 offset).
+  static const double defaultSpacing = 6;
+  static const double _legacySpacingBase = 26;
+  static const double minSpacing = 0;
+  static const double maxSpacing = 64;
+  static const int defaultRoomCardColumns = 4;
+
+  /// Dense-room-layout levels, as grid columns: standard / dense.
+  static const List<int> roomCardColumnsOptions = <int>[4, 5, 6];
+
+  /// Grid cell aspect (width / height) for the room-card grids at [columns].
+  ///
+  /// Denser levels make every cell narrower; a fixed ratio would then leave too
+  /// little height under the 16:9 cover for the info row (a bottom overflow),
+  /// so the cell relatively heightens as the density grows.
+  static double roomCardAspectRatio(int columns) => switch (columns) {
+    5 => 1.25,
+    // The playlist shelf's tuned density: six narrow columns want the taller
+    // cell, not an even flatter one.
+    6 => 1.5,
+    _ => 1.3,
+  };
+
+  /// The one delegate every **card grid** takes — TvRoomCard, TvAreaCard, the
+  /// video and music media cards: the user's density setting
+  /// ([ThemeSettingsModel.denseRoomLayout]) picks the column count, the ratio
+  /// matched to it keeps the covers from starving their info row as the
+  /// density grows, and the grid-gap settings set the spacing. One settings
+  /// page tunes every shelf in the app.
+  ///
+  /// Special small grids stay exempt: the colour/icon/loading pickers, the
+  /// wallpaper tiles, episode chips and queue rows — none of them is a poster
+  /// card.
+  static SliverGridDelegateWithFixedCrossAxisCount cardGridDelegate(
+    BuildContext context,
+    WidgetRef ref, {
+    int? gridColums,
+    double? gridAspectRatio,
+  }) {
+    final ThemeSettingsModel themeState = ref.watch(themeSettingsControllerProvider);
+    // Rebuild when the font scale changes — TvTextScale.factorOf reads it via
+    // a static getter, so the grid won't update on its own.
+    ref.watch(fontSettingsControllerProvider);
+    int columns = gridColums ?? themeState.denseRoomLayout;
+    final textScaleFactor = TvTextScale.factorOf(context);
+    if (textScaleFactor > 1.0 && textScaleFactor <= 1.3) {
+      columns -= 1.clamp(1, columns);
+    } else if (textScaleFactor > 1.3 && textScaleFactor <= 1.6) {
+      columns -= 2.clamp(1, columns);
+    }
+    return TvAdaptiveGrid.fixed(
+      context,
+      crossAxisCount: columns,
+      mainAxisSpacing: themeState.mainAxisSpacing.w,
+      crossAxisSpacing: themeState.crossAxisSpacing.w,
+      childAspectRatio: gridAspectRatio ?? roomCardAspectRatio(columns),
+    );
+  }
+
+  static bool _hasSwitchedOnce = false;
+  static final Set<String> _loadingStyleKeys = AppConsts.allStyles
+      .map((item) => item['key'] ?? '')
+      .where((key) => key.isNotEmpty)
+      .toSet();
+
+  @override
+  ThemeSettingsModel build() {
+    final savedJson = HivePrefUtil.getObject('theme_settings', (json) => json as Map<String, dynamic>);
+    // A fresh install has no stored legacy value to migrate: its defaults are
+    // already direct spacing, otherwise the +26 legacy shift would inflate
+    // them. Only reads of stored data go through the one-time conversion.
+    final model = savedJson != null
+        ? _migrateSpacing(ThemeSettingsModel.fromJson(savedJson))
+        : const ThemeSettingsModel(spacingDirectV2: true);
+    return _normalize(model);
+  }
+
+  /// One-time conversion from the old offset semantics: what used to render
+  /// was `32 + stored - 6`, so the stored value carries that exact number over
+  /// and the setting means the actual gap from now on. Untouched installs
+  /// (stored 6 → 32) keep their look; a user-set 1 stops hiding a 27 gap.
+  static ThemeSettingsModel _migrateSpacing(ThemeSettingsModel model) {
+    if (model.spacingDirectV2) return model;
+    double convert(num v) => (v + _legacySpacingBase).clamp(minSpacing, maxSpacing).toDouble();
+    return model.copyWith(
+      crossAxisSpacing: convert(model.crossAxisSpacing),
+      mainAxisSpacing: convert(model.mainAxisSpacing),
+      spacingDirectV2: true,
+    );
+  }
+
+  /// Repairs stored visual settings that another build or an imported backup
+  /// can leave outside the supported range.
+  ///
+  /// An unknown theme mode or loading style would render nothing at all, and an
+  /// unbounded grid spacing makes the room grids unreadable.
+  static ThemeSettingsModel _normalize(ThemeSettingsModel model) {
+    return model.copyWith(
+      themeModeName: normalizeThemeMode(model.themeModeName),
+      languageName: normalizeLanguage(model.languageName),
+      loadingStyle: normalizeLoadingStyle(model.loadingStyle),
+      crossAxisSpacing: normalizeSpacing(model.crossAxisSpacing),
+      mainAxisSpacing: normalizeSpacing(model.mainAxisSpacing),
+      denseRoomLayout: normalizeRoomCardColumns(model.denseRoomLayout),
+    );
+  }
+
+  /// Matches a stored mode against [AppThemeConsts.themeModes] ignoring case.
+  static String normalizeThemeMode(String value) {
+    final normalized = value.trim().toLowerCase();
+    return AppThemeConsts.themeModes.keys.firstWhere(
+      (candidate) => candidate.toLowerCase() == normalized,
+      orElse: () => defaultThemeModeName,
+    );
+  }
+
+  /// Matches a stored language against [AppThemeConsts.languages] ignoring case.
+  static String normalizeLanguage(String value) {
+    final normalized = value.trim().toLowerCase();
+    return AppThemeConsts.languages.keys.firstWhere(
+      (candidate) => candidate.toLowerCase() == normalized,
+      orElse: () => defaultLanguageName,
+    );
+  }
+
+  static String normalizeLoadingStyle(String value) {
+    final normalized = value.trim();
+    return _loadingStyleKeys.contains(normalized) ? normalized : AppConsts.defaultLoadingStyleKey;
+  }
+
+  static double normalizeSpacing(num value) {
+    final converted = value.toDouble();
+    if (!converted.isFinite) return defaultSpacing;
+    return converted.clamp(minSpacing, maxSpacing).toDouble();
+  }
+
+  /// Stored/imported column counts snap to the nearest offered option.
+  static int normalizeRoomCardColumns(num value) {
+    final converted = value.toDouble();
+    if (!converted.isFinite) return defaultRoomCardColumns;
+    return roomCardColumnsOptions.reduce((a, b) => (converted - a).abs() <= (converted - b).abs() ? a : b);
+  }
+
+  void updateSettings(ThemeSettingsModel newModel) {
+    state = _normalize(newModel);
+    _persist();
+  }
+
+  void changeThemeMode(String mode) {
+    updateSettings(state.copyWith(themeModeName: mode));
+  }
+
+  void changeThemeColor(Color color) {
+    updateSettings(state.copyWith(themeColor: color));
+  }
+
+  Future<void> changeLanguageWithRetry(BuildContext context, {required String languageName}) async {
+    changeLanguage(languageName);
+
+    final targetLocale = AppThemeConsts.languages[languageName];
+    if (targetLocale == null) return;
+    if (!_hasSwitchedOnce) {
+      final pivotLanguage = AppThemeConsts.languages.keys.firstWhere(
+        (key) => key != languageName,
+        orElse: () => languageName,
+      );
+      final pivotLocale = AppThemeConsts.languages[pivotLanguage]!;
+      await context.setLocale(Locale(targetLocale.languageCode));
+      // ignore: use_build_context_synchronously
+      await context.setLocale(Locale(pivotLocale.languageCode));
+      // ignore: use_build_context_synchronously
+      await context.setLocale(Locale(targetLocale.languageCode));
+
+      _hasSwitchedOnce = true;
+    } else {
+      // succeeds on the next attempt
+      await context.setLocale(Locale(targetLocale.languageCode));
+    }
+  }
+
+  void changeLanguage(String lang) {
+    updateSettings(state.copyWith(languageName: lang));
+  }
+
+  void changeSpacing({double? crossAxis, double? mainAxis}) {
+    updateSettings(
+      state.copyWith(
+        crossAxisSpacing: crossAxis ?? state.crossAxisSpacing,
+        mainAxisSpacing: mainAxis ?? state.mainAxisSpacing,
+      ),
+    );
+  }
+
+  void _persist() {
+    HivePrefUtil.setObject('theme_settings', state.toJson());
+  }
+
+  // Accessor helpers
+  ThemeMode get themeMode => AppThemeConsts.themeModes[state.themeModeName] ?? ThemeMode.system;
+  Locale get locale => AppThemeConsts.languages[state.languageName] ?? const Locale('zh', 'CN');
+
+  // Backup and restore
+  Map<String, dynamic> toJson() => state.toJson();
+
+  void importFromJson(Map<String, dynamic> json) {
+    updateSettings(ThemeSettingsModel.fromJson(json));
+  }
+}

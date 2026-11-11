@@ -1,0 +1,63 @@
+import 'package:pure_live/platforms/sites.dart';
+import 'package:pure_live/exports/package_export.dart';
+import 'package:pure_live/app/router/app/app_router.dart';
+import 'package:pure_live/services/favorites/favorite_room_controller.dart';
+
+class PlatformSettingsSectionPage extends ConsumerWidget {
+  const PlatformSettingsSectionPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final favState = ref.watch(favoriteRoomControllerProvider);
+    final fav = ref.read(favoriteRoomControllerProvider.notifier);
+    // Only platforms the user actually shows can be the preferred opening tab;
+    // fall back to the full catalog when nothing is visible yet.
+    final visible = Sites().availableSites();
+    final sites = visible.isEmpty ? Sites.supportSites : visible;
+    final siteIds = sites.map((s) => s.id).toList();
+    final siteNames = sites.map((s) => s.name).toList();
+    final currentIndex = siteIds.indexOf(favState.preferPlatform).clamp(0, siteIds.length - 1);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TvSettingsGroupTitle(title: i18n('platform_settings')),
+        TvSettingsCard(
+          children: [
+            // Same rows and order as the desktop platform page: which platforms are
+            // shown, the preferred platform, then the authorisation and tag pages.
+            TvSettingsNavTile(
+              title: i18n('platform_display'),
+              subtitle: i18n('platform_display_subtitle'),
+              icon: Remix.apps_2_line,
+              onTap: () => const PlatformDisplayRoute().push(context),
+            ),
+            TvSettingsOptionTile(
+              title: i18n('prefer_platform'),
+              subtitle: i18n('prefer_platform_subtitle'),
+              icon: Remix.heart_3_line,
+              options: siteNames,
+              // The picker rows wear each platform's own logo, like every
+              // other platform list in the app.
+              optionLeading: [for (final site in sites) TvPlatformLogo(logo: site.logo)],
+              index: currentIndex,
+              onChanged: (i) => fav.changePreferPlatform(siteIds[i]),
+            ),
+            TvSettingsNavTile(
+              title: i18n('third_party_auth'),
+              subtitle: i18n('third_party_auth_subtitle'),
+              icon: Remix.accessibility_line,
+              onTap: () => const AccountSettingsRoute().push(context),
+            ),
+            TvSettingsNavTile(
+              title: i18n('tag_management'),
+              subtitle: i18n('tag_management_subtitle'),
+              icon: Remix.price_tag_3_line,
+              onTap: () => const TagsRoute().push(context),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}

@@ -1,0 +1,55 @@
+import os
+import shutil
+import time
+source_dir_name = 'E:/project/pure_live_release_Tv/'
+# target_apk_dir_name = 'E:/project/pure_live_TV/build/app/outputs/flutter-apk/'
+target_files = ['app-arm64-v8a-release.apk','app-armeabi-v7a-release.apk']
+build_path = []
+buildcellctions = []
+target_apk_dir_name = 'C:/Users/XA-158/projects/flutter/pure_live_TV/build/app/outputs/flutter-apk/'
+files = []
+dirArr = ['app-arm64-v8a-release-TV.apk','app-armeabi-v7a-release-TV.apk']
+def traversal_dirs(path):
+    for item in os.scandir(path):
+        if item.is_dir():
+            shutil.rmtree(item.path)
+        else:
+            os.remove(item.path)
+            
+def traversal_files(path):
+    for item in os.scandir(path):
+        if item.is_file():
+            fileName = item.path.split('/')[-1].split('\\')[-1]
+            if fileName in target_files:
+                buildcellctions.append(item.path)
+    
+def traversal_target_files(path,version):
+    if (len(buildcellctions)!=len(dirArr)):
+      print('请全部打包')
+      return
+    for i in range(0,len(dirArr)):
+            src = os.path.join(path,version + '-' +dirArr[i])
+            source = buildcellctions[i]
+            shutil.copy(source, src)
+def zip_dirs(path):
+    for file in os.listdir(path):
+        file_path = os.path.join(path, file)
+        if os.path.isdir(file_path):
+           shutil.make_archive(file_path, 'zip', file_path)
+
+def main():
+        version = str(input("请输入你想发布的版本："))
+        # 先改名字12
+        traversal_dirs(source_dir_name)
+        
+        
+        # 复制文件
+        
+        traversal_files(target_apk_dir_name)
+        traversal_target_files(source_dir_name,version)
+        # print(buildcellctions)
+        # 压缩为zip
+        # zip_dirs(source_dir_name)
+        # 12
+if __name__ == '__main__':
+     main()

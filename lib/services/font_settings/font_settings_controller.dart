@@ -1,0 +1,225 @@
+import 'dart:io';
+import 'dart:convert';
+import 'font_settings_model.dart';
+import 'package:path/path.dart' as p;
+import 'package:flutter/services.dart';
+import 'package:pure_live/exports/common_export.dart';
+import 'package:pure_live/services/settings/settings.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:pure_live/app/bootstrap/app_path_manager.dart';
+
+part 'font_settings_controller.g.dart';
+
+@riverpod
+class FontSettingsController extends _$FontSettingsController {
+  static FontSettingsController get to => SettingsService.to.font;
+
+  /// The cloud-font manifest bundled with the app.
+  List<FontModel> fontList = [];
+
+  /// Disk usage of every downloaded family, e.g. `{'SourceHanSans': '12.4 MB'}`.
+  ///
+  /// A family being present here *is* what "downloaded" means for the manager page —
+  /// the same source of truth the mobile app uses (`fontFolderSizes`), so a family
+  /// deleted behind the app's back stops looking installed on the next refresh.
+  Map<String, String> fontFolderSizes = <String, String>{};
+
+  static const String _familyKey = 'fontFamilyName';
+  static const String _fileNameKey = 'fontFamilyFileName';
+
+  DateTime? _lastDiskSizeRefresh;
+  Future<void>? _diskSizeRefresh;
+
+  /// The weight file the active family is locked to, or `''` for the whole family.
+  ///
+  /// Kept in Hive next to the family rather than in [FontSettingsModel]: the model is
+  /// mirrored into the settings file the desktop app reads, and this is device-local,
+  /// exactly as on mobile.
+  String get fontFamilyFileName => HivePrefUtil.getString(_fileNameKey) ?? '';
+
+  /// Whether a downloaded family (not the bundled one) is in force.
+  bool get hasCustomFamily {
+    final String id = state.value?.fontFamilyName ?? 'Default';
+    return id != 'Default' && id.isNotEmpty;
+  }
+
+  @override
+  Future<FontSettingsModel> build() async {
+    await _loadInitialFontManifest();
+    // Restore before the model is built: the lifecycle below may fall back to the
+    // bundled font, and the model has to carry the value the app will actually render.
+    await _restoreFontFamily(HivePrefUtil.getString(_familyKey) ?? 'Default');
+
+    return FontSettingsModel(
+      // Clamp the stored scale into the slider's range: a value saved under the
+      // old 1.6 max paints at 2.4x on a 720p panel once the legibility
+      // correction stacks on, which is where every scaled layout broke.
+      textScaleFactor: (HivePrefUtil.getDouble('textScaleFactor') ?? 1.0).clamp(0.8, 1.6),
+      fontFamilyName: HivePrefUtil.getString(_familyKey) ?? 'Default',
+    );
+  }
+
+  Future<void> _loadInitialFontManifest() async {
+    try {
+      final jsonStr = await rootBundle.loadString('assets/fonts/fonts-manifest.json');
+      final list = jsonDecode(jsonStr) as List;
+      fontList = list.map((e) => FontModel.fromJson(e)).toList();
+    } catch (_) {}
+  }
+
+  /// Re-registers the family in force after a restart, and falls back to the bundled
+  /// font when it cannot be rendered any more.
+  ///
+  /// Three cases, all of them the mobile app's startup lifecycle: the family's files
+  /// are gone, the weight it was locked to is gone, or everything is fine. The stored
+  /// weight is cleared whenever it had to be dropped, so the next start does not retry
+  /// a file that is not there. Without this a restart showed the family name in settings
+  /// while every glyph fell back to the platform font font missing after restart.
+  Future<void> _restoreFontFamily(String id) async {
+    if (id == 'Default' || id.isEmpty) return;
+
+    // A locked family stores its derived id (`X::700`); the folder is `X`.
+    final String baseId = FontDownloadManager.baseFamilyId(id);
+    final String storedFile = fontFamilyFileName;
+    if (!await FontDownloadManager.instance.checkFontDownloaded(baseId)) {
+      await _clearFamily();
+      return;
+    }
+    // A derived id without its weight file is unusable: the whole-family
+    // registration lives under the base id, which the theme never reads.
+    if (baseId != id && storedFile.isEmpty) {
+      await _clearFamily();
+      return;
+    }
+
+    bool loaded = await FontDownloadManager.instance.loadFont(baseId, fileName: storedFile);
+    if (!loaded && storedFile.isNotEmpty) {
+      // The locked weight was removed but the family is still usable: keep the family
+      // and drop the lock.
+      loaded = await FontDownloadManager.instance.loadFont(baseId);
+      if (loaded) {
+        await HivePrefUtil.setString(_fileNameKey, '');
+        await HivePrefUtil.setString(_familyKey, baseId);
+      }
+    }
+    if (!loaded) await _clearFamily();
+  }
+
+  Future<void> _clearFamily() async {
+    await HivePrefUtil.setString(_familyKey, 'Default');
+    await HivePrefUtil.setString(_fileNameKey, '');
+  }
+
+  Future<void> updateSettings(FontSettingsModel newModel) async {
+    state = AsyncData(newModel);
+    HivePrefUtil.setDouble('textScaleFactor', newModel.textScaleFactor);
+    HivePrefUtil.setString(_familyKey, newModel.fontFamilyName);
+  }
+
+  /// Applies [fontModel], optionally locked to a single weight file.
+  ///
+  /// The family is registered **before** anything is persisted, so a family whose files
+  /// are gone — or a weight that is missing — leaves the current selection alone and
+  /// only says why (the mobile app's `activateFontFamily`).
+  Future<bool> activateFontFamily(FontModel fontModel, {String? targetFileName}) async {
+    final bool locked = targetFileName != null && targetFileName.isNotEmpty;
+    final bool loaded = await FontDownloadManager.instance.loadFont(fontModel.id, fileName: targetFileName ?? '');
+    if (!loaded) {
+      ToastUtil.show(i18n('font_not_downloaded_or_corrupted'));
+      return false;
+    }
+
+    // The theme reads the family the engine actually registered: the base id
+    // for the whole family, the derived id for a locked weight.
+    final String familyName = locked ? FontDownloadManager.lockedFamilyId(fontModel.id, targetFileName) : fontModel.id;
+
+    final FontSettingsModel? current = state.value;
+    if (current != null) {
+      await updateSettings(current.copyWith(fontFamilyName: familyName));
+    } else {
+      await HivePrefUtil.setString(_familyKey, familyName);
+    }
+    await HivePrefUtil.setString(_fileNameKey, targetFileName ?? '');
+
+    if (locked) {
+      ToastUtil.show(
+        i18n(
+          'font_toast_exclusive',
+          args: {'name': fontModel.name, 'subName': FontDownloadManager.weightLabelOf(targetFileName)},
+        ),
+      );
+    } else {
+      ToastUtil.show(i18n('font_toast_global', args: {'name': fontModel.name}));
+    }
+    return true;
+  }
+
+  /// Drops back to the font bundled with the app.
+  Future<void> resetAppFontFamily() async {
+    final FontSettingsModel? current = state.value;
+    if (current != null) {
+      await updateSettings(current.copyWith(fontFamilyName: 'Default'));
+    } else {
+      await HivePrefUtil.setString(_familyKey, 'Default');
+    }
+    await HivePrefUtil.setString(_fileNameKey, '');
+  }
+
+  /// Deletes the downloaded files of [font], dropping the selection when it was the one
+  /// in force. The danmaku family is handled by its own controller.
+  Future<void> uninstallFontFamily(FontModel font) async {
+    await FontDownloadManager.instance.deleteFontFamily(font, (_) {});
+    final String? active = state.value?.fontFamilyName;
+    if (active != null && FontDownloadManager.baseFamilyId(active) == font.id) {
+      await resetAppFontFamily();
+    }
+    await refreshFontDiskSizes(force: true);
+  }
+
+  /// Re-reads the size of every downloaded family, at most once every 30 seconds.
+  ///
+  /// The page calls this on open and after a download/delete; the throttle keeps the
+  /// directory walk off the frame budget when the page is rebuilt repeatedly.
+  Future<void> refreshFontDiskSizes({bool force = false}) {
+    final Future<void>? inFlight = _diskSizeRefresh;
+    if (inFlight != null) return inFlight;
+
+    final DateTime? last = _lastDiskSizeRefresh;
+    if (!force && last != null && DateTime.now().difference(last) < const Duration(seconds: 30)) {
+      return Future<void>.value();
+    }
+
+    final Future<void> refresh = _readFontDiskSizes();
+    _diskSizeRefresh = refresh;
+    return refresh.whenComplete(() {
+      if (identical(_diskSizeRefresh, refresh)) _diskSizeRefresh = null;
+    });
+  }
+
+  Future<void> _readFontDiskSizes() async {
+    final Directory fontRoot = await AppPathManager().fontRootDir;
+    final Map<String, String> nextSizes = <String, String>{};
+
+    await for (final entity in fontRoot.list()) {
+      if (entity is! Directory) continue;
+      int bytes = 0;
+      await for (final file in entity.list(recursive: true)) {
+        if (file is File) bytes += await file.length();
+      }
+      // A folder of empty files is a dead download, not an installed family.
+      if (bytes <= 0) continue;
+      nextSizes[p.basename(entity.path)] = '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
+    }
+
+    fontFolderSizes = nextSizes;
+    _lastDiskSizeRefresh = DateTime.now();
+  }
+
+  void importFromJson(Map<String, dynamic> json) {
+    state = AsyncData(FontSettingsModel.fromJson(json));
+  }
+
+  Map<String, dynamic> toJson() {
+    return state.value?.toJson() ?? const FontSettingsModel().toJson();
+  }
+}

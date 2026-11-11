@@ -1,0 +1,954 @@
+[
+  {
+    "version": "3.0.7",
+    "title": "v3.0.7",
+    "date": "2026-09-27",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v3.0.7",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v3.0.7\n本次更新内容：\n-Feature:修复斗鱼播放视频卡顿,优化弹幕\n📺 版本说明：\n• Impeller 版：新渲染器，文件名带 -impeller，推荐优先尝试\n• Skia 版：旧渲染器，文件名带 -skia，画面异常/黑屏时改用此版\n• 每个渲染器均按 ABI 拆分：arm64-v8a（绝大多数设备）、armeabi-v7a（老设备）、x86_64（模拟器）\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
+    "files": [
+      {
+        "name": "PureLive-TV-arm64-v8a-impeller",
+        "size": "93.21mb",
+        "downloads": 0,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-arm64-v8a-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-arm64-v8a-skia",
+        "size": "93.21mb",
+        "downloads": 0,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-arm64-v8a-skia.apk"
+      },
+      {
+        "name": "PureLive-TV-armeabi-v7a-impeller",
+        "size": "78.92mb",
+        "downloads": 1,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-armeabi-v7a-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-armeabi-v7a-skia",
+        "size": "78.92mb",
+        "downloads": 0,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-armeabi-v7a-skia.apk"
+      },
+      {
+        "name": "PureLive-TV-x86_64-impeller",
+        "size": "95.97mb",
+        "downloads": 0,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-x86_64-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-x86_64-skia",
+        "size": "95.97mb",
+        "downloads": 0,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-x86_64-skia.apk"
+      }
+    ]
+  },
+  {
+    "version": "3.0.6",
+    "title": "v3.0.6",
+    "date": "2026-09-26",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v3.0.6",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v3.0.6\n本次更新内容：\n-Feature:修复分页加载,添加fvp播放器,优化UI\n📺 版本说明：\n• Impeller 版：新渲染器，文件名带 -impeller，推荐优先尝试\n• Skia 版：旧渲染器，文件名带 -skia，画面异常/黑屏时改用此版\n• 每个渲染器均按 ABI 拆分：arm64-v8a（绝大多数设备）、armeabi-v7a（老设备）、x86_64（模拟器）\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
+    "files": [
+      {
+        "name": "PureLive-TV-arm64-v8a-impeller",
+        "size": "93.99mb",
+        "downloads": 139,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.6/PureLive-TV-arm64-v8a-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-arm64-v8a-skia",
+        "size": "93.99mb",
+        "downloads": 76,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.6/PureLive-TV-arm64-v8a-skia.apk"
+      },
+      {
+        "name": "PureLive-TV-armeabi-v7a-impeller",
+        "size": "78.85mb",
+        "downloads": 179,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.6/PureLive-TV-armeabi-v7a-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-armeabi-v7a-skia",
+        "size": "78.85mb",
+        "downloads": 65,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.6/PureLive-TV-armeabi-v7a-skia.apk"
+      },
+      {
+        "name": "PureLive-TV-x86_64-impeller",
+        "size": "95.91mb",
+        "downloads": 27,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.6/PureLive-TV-x86_64-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-x86_64-skia",
+        "size": "95.91mb",
+        "downloads": 13,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.6/PureLive-TV-x86_64-skia.apk"
+      }
+    ]
+  },
+  {
+    "version": "3.0.5",
+    "title": "v3.0.5",
+    "date": "2026-09-25",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v3.0.5",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v3.0.5\n本次更新内容：\n-Feature:直播页进房即显示房间信息（标题/主播/头像/人气/公告），详情请求失败时也会标明是哪个房间，回放与未开播按真实原因呈现，不再误报「无可用清晰度」。\n-Feature:关注状态实时回写：房间下播后卡片自动归入离线或回放，同一房间的两种平台 id 都能命中；各状态页签的网格自动对齐，不必再手动切页签才刷新；快速上下换台不再黑屏。\n-Feature:备份导入前先勾选模块：非 TV 备份默认只勾关注/历史/Cookie/IPTV/标签，TV 备份默认全选；备份页新增手机扫码入口，可在浏览器下载或导入与本地备份同一种文件。\n-Feature:IPTV 播放列表按镜像池竞速取源并校验正文，频道卡显示来源分组与频道号。\n-Feature:标签栏新增刷新进度线，历史页二次按下对整表重新校验平台状态；分区目录平铺与卡片布局修复。\n-Fixed:切换播放内核时自动重新获取播放地址，过期的流地址不再导致切换失败。\n-Fixed:安装包下载到应用文档目录，修复部分设备安装器无法起动的问题。\n-Fixed:音量不再被历史房间记忆压低（移除按房间记忆音量）；设备同步页补上接收结果提示。\n-Intro: 移除未使用的 PingFang/MiSans 静态字体；本地备份、设备同步与网页导出的备份统一为同一种文件格式。\n📺 版本说明：\n• Impeller 版：新渲染器，文件名带 -impeller，推荐优先尝试\n• Skia 版：旧渲染器，文件名带 -skia，画面异常/黑屏时改用此版\n• 每个渲染器均按 ABI 拆分：arm64-v8a（绝大多数设备）、armeabi-v7a（老设备）、x86_64（模拟器）\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
+    "files": [
+      {
+        "name": "PureLive-TV-arm64-v8a-impeller",
+        "size": "80.74mb",
+        "downloads": 312,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.5/PureLive-TV-arm64-v8a-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-arm64-v8a-skia",
+        "size": "80.74mb",
+        "downloads": 116,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.5/PureLive-TV-arm64-v8a-skia.apk"
+      },
+      {
+        "name": "PureLive-TV-armeabi-v7a-impeller",
+        "size": "68.09mb",
+        "downloads": 192,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.5/PureLive-TV-armeabi-v7a-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-armeabi-v7a-skia",
+        "size": "68.09mb",
+        "downloads": 86,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.5/PureLive-TV-armeabi-v7a-skia.apk"
+      },
+      {
+        "name": "PureLive-TV-x86_64-impeller",
+        "size": "82.48mb",
+        "downloads": 48,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.5/PureLive-TV-x86_64-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-x86_64-skia",
+        "size": "82.48mb",
+        "downloads": 31,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.5/PureLive-TV-x86_64-skia.apk"
+      }
+    ]
+  },
+  {
+    "version": "3.0.4",
+    "title": "v3.0.4",
+    "date": "2026-09-24",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v3.0.4",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v3.0.4\n本次更新内容：\n-Feature:全部平台图标重制：47 个站点统一为 200×200 高清品牌图标，修复缺失、模糊与白边（斗鱼/虎牙/快手/YY/17LIVE/六间房/微博/京东/百度/TikTok 等）。\n-Feature:切换播放内核时自动重新获取播放地址，过期的流地址不再导致切换失败。\n-Feature:在线更新页显示各安装包体积，按架构与渲染器区分。\n-Fixed:修复画面已开始播放后「缓冲中」提示仍然显示的问题。\n-Fixed:修复动态壁纸在进出播放页时反复重建解码器导致的卡顿。\n-Fixed:修复微博空搜索、小红书深链跳转、首选平台越界等平台问题。\n-Intro: 移除系统动态取色功能，主题以手动选择为准。\n📺 版本说明：\n• Impeller 版：新渲染器，文件名带 -impeller，推荐优先尝试\n• Skia 版：旧渲染器，文件名带 -skia，画面异常/黑屏时改用此版\n• 每个渲染器均按 ABI 拆分：arm64-v8a（绝大多数设备）、armeabi-v7a（老设备）、x86_64（模拟器）\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
+    "files": [
+      {
+        "name": "PureLive-TV-arm64-v8a-impeller",
+        "size": "85.92mb",
+        "downloads": 74,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.4/PureLive-TV-arm64-v8a-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-arm64-v8a-skia",
+        "size": "85.92mb",
+        "downloads": 33,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.4/PureLive-TV-arm64-v8a-skia.apk"
+      },
+      {
+        "name": "PureLive-TV-armeabi-v7a-impeller",
+        "size": "73.2mb",
+        "downloads": 53,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.4/PureLive-TV-armeabi-v7a-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-armeabi-v7a-skia",
+        "size": "73.2mb",
+        "downloads": 24,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.4/PureLive-TV-armeabi-v7a-skia.apk"
+      },
+      {
+        "name": "PureLive-TV-x86_64-impeller",
+        "size": "87.67mb",
+        "downloads": 9,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.4/PureLive-TV-x86_64-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-x86_64-skia",
+        "size": "87.67mb",
+        "downloads": 9,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.4/PureLive-TV-x86_64-skia.apk"
+      }
+    ]
+  },
+  {
+    "version": "3.0.3",
+    "title": "v3.0.3",
+    "date": "2026-09-23",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v3.0.3",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v3.0.3\n本次更新内容：\n-Feature:接入 20+ 个直播平台（YouTube Live、TikTok、Bigo、六间房、淘宝、京东、酷狗、虾皮、VK、Rumble 等），并修正 YY、CHZZK、微博的分类与人数显示。\n-Feature:新增纯音频模式：播放页底栏一键切换，只听声音、不渲染画面。\n-Feature:关注页改造：平台标签只列出有关注房间的平台，支持给房间设置标签并按标签筛选、排序。\n-Feature:新增斗鱼账号 Cookie 支持，手机远程页补齐斗鱼、淘宝等平台。\n-Fixed:在线更新按 ABI 与渲染器下载正确的安装包（此前会取到不存在的文件名）。\n-Fixed:关注列表不再只显示第一页，历史页滚动不再清空，每页条数统一为 20/40/60/80。\n-Fixed:电视输入法输入的内容可被识别；未知观众数不再显示成 0 人。\n-Fixed:播放列表跟随你打开它的列表（关注 / 热门 / 分区 / 搜索），补上观看历史，长按换台不再改写播放列表。\n-Intro: 播放页顶栏把房间信息与时间合并成一张卡，线路与清晰度只在底栏显示。\n-Intro: 切换直播间改为上下选择、OK 确认；长按关注的房间卡片可设置标签。\n📺 版本说明：\n• Impeller 版：新渲染器，文件名带 -impeller，推荐优先尝试\n• Skia 版：旧渲染器，文件名带 -skia，画面异常/黑屏时改用此版\n• 每个渲染器均按 ABI 拆分：arm64-v8a（绝大多数设备）、armeabi-v7a（老设备）、x86_64（模拟器）\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
+    "files": [
+      {
+        "name": "PureLive-TV-arm64-v8a-impeller",
+        "size": "86.02mb",
+        "downloads": 112,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.3/PureLive-TV-arm64-v8a-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-arm64-v8a-skia",
+        "size": "86.02mb",
+        "downloads": 33,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.3/PureLive-TV-arm64-v8a-skia.apk"
+      },
+      {
+        "name": "PureLive-TV-armeabi-v7a-impeller",
+        "size": "73.38mb",
+        "downloads": 94,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.3/PureLive-TV-armeabi-v7a-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-armeabi-v7a-skia",
+        "size": "73.38mb",
+        "downloads": 46,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.3/PureLive-TV-armeabi-v7a-skia.apk"
+      },
+      {
+        "name": "PureLive-TV-x86_64-impeller",
+        "size": "87.76mb",
+        "downloads": 11,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.3/PureLive-TV-x86_64-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-x86_64-skia",
+        "size": "87.76mb",
+        "downloads": 9,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.3/PureLive-TV-x86_64-skia.apk"
+      }
+    ]
+  },
+  {
+    "version": "3.0.2",
+    "title": "v3.0.2",
+    "date": "2026-09-22",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v3.0.2",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v3.0.2\n本次更新内容：\n-Fixed:优化主页.\n-Intro: 双击Tbar即可刷新. \n-Intro: 长按直播间或.分区可关注或取消关注 \n📺 版本说明：\n• Impeller 版：新渲染器，文件名带 -impeller，推荐优先尝试\n• Skia 版：旧渲染器，文件名带 -skia，画面异常/黑屏时改用此版\n• 每个渲染器均按 ABI 拆分：arm64-v8a（绝大多数设备）、armeabi-v7a（老设备）、x86_64（模拟器）\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
+    "files": [
+      {
+        "name": "PureLive-TV-arm64-v8a-impeller",
+        "size": "85.01mb",
+        "downloads": 134,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.2/PureLive-TV-arm64-v8a-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-arm64-v8a-skia",
+        "size": "85.01mb",
+        "downloads": 66,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.2/PureLive-TV-arm64-v8a-skia.apk"
+      },
+      {
+        "name": "PureLive-TV-armeabi-v7a-impeller",
+        "size": "72.24mb",
+        "downloads": 124,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.2/PureLive-TV-armeabi-v7a-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-armeabi-v7a-skia",
+        "size": "72.24mb",
+        "downloads": 77,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.2/PureLive-TV-armeabi-v7a-skia.apk"
+      },
+      {
+        "name": "PureLive-TV-x86_64-impeller",
+        "size": "86.75mb",
+        "downloads": 21,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.2/PureLive-TV-x86_64-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-x86_64-skia",
+        "size": "86.75mb",
+        "downloads": 18,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.2/PureLive-TV-x86_64-skia.apk"
+      }
+    ]
+  },
+  {
+    "version": "3.0.1",
+    "title": "v3.0.1",
+    "date": "2026-09-21",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v3.0.1",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v3.0.1\n本次更新内容：\n-Fixed:优化播放器以及修复输入.\n📺 版本说明：\n• Impeller 版：新渲染器，文件名带 -impeller，推荐优先尝试\n• Skia 版：旧渲染器，文件名带 -skia，画面异常/黑屏时改用此版\n• 每个渲染器均按 ABI 拆分：arm64-v8a（绝大多数设备）、armeabi-v7a（老设备）、x86_64（模拟器）\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
+    "files": [
+      {
+        "name": "PureLive-TV-arm64-v8a-impeller",
+        "size": "85.78mb",
+        "downloads": 51,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.1/PureLive-TV-arm64-v8a-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-arm64-v8a-skia",
+        "size": "85.78mb",
+        "downloads": 29,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.1/PureLive-TV-arm64-v8a-skia.apk"
+      },
+      {
+        "name": "PureLive-TV-armeabi-v7a-impeller",
+        "size": "73.03mb",
+        "downloads": 55,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.1/PureLive-TV-armeabi-v7a-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-armeabi-v7a-skia",
+        "size": "73.03mb",
+        "downloads": 52,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.1/PureLive-TV-armeabi-v7a-skia.apk"
+      },
+      {
+        "name": "PureLive-TV-x86_64-impeller",
+        "size": "87.53mb",
+        "downloads": 8,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.1/PureLive-TV-x86_64-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-x86_64-skia",
+        "size": "87.53mb",
+        "downloads": 6,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.1/PureLive-TV-x86_64-skia.apk"
+      }
+    ]
+  },
+  {
+    "version": "3.0.0",
+    "title": "v3.0.0",
+    "date": "2026-09-20",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v3.0.0",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v3.0.0\n本次更新内容：\n-Fixed:同步android各种直播平台。\n-Feature:重新打造纯粹直播TV版。\n-Feature:已修改包名为com.mystyle.purelive.tv。\n📺 版本说明：\n• Impeller 版：新渲染器，文件名带 -impeller，推荐优先尝试\n• Skia 版：旧渲染器，文件名带 -skia，画面异常/黑屏时改用此版\n• 每个渲染器均按 ABI 拆分：arm64-v8a（绝大多数设备）、armeabi-v7a（老设备）、x86_64（模拟器）\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
+    "files": [
+      {
+        "name": "PureLive-TV-arm64-v8a-impeller",
+        "size": "86.04mb",
+        "downloads": 87,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.0/PureLive-TV-arm64-v8a-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-arm64-v8a-skia",
+        "size": "86.04mb",
+        "downloads": 65,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.0/PureLive-TV-arm64-v8a-skia.apk"
+      },
+      {
+        "name": "PureLive-TV-armeabi-v7a-impeller",
+        "size": "73.3mb",
+        "downloads": 94,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.0/PureLive-TV-armeabi-v7a-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-armeabi-v7a-skia",
+        "size": "73.3mb",
+        "downloads": 62,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.0/PureLive-TV-armeabi-v7a-skia.apk"
+      },
+      {
+        "name": "PureLive-TV-x86_64-impeller",
+        "size": "87.78mb",
+        "downloads": 13,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.0/PureLive-TV-x86_64-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-x86_64-skia",
+        "size": "87.78mb",
+        "downloads": 8,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.0/PureLive-TV-x86_64-skia.apk"
+      }
+    ]
+  },
+  {
+    "version": "2.0.20",
+    "title": "v2.0.20",
+    "date": "2026-05-31",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v2.0.20",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v2.0.20\n本次更新内容：\n-Fixed:优化弹幕\n📺 版本说明：\n• 标准版：包含完整播放器内核 (来自 main 分支)\n• 精简版：不含 Exo 内核，文件名带 -without-exo (来自 without-exo 分支)\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
+    "files": [
+      {
+        "name": "arm64-v8a",
+        "size": "51.82mb",
+        "downloads": 9159,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.20/app-arm64-v8a-release.apk"
+      },
+      {
+        "name": "arm64-v8a-without-exo",
+        "size": "45.47mb",
+        "downloads": 1550,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.20/app-arm64-v8a-without-exo.apk"
+      },
+      {
+        "name": "armeabi-v7a",
+        "size": "50.6mb",
+        "downloads": 6377,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.20/app-armeabi-v7a-release.apk"
+      },
+      {
+        "name": "armeabi-v7a-without-exo",
+        "size": "44.87mb",
+        "downloads": 1340,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.20/app-armeabi-v7a-without-exo.apk"
+      },
+      {
+        "name": "x86_64",
+        "size": "53.72mb",
+        "downloads": 1348,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.20/app-x86_64-release.apk"
+      },
+      {
+        "name": "x86_64-without-exo",
+        "size": "47.34mb",
+        "downloads": 534,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.20/app-x86_64-without-exo.apk"
+      }
+    ]
+  },
+  {
+    "version": "2.0.19",
+    "title": "v2.0.19",
+    "date": "2026-05-26",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v2.0.19",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v2.0.19\n本次更新内容：\n-Fixed:优化抖音分类显示以及优化背景色\n📺 版本说明：\n• 标准版：包含完整播放器内核 (来自 main 分支)\n• 精简版：不含 Exo 内核，文件名带 -without-exo (来自 without-exo 分支)\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
+    "files": [
+      {
+        "name": "arm64-v8a",
+        "size": "45.95mb",
+        "downloads": 453,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.19/app-arm64-v8a-release.apk"
+      },
+      {
+        "name": "arm64-v8a-without-exo",
+        "size": "39.61mb",
+        "downloads": 106,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.19/app-arm64-v8a-without-exo.apk"
+      },
+      {
+        "name": "armeabi-v7a",
+        "size": "44.74mb",
+        "downloads": 429,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.19/app-armeabi-v7a-release.apk"
+      },
+      {
+        "name": "armeabi-v7a-without-exo",
+        "size": "39.01mb",
+        "downloads": 138,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.19/app-armeabi-v7a-without-exo.apk"
+      },
+      {
+        "name": "x86_64",
+        "size": "47.86mb",
+        "downloads": 80,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.19/app-x86_64-release.apk"
+      },
+      {
+        "name": "x86_64-without-exo",
+        "size": "41.47mb",
+        "downloads": 40,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.19/app-x86_64-without-exo.apk"
+      }
+    ]
+  },
+  {
+    "version": "2.0.18",
+    "title": "v2.0.18",
+    "date": "2026-05-20",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v2.0.18",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v2.0.18\n本次更新内容：\n-Fixed:添加快手cookies\n📺 版本说明：\n• 标准版：包含完整播放器内核 (来自 main 分支)\n• 精简版：不含 Exo 内核，文件名带 -without-exo (来自 without-exo 分支)\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
+    "files": [
+      {
+        "name": "arm64-v8a",
+        "size": "48.13mb",
+        "downloads": 550,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.18/app-arm64-v8a-release.apk"
+      },
+      {
+        "name": "arm64-v8a-without-exo",
+        "size": "41.71mb",
+        "downloads": 116,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.18/app-arm64-v8a-without-exo.apk"
+      },
+      {
+        "name": "armeabi-v7a",
+        "size": "46.88mb",
+        "downloads": 542,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.18/app-armeabi-v7a-release.apk"
+      },
+      {
+        "name": "armeabi-v7a-without-exo",
+        "size": "41.09mb",
+        "downloads": 93,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.18/app-armeabi-v7a-without-exo.apk"
+      },
+      {
+        "name": "x86_64",
+        "size": "50.0mb",
+        "downloads": 116,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.18/app-x86_64-release.apk"
+      },
+      {
+        "name": "x86_64-without-exo",
+        "size": "43.53mb",
+        "downloads": 36,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.18/app-x86_64-without-exo.apk"
+      }
+    ]
+  },
+  {
+    "version": "2.0.17",
+    "title": "v2.0.17",
+    "date": "2026-05-06",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v2.0.17",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v2.0.17\n本次更新内容：\n-Fixed:优化视频播放器.添加视频播放器缓存可在设置中切换.\n-Intro: 长按分区松开可以进行分区关注.\n-Added: 添加直播间屏蔽词设置.\n-Added: 添加更新详情\n📺 版本说明：\n• 标准版：包含完整播放器内核 (来自 main 分支)\n• 精简版：不含 Exo 内核，文件名带 -without-exo (来自 without-exo 分支)\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
+    "files": [
+      {
+        "name": "arm64-v8a",
+        "size": "36.54mb",
+        "downloads": 893,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.17/app-arm64-v8a-release.apk"
+      },
+      {
+        "name": "arm64-v8a-without-exo",
+        "size": "33.22mb",
+        "downloads": 171,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.17/app-arm64-v8a-without-exo.apk"
+      },
+      {
+        "name": "armeabi-v7a",
+        "size": "35.99mb",
+        "downloads": 759,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.17/app-armeabi-v7a-release.apk"
+      },
+      {
+        "name": "armeabi-v7a-without-exo",
+        "size": "32.62mb",
+        "downloads": 149,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.17/app-armeabi-v7a-without-exo.apk"
+      },
+      {
+        "name": "x86_64",
+        "size": "38.35mb",
+        "downloads": 110,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.17/app-x86_64-release.apk"
+      },
+      {
+        "name": "x86_64-without-exo",
+        "size": "35.04mb",
+        "downloads": 46,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.17/app-x86_64-without-exo.apk"
+      }
+    ]
+  },
+  {
+    "version": "2.0.15",
+    "title": "v2.0.15",
+    "date": "2026-04-20",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v2.0.15",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v2.0.15\n本次更新内容：\n-Fixed: 优化UI显示. \n-Added: ExoPlayer播放器\n🔗 下载地址：https://github.com/liuchuancong/pure_live_TV/releases/latest\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。\n📺 TV 版本\n• 安装程序：支持 Android TV 5.0+ (armeabi-v7a, arm64-v8a)\n• 已实现TV同步直播源\n• 支持多种播放器切换 \n• 支持弹幕显示\n• 支持应用內更新",
+    "files": [
+      {
+        "name": "arm64-v8a",
+        "size": "34.41mb",
+        "downloads": 181,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.15/app-arm64-v8a-release.apk"
+      },
+      {
+        "name": "armeabi-v7a",
+        "size": "33.78mb",
+        "downloads": 203,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.15/app-armeabi-v7a-release.apk"
+      },
+      {
+        "name": "x86_64",
+        "size": "36.22mb",
+        "downloads": 50,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.15/app-x86_64-release.apk"
+      }
+    ]
+  },
+  {
+    "version": "2.0.14",
+    "title": "v2.0.14",
+    "date": "2026-02-10",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v2.0.14",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v2.0.14\n本次更新内容：\n-Fixed: 修复抖音分类.\n-Fixed: 添加关注自动刷新.\n-Fixed: 优化首页历史自动更新.\n-Added: 新增自动刷新间隔设置.\n-Fixed: Mpv播放器音量.\n🔗 下载地址：https://github.com/liuchuancong/pure_live_TV/releases/latest\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。\n📺 TV 版本\n• 安装程序：支持 Android TV 5.0+ (armeabi-v7a, arm64-v8a)\n• 已实现TV同步直播源\n• 支持多种播放器切换 \n• 支持弹幕显示\n• 支持应用內更新",
+    "files": [
+      {
+        "name": "arm64-v8a",
+        "size": "32.84mb",
+        "downloads": 2581,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.14/app-arm64-v8a-release.apk"
+      },
+      {
+        "name": "armeabi-v7a",
+        "size": "32.19mb",
+        "downloads": 2034,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.14/app-armeabi-v7a-release.apk"
+      },
+      {
+        "name": "x86_64",
+        "size": "34.64mb",
+        "downloads": 657,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.14/app-x86_64-release.apk"
+      }
+    ]
+  },
+  {
+    "version": "2.0.13",
+    "title": "v2.0.13",
+    "date": "2026-02-02",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v2.0.13",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v2.0.13\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。\n📺 TV 版本\n• 安装程序：支持 Android TV 6.0+ (armeabi-v7a, arm64-v8a)\n• 已实现TV同步直播源\n• 支持多种播放器切换 \n• 支持弹幕显示\n• 支持应用內更新\n下载地址：https://github.com/liuchuancong/pure_live_TV/releases/latest\n\n本次更新内容：\n-Fixed: 支持android 5.0",
+    "files": [
+      {
+        "name": "arm64-v8a",
+        "size": "32.81mb",
+        "downloads": 354,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.13/app-arm64-v8a-release.apk"
+      },
+      {
+        "name": "armeabi-v7a",
+        "size": "32.16mb",
+        "downloads": 298,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.13/app-armeabi-v7a-release.apk"
+      },
+      {
+        "name": "x86_64",
+        "size": "34.6mb",
+        "downloads": 89,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.13/app-x86_64-release.apk"
+      }
+    ]
+  },
+  {
+    "version": "2.0.12",
+    "title": "v2.0.12",
+    "date": "2026-01-12",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v2.0.12",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v2.0.12\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。\n📺 TV 版本\n• 安装程序：支持 Android TV 6.0+ (armeabi-v7a, arm64-v8a)\n• 已实现TV同步直播源\n• 支持多种播放器切换 \n• 支持弹幕显示\n• 支持应用內更新\n下载地址：https://github.com/liuchuancong/pure_live_TV/releases/latest\n\n本次更新内容：\n-Fixed: 修复与移动端同步. \n -Fixed: 添加延时设置. \n -Fixed: 修复断流",
+    "files": [
+      {
+        "name": "arm64-v8a",
+        "size": "55.27mb",
+        "downloads": 1679,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.12/app-arm64-v8a-release.apk"
+      },
+      {
+        "name": "armeabi-v7a",
+        "size": "51.57mb",
+        "downloads": 1350,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.12/app-armeabi-v7a-release.apk"
+      },
+      {
+        "name": "x86_64",
+        "size": "63.09mb",
+        "downloads": 446,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.12/app-x86_64-release.apk"
+      }
+    ]
+  },
+  {
+    "version": "2.0.10",
+    "title": "v2.0.10",
+    "date": "2025-12-24",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v2.0.10",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v2.0.10\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。\n📺 TV 版本\n• 安装程序：支持 Android TV 6.0+ (armeabi-v7a, arm64-v8a)\n• 已实现TV同步直播源\n• 支持多种播放器切换 \n• 支持弹幕显示\n• 支持应用內更新\n下载地址：https://github.com/liuchuancong/pure_live_TV/releases/latest\n\n本次更新内容：\n-Fixed: 修复与移动端同步. \n -Fixed: 添加延时设置. \n -Fixed: 修复断流",
+    "files": [
+      {
+        "name": "arm64-v8a",
+        "size": "55.27mb",
+        "downloads": 1366,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.10/app-arm64-v8a-release.apk"
+      },
+      {
+        "name": "armeabi-v7a",
+        "size": "51.57mb",
+        "downloads": 1210,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.10/app-armeabi-v7a-release.apk"
+      },
+      {
+        "name": "x86_64",
+        "size": "63.09mb",
+        "downloads": 344,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.10/app-x86_64-release.apk"
+      }
+    ]
+  },
+  {
+    "version": "2.0.9",
+    "title": "v2.0.9",
+    "date": "2025-12-23",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v2.0.9",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v2.0.9\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。\n📺 TV 版本\n• 安装程序：支持 Android TV 6.0+ (armeabi-v7a, arm64-v8a)\n• 已实现TV同步直播源\n• 支持多种播放器切换 \n• 支持弹幕显示\n• 支持应用內更新\n下载地址：https://github.com/liuchuancong/pure_live_TV/releases/latest\n\n本次更新内容：\n-Fixed: 优化播放器. -Fixed: 修复TV 存储. -Intro: 新版本采用真实的版本号. 之前过高的请备份数据后卸载升级.TV端请使用浏览器扫描二维码备份到手机后卸载升级.",
+    "files": [
+      {
+        "name": "arm64-v8a",
+        "size": "55.27mb",
+        "downloads": 146,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.9/app-arm64-v8a-release.apk"
+      },
+      {
+        "name": "armeabi-v7a",
+        "size": "51.57mb",
+        "downloads": 124,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.9/app-armeabi-v7a-release.apk"
+      },
+      {
+        "name": "x86_64",
+        "size": "63.09mb",
+        "downloads": 31,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.9/app-x86_64-release.apk"
+      }
+    ]
+  },
+  {
+    "version": "2.0.8",
+    "title": "v2.0.8",
+    "date": "2025-12-18",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v2.0.8",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v2.0.8\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。\n📺 TV 版本\n• 安装程序：支持 Android TV 6.0+ (armeabi-v7a, arm64-v8a)\n• 已实现TV同步直播源\n• 支持多种播放器切换 \n• 支持弹幕显示\n• 支持应用內更新\n下载地址：https://github.com/liuchuancong/pure_live_TV/releases/latest\n\n本次更新内容：\n-Fix: 修复虎牙断流",
+    "files": [
+      {
+        "name": "arm64-v8a",
+        "size": "55.27mb",
+        "downloads": 425,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.8/app-arm64-v8a-release.apk"
+      },
+      {
+        "name": "armeabi-v7a",
+        "size": "51.57mb",
+        "downloads": 440,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.8/app-armeabi-v7a-release.apk"
+      },
+      {
+        "name": "x86_64",
+        "size": "63.09mb",
+        "downloads": 103,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.8/app-x86_64-release.apk"
+      }
+    ]
+  },
+  {
+    "version": "2.0.7",
+    "title": "v2.0.7",
+    "date": "2025-12-17",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v2.0.7",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v2.0.7\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。\n📺 TV 版本\n• 安装程序：支持 Android TV 6.0+ (armeabi-v7a, arm64-v8a)\n• 已实现TV同步直播源\n• 支持多种播放器切换 \n• 支持弹幕显示\n• 支持应用內更新\n下载地址：https://github.com/liuchuancong/pure_live_TV/releases/latest\n\n本次更新内容：\n-Fix: 禁用Impeller, 新的渲染引擎可能导致无法打开",
+    "files": [
+      {
+        "name": "arm64-v8a",
+        "size": "55.2mb",
+        "downloads": 258,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.7/app-arm64-v8a-release.apk"
+      },
+      {
+        "name": "armeabi-v7a",
+        "size": "51.53mb",
+        "downloads": 341,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.7/app-armeabi-v7a-release.apk"
+      },
+      {
+        "name": "x86_64",
+        "size": "62.96mb",
+        "downloads": 60,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.7/app-x86_64-release.apk"
+      }
+    ]
+  },
+  {
+    "version": "2.0.6",
+    "title": "v2.0.6",
+    "date": "2025-12-16",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v2.0.6",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 vv2.0.6\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。\n📺 TV 版本\n• 安装程序：支持 Android TV 6.0+ (armeabi-v7a, arm64-v8a)\n• 已实现TV同步直播源\n• 支持多种播放器切换 \n• 支持弹幕显示\n• 支持应用內更新\n下载地址：https://github.com/liuchuancong/pure_live_TV/releases/latest\n\n本次更新内容：\n-Fix:迁移数据至Hive数据库，解决数据丢失问题.",
+    "files": [
+      {
+        "name": "arm64-v8a",
+        "size": "53.82mb",
+        "downloads": 144,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.6/app-arm64-v8a-release.apk"
+      },
+      {
+        "name": "armeabi-v7a",
+        "size": "50.14mb",
+        "downloads": 179,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.6/app-armeabi-v7a-release.apk"
+      },
+      {
+        "name": "x86_64",
+        "size": "61.57mb",
+        "downloads": 27,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.6/app-x86_64-release.apk"
+      }
+    ]
+  },
+  {
+    "version": "2.0.4",
+    "title": "v2.0.4",
+    "date": "2025-12-09",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v2.0.4",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v2.0.4\r\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。\r\n📺 TV 版本\r\n• 安装程序：支持 Android TV 6.0+ (armeabi-v7a, arm64-v8a)\r\n• 已实现TV同步直播源\r\n• 支持多种播放器切换 \r\n• 支持弹幕显示\r\n• 支持应用內更新\r\n下载地址：https://github.com/liuchuancong/pure_live_TV/releases/latest\r\n\r\n本次更新内容：\r\n-Fix:优化播放器. \r\n -Add:优化App内更新. \r\n -Fix:优化弹幕按钮",
+    "files": [
+      {
+        "name": "arm64-v8a",
+        "size": "53.79mb",
+        "downloads": 174,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.4/app-arm64-v8a-release.apk"
+      },
+      {
+        "name": "armeabi-v7a",
+        "size": "50.18mb",
+        "downloads": 224,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.4/app-armeabi-v7a-release.apk"
+      },
+      {
+        "name": "x86_64",
+        "size": "61.78mb",
+        "downloads": 40,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.4/app-x86_64-release.apk"
+      }
+    ]
+  },
+  {
+    "version": "2.0.3",
+    "title": "v2.0.3",
+    "date": "2025-12-05",
+    "github": "https://github.com/liuchuancong/pure_live_TV/releases/tag/v2.0.3",
+    "author": {
+      "name": "liuchuancong",
+      "avatar": "https://avatars.githubusercontent.com/u/36957912?v=4",
+      "profile": "https://github.com/liuchuancong"
+    },
+    "changelog": "📦 纯粹直播 v2.0.3\r\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。\r\n📺 TV 版本\r\n• 安装程序：支持 Android TV 6.0+ (armeabi-v7a, arm64-v8a)\r\n• 已实现TV同步直播源\r\n• 支持多种播放器切换 \r\n• 支持弹幕显示\r\n• 支持应用內更新\r\n下载地址：https://github.com/liuchuancong/pure_live_TV/releases/latest\r\n\r\n本次更新内容：\r\n-Fix:优化直播间. \r\n -Add:新增App内更新. \r\n -Fix:优化弹幕（无法显示请设置区域大小）.",
+    "files": [
+      {
+        "name": "arm64-v8a",
+        "size": "47.54mb",
+        "downloads": 753,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.3/app-arm64-v8a-release.apk"
+      },
+      {
+        "name": "armeabi-v7a",
+        "size": "43.55mb",
+        "downloads": 330,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.3/app-armeabi-v7a-release.apk"
+      },
+      {
+        "name": "x86_64",
+        "size": "54.83mb",
+        "downloads": 229,
+        "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.3/app-x86_64-release.apk"
+      }
+    ]
+  }
+]

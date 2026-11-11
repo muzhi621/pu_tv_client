@@ -1,0 +1,152 @@
+import 'missevan_api.dart';
+import 'package:dio/dio.dart';
+import 'package:pure_live/core/models/index.dart';
+import 'package:pure_live/core/contracts/index.dart';
+import 'package:pure_live/core/danmaku/empty_danmaku.dart';
+import 'package:pure_live/core/i18n/locale_helper.dart';
+
+
+/// Anonymous directory, official keyword/exact search, playback and recording.
+/// Remote danmaku remains absent until its contract is verified.
+class MissevanSite extends LiveSite
+    implements
+        LiveSiteRoomRefresher,
+        LiveSiteRecordRoomResolver,
+        LivePlayRecoveryResolver,
+        LivePlayLeaseMetadata,
+        LiveSiteDirectoryPager,
+        LiveCancellableSearch,
+    LiveSearchPaginationPolicy {
+  MissevanSite({MissevanApi? api}) : _api = api ?? MissevanApi();
+  final MissevanApi _api;
+  @override
+  Future<LiveDirectoryPage> getDirectoryPage({int page = 1, LiveArea? category, CancelToken? cancel}) async {
+    final result = await _api.directoryPage(page: page, category: category, cancel: cancel);
+    return LiveDirectoryPage(rooms: result.rooms, page: result.page, hasMore: result.hasMore);
+  }
+
+  @override
+  String get id => 'missevan';
+  @override
+  String get name => i18n('site_missevan');
+  @override
+  LiveDanmaku getDanmaku() => EmptyDanmaku();
+  @override
+  Future<List<LiveCategory>> getCategores(int page, int pageSize) async =>
+      page == 1 ? [LiveCategory(id: id, name: name, children: await _api.categories())] : [];
+  @override
+  Future<List<LiveRoom>> getRecommendRooms({int page = 1, int pageSize = 30}) =>
+      _api.directory(page: page, pageSize: pageSize);
+  @override
+  Future<List<LiveRoom>> getCategoryRooms(LiveArea category, {int page = 1, int pageSize = 30}) =>
+      _api.directory(page: page, pageSize: pageSize, category: category);
+
+  @override
+  Future<List<LiveRoom>> searchRooms(String keyword, {int page = 1, int pageSize = 30}) =>
+      searchRoomsCancellable(keyword, page: page, pageSize: pageSize);
+
+  /// An exact room id or official link resolves one room, so the caller must
+  /// not page past the first request.
+  static String? _searchRoomId(String input) {
+    try {
+      return MissevanApi.roomId(input);
+    } on MissevanException {
+      final uri = Uri.tryParse(input);
+      return uri == null ? null : MissevanApi.roomFromUri(uri);
+    }
+  }
+
+  @override
+  bool supportsSearchPaginationFor(String keyword) {
+    final input = keyword.trim();
+    return input.isNotEmpty && _searchRoomId(input) == null && Uri.tryParse(input)?.hasScheme != true;
+  }
+
+  @override
+  Future<List<LiveRoom>> searchRoomsCancellable(
+    String keyword, {
+    int page = 1,
+    int pageSize = 30,
+    CancelToken? cancel,
+  }) async {
+    if (pageSize < 1) return const [];
+    final input = keyword.trim();
+    if (input.isEmpty) return const [];
+    final id = _searchRoomId(input);
+    if (id != null) {
+      if (page != 1) return const [];
+      try {
+        return [await _api.detail(id, includeMedia: false, cancel: cancel)];
+      } on MissevanException catch (error) {
+        if (error.kind == MissevanFailure.notFound) return const [];
+        rethrow;
+      }
+    }
+    // A foreign/malformed share URL is not a nickname search request.
+    if (Uri.tryParse(input)?.hasScheme == true) return const [];
+    return _api.searchPage(input, page: page, pageSize: pageSize, cancel: cancel);
+  }
+
+  @override
+  Future<LiveRoom> getRoomDetail(LiveRoom room) {
+    final roomId = room.roomId;
+    final platform = room.platform;
+    if (platform != id) throw const MissevanException(MissevanFailure.schema);
+    return _api.detail(roomId);
+  }
+
+  @override
+  Future<LiveRoom> getRoomDetailForRefresh(LiveRoom room) => getRoomDetail(room);
+  @override
+  Future<LiveRoom> getRoomDetailForRecording(LiveRoom room) => getRoomDetail(room);
+  @override
+  Future<bool> getLiveStatus(LiveRoom room) async => (await getRoomDetail(room)).isLiveNow;
+  @override
+  Future<List<LivePlayQuality>> getPlayQualites({required LiveRoom detail}) async {
+    if (detail.platform != id) throw const MissevanException(MissevanFailure.schema);
+    if (detail.isExplicitlyOfflineNow) return [];
+    if (!detail.isLiveNow || detail.data is! List<LivePlayQuality> || (detail.data as List).isEmpty) {
+      throw const MissevanException(MissevanFailure.schema);
+    }
+    return List.unmodifiable(detail.data as List<LivePlayQuality>);
+  }
+
+  @override
+  Future<List<String>> getPlayUrls({required LiveRoom detail, required LivePlayQuality quality}) async {
+    for (final current in await getPlayQualites(detail: detail)) {
+      if (current.selectionId == quality.selectionId) return List.unmodifiable(current.data as List<String>);
+    }
+    throw const MissevanException(MissevanFailure.qualityUnavailable);
+  }
+
+  @override
+  Future<LivePlayUrlResolution> resolvePlayUrlsForRecoveryRaw({
+    required LiveRoom detail,
+    required LivePlayQuality quality,
+  }) async {
+    final fresh = await getRoomDetail(detail);
+    return LivePlayUrlResolution(
+      urls: await getPlayUrls(detail: fresh, quality: quality),
+      appliedQualityData: quality.selectionId,
+    );
+  }
+
+  @override
+  DateTime? getPlayUrlInvalidAt(String url, {DateTime? now}) {
+    try {
+      final uri = Uri.parse(url);
+      final kind = uri.path.endsWith('.m3u8') ? 'hls' : 'flv';
+      final normalized = Uri.parse(MissevanApi.mediaUrl(url, kind: kind));
+      final expires = int.tryParse(normalized.queryParameters['expires'] ?? '');
+      return expires == null ? null : DateTime.fromMillisecondsSinceEpoch(expires * 1000, isUtc: true);
+    } on FormatException {
+      return null;
+    } on MissevanException {
+      return null;
+    }
+  }
+
+  @override
+  DateTime? getPlayUrlRefreshAt(String url, {DateTime? now}) =>
+      getPlayUrlInvalidAt(url, now: now)?.subtract(const Duration(minutes: 1));
+}

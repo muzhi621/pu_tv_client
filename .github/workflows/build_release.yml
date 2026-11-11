@@ -1,0 +1,65 @@
+name: 更新历史发布数据
+
+on:
+  # The manual button, and the tail of build-android-Tv: that workflow calls this
+  # file once the APKs are published, so a new release's download paths reach
+  # assets/releases.json without anyone pressing the button.
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Static on purpose: a called workflow inherits the caller's `github.workflow`,
+  # so a group built from it would be shared with build-android-Tv and deadlock the
+  # release run against itself.
+  group: release-index-main
+  cancel-in-progress: false
+
+jobs:
+  update-json:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+    # 1. 检出仓库代码（获取完整 Git 历史，为后续 rebase 做准备）
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: main
+        fetch-depth: 0
+
+    # 2. 设置 Python 环境
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: '3.14'
+
+    # 3. 运行更新脚本
+    - name: Run update script
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: python tool/update_releases.py
+
+    # 4. 检查是否有文件更新，并采用拉取重构（Pull Rebase）后安全推送
+    - name: Commit and Push changes
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+        # 检查是否有文件变动
+        if ! git diff --quiet -- assets/releases.json; then
+          git add assets/releases.json
+          git commit -m "chore: update releases.json [skip ci]"
+
+          # 推送前先拉取远程最新修改，防止与其他任务（如发布 Release）冲突
+          git pull --rebase origin main
+
+          git push origin main
+        else
+          echo "数据未发生变化，无需更新。"
+        fi

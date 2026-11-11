@@ -1,0 +1,55 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "pure_live_TV (debug, Skia)",
+            "request": "launch",
+            "type": "dart",
+            "program": "lib/main.dart",
+            "flutterMode": "debug",
+            "toolArgs": [
+                "--flavor",
+                "skia",
+                "--no-enable-impeller"
+            ]
+        },
+        {
+            "name": "pure_live_TV (debug, Skia, local defines)",
+            "request": "launch",
+            "type": "dart",
+            "program": "lib/main.dart",
+            "flutterMode": "debug",
+            "toolArgs": [
+                "--flavor",
+                "skia",
+                "--no-enable-impeller",
+                "--dart-define-from-file=.pure_live_TV_build_defines.env"
+            ]
+        },
+        {
+            "name": "pure_live_TV (debug, Impeller)",
+            "request": "launch",
+            "type": "dart",
+            "program": "lib/main.dart",
+            "flutterMode": "debug",
+            "toolArgs": [
+                "--flavor",
+                "impeller",
+                "--enable-impeller"
+            ]
+        },
+        {
+            "name": "pure_live_TV (debug, Impeller, local defines)",
+            "request": "launch",
+            "type": "dart",
+            "program": "lib/main.dart",
+            "flutterMode": "debug",
+            "toolArgs": [
+                "--flavor",
+                "impeller",
+                "--enable-impeller",
+                "--dart-define-from-file=.pure_live_TV_build_defines.env"
+            ]
+        }
+    ]
+}

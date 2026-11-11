@@ -1,0 +1,12 @@
+import 'dart:async';
+import 'package:pure_live/player/index.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:pure_live/exports/package_export.dart';
+import 'package:pure_live/modules/live/playback/models/live_play_args.dart';
+import 'package:pure_live/modules/live/playback/states/live_play_state.dart';
+import 'package:pure_live/services/favorites/favorite_room_controller.dart';
+import 'package:pure_live/modules/live/playback/dialogs/room_switch_dialog.dart';
+import 'package:pure_live/modules/live/playback/controllers/live_play_controller.dart';
+import 'package:pure_live/services/player_settings/player_settings_controller.dart';
+import 'package:pure_live/services/danmaku_settings/danmaku_settings_controller.dart';
+part 'video_controller_panel_parts.dart';

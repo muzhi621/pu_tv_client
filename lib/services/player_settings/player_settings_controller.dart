@@ -1,0 +1,189 @@
+import 'package:pure_live/services/settings/settings.dart';
+import 'package:pure_live/player/utils/player_consts.dart';
+import 'package:pure_live/app/consts/app_theme_consts.dart';
+import 'package:pure_live/core/utils/hive_pref_util.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:pure_live/services/player_settings/player_settings_model.dart';
+
+part 'player_settings_controller.g.dart';
+
+@riverpod
+class PlayerSettingsController extends _$PlayerSettingsController {
+  static PlayerSettingsController get to => SettingsService.to.player;
+
+  /// Player-layer hook, installed by [GlobalPlayerService] at startup.
+  ///
+  /// Invoked whenever a stored output setting changes, so the value can reach
+  /// the engine that is already playing instead of waiting for the next
+  /// session. `rebuild` marks that the change rides on the render context
+  /// (video output driver / custom-output / compat surface), which mpv cannot
+  /// hot-swap and must rebuild the engine for; every other output change is a
+  /// live-appliable mpv property.
+  ///
+  /// Declared here and injected from the player layer so this settings service
+  /// never has to import it back.
+  static void Function({required bool rebuild})? outputSettingsDispatcher;
+
+  /// First video fit option; used when a stored index no longer exists.
+  static const int defaultVideoFitIndex = 0;
+
+  @override
+  PlayerSettingsModel build() {
+    return _normalize(
+      PlayerSettingsModel(
+        videoFitIndex: HivePrefUtil.getInt('videoFitIndex') ?? defaultVideoFitIndex,
+        videoPlayerKey: HivePrefUtil.getString('videoPlayerKey') ?? PlayerConsts.defaultKey,
+        preferResolution: HivePrefUtil.getString('preferResolution') ?? PlayerConsts.resolutionKeys.first,
+        preferResolutionCellular:
+            HivePrefUtil.getString('preferResolutionCellular') ?? PlayerConsts.resolutionKeys.first,
+        enableCodec: HivePrefUtil.getBool('enableCodec') ?? true,
+        playerCompatMode: HivePrefUtil.getBool('playerCompatMode') ?? false,
+        customPlayerOutput: HivePrefUtil.getBool('customPlayerOutput') ?? false,
+        videoOutputDriver: HivePrefUtil.getString('videoOutputDriver') ?? 'gpu',
+        audioOutputDriver: HivePrefUtil.getString('audioOutputDriver') ?? 'auto',
+        videoHardwareDecoder: HivePrefUtil.getString('videoHardwareDecoder') ?? 'auto',
+        floatPlay: HivePrefUtil.getBool('floatPlay') ?? false,
+        audioOnly: HivePrefUtil.getBool('audioOnly') ?? false,
+        useHardStopOnExit: HivePrefUtil.getBool('useHardStopOnExit') ?? false,
+        windowsPipAlwaysOnTop: HivePrefUtil.getBool('windowsPipAlwaysOnTop') ?? false,
+        enableRtxVsr: HivePrefUtil.getBool('enableRtxVsr') ?? false,
+        enablePortraitStreamAdaptation: HivePrefUtil.getBool('enablePortraitStreamAdaptation') ?? true,
+        portraitAdaptiveHeight: HivePrefUtil.getBool('portraitAdaptiveHeight') ?? true,
+        portraitLayoutModeName: HivePrefUtil.getString('portraitLayoutMode') ?? 'balanced',
+        portraitFullscreenPolicyName: HivePrefUtil.getString('portraitFullscreenPolicy') ?? '',
+        portraitFullscreenDisplayModeName: HivePrefUtil.getString('portraitFullscreenDisplayMode') ?? '',
+        portraitPipFollowSource: HivePrefUtil.getBool('portraitPipFollowSource') ?? true,
+        portraitDanmakuModeName: HivePrefUtil.getString('portraitDanmakuMode') ?? 'followGlobal',
+        rememberPortraitRoomOverride: HivePrefUtil.getBool('rememberPortraitRoomOverride') ?? true,
+        showPortraitDiagnostics: HivePrefUtil.getBool('showPortraitDiagnostics') ?? false,
+        portraitRoomOverrides:
+            HivePrefUtil.getObject(
+              'portraitRoomOverrides',
+              (json) => (json as Map).map((k, v) => MapEntry(k.toString(), v.toString())),
+            ) ??
+            {},
+      ),
+    );
+  }
+
+  /// Repairs values that must stay inside their option lists.
+  ///
+  /// A stored video fit index from another build would throw while the settings
+  /// page maps it to a label, and a resolution stored as a localized label
+  /// would stop matching the qualities a site returns after a language change.
+  static PlayerSettingsModel _normalize(PlayerSettingsModel model) {
+    return model.copyWith(
+      videoFitIndex: normalizeVideoFitIndex(model.videoFitIndex),
+      preferResolution: PlayerConsts.normalizeResolutionKey(model.preferResolution),
+      preferResolutionCellular: PlayerConsts.normalizeResolutionKey(model.preferResolutionCellular),
+    );
+  }
+
+  static int normalizeVideoFitIndex(int value) {
+    final optionCount = AppThemeConsts.videoFitType.length;
+    if (optionCount == 0 || value < 0 || value >= optionCount) return defaultVideoFitIndex;
+    return value;
+  }
+
+  void updateSettings(PlayerSettingsModel newModel) {
+    final old = state;
+    final normalized = _normalize(newModel);
+    state = normalized;
+    HivePrefUtil.setInt('videoFitIndex', normalized.videoFitIndex);
+    HivePrefUtil.setString('videoPlayerKey', normalized.videoPlayerKey);
+    HivePrefUtil.setString('preferResolution', normalized.preferResolution);
+    HivePrefUtil.setString('preferResolutionCellular', normalized.preferResolutionCellular);
+    HivePrefUtil.setBool('enableCodec', normalized.enableCodec);
+    HivePrefUtil.setBool('playerCompatMode', normalized.playerCompatMode);
+    HivePrefUtil.setBool('customPlayerOutput', normalized.customPlayerOutput);
+    HivePrefUtil.setString('videoOutputDriver', normalized.videoOutputDriver);
+    HivePrefUtil.setString('audioOutputDriver', normalized.audioOutputDriver);
+    HivePrefUtil.setString('videoHardwareDecoder', normalized.videoHardwareDecoder);
+    HivePrefUtil.setBool('floatPlay', normalized.floatPlay);
+    HivePrefUtil.setBool('audioOnly', normalized.audioOnly);
+    HivePrefUtil.setBool('useHardStopOnExit', normalized.useHardStopOnExit);
+    HivePrefUtil.setBool('windowsPipAlwaysOnTop', normalized.windowsPipAlwaysOnTop);
+    HivePrefUtil.setBool('enableRtxVsr', normalized.enableRtxVsr);
+    HivePrefUtil.setBool('enablePortraitStreamAdaptation', normalized.enablePortraitStreamAdaptation);
+    HivePrefUtil.setBool('portraitAdaptiveHeight', normalized.portraitAdaptiveHeight);
+    HivePrefUtil.setString('portraitLayoutMode', normalized.portraitLayoutModeName);
+    HivePrefUtil.setString('portraitFullscreenPolicy', normalized.portraitFullscreenPolicyName);
+    HivePrefUtil.setString('portraitFullscreenDisplayMode', normalized.portraitFullscreenDisplayModeName);
+    HivePrefUtil.setBool('portraitPipFollowSource', normalized.portraitPipFollowSource);
+    HivePrefUtil.setString('portraitDanmakuMode', normalized.portraitDanmakuModeName);
+    HivePrefUtil.setBool('rememberPortraitRoomOverride', normalized.rememberPortraitRoomOverride);
+    HivePrefUtil.setBool('showPortraitDiagnostics', normalized.showPortraitDiagnostics);
+    HivePrefUtil.setObject('portraitRoomOverrides', normalized.portraitRoomOverrides);
+    _dispatchOutputChanges(old, normalized);
+  }
+
+  /// Pushes an output-setting change to the running engine (see [GlobalPlayerService]).
+  ///
+  /// Only the fields that feed the libmpv contract are watched; a fit, resolution
+  /// or portrait change must not rebuild or re-option a live player. A video
+  /// output / custom-output / compat-surface change is bound to the render
+  /// context and asks for a rebuild — everything else is a live-appliable
+  /// mpv property.
+  void _dispatchOutputChanges(PlayerSettingsModel oldModel, PlayerSettingsModel next) {
+    final dispatcher = outputSettingsDispatcher;
+    if (dispatcher == null) return;
+
+    final bool touchedOutput = oldModel.enableCodec != next.enableCodec ||
+        oldModel.videoHardwareDecoder != next.videoHardwareDecoder ||
+        oldModel.videoOutputDriver != next.videoOutputDriver ||
+        oldModel.audioOutputDriver != next.audioOutputDriver ||
+        oldModel.customPlayerOutput != next.customPlayerOutput ||
+        oldModel.playerCompatMode != next.playerCompatMode;
+    if (!touchedOutput) return;
+
+    final bool rebuild = oldModel.videoOutputDriver != next.videoOutputDriver ||
+        oldModel.customPlayerOutput != next.customPlayerOutput ||
+        oldModel.playerCompatMode != next.playerCompatMode;
+    dispatcher(rebuild: rebuild);
+  }
+
+  /// Advances the video fit option and returns the new index.
+  int? advanceVideoFitIndex() {
+    final optionCount = AppThemeConsts.videoFitType.length;
+    if (optionCount == 0) return null;
+    final next = (normalizeVideoFitIndex(state.videoFitIndex) + 1) % optionCount;
+    updateSettings(state.copyWith(videoFitIndex: next));
+    return next;
+  }
+
+  void changePreferResolution(String resolution) {
+    if (PlayerConsts.resolutionKeys.contains(resolution)) {
+      updateSettings(state.copyWith(preferResolution: resolution));
+    }
+  }
+
+  void changePreferResolutionCellular(String resolution) {
+    if (PlayerConsts.resolutionKeys.contains(resolution)) {
+      updateSettings(state.copyWith(preferResolutionCellular: resolution));
+    }
+  }
+
+  void resetMpvPlayerSettings() {
+    updateSettings(
+      state.copyWith(
+        enableCodec: true,
+        playerCompatMode: false,
+        customPlayerOutput: false,
+        videoOutputDriver: 'gpu',
+        audioOutputDriver: 'auto',
+        videoHardwareDecoder: 'auto',
+        preferResolution: PlayerConsts.resolutionKeys.first,
+        preferResolutionCellular: PlayerConsts.resolutionKeys.first,
+        useHardStopOnExit: false,
+      ),
+    );
+  }
+
+  void importFromJson(Map<String, dynamic> json) {
+    updateSettings(PlayerSettingsModel.fromJson(json));
+  }
+
+  Map<String, dynamic> toJson() {
+    return state.toJson();
+  }
+}
