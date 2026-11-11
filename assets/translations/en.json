@@ -1561,7 +1561,7 @@
   "update_renderer": "Renderer",
   "update_renderer_impeller": "Impeller (new)",
   "update_renderer_skia": "Skia (compatible)",
-  "update_renderer_desc": "Switch to Skia if the picture misbehaves; the choice persists and the download sources follow it",
+  "update_renderer_desc": "Releases ship Impeller only; trigger a manual build for the Skia fallback if the picture misbehaves (falls back to an available package for the same ABI)",
   "version_history": "Version history",
   "version_history_load_failed": "Could not refresh the release history, showing the last list.",
   "version_history_open_release": "Open release page",

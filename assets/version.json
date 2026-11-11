@@ -3,6 +3,6 @@
   "version_num": 130009,
   "version_desc": "-Feature: 接入云端配置下发（站点可见性 / 导航菜单 / 启动弹窗 / 更新策略可在云端编辑并同步）\n-Fix: 修复 GitHub Actions 云端构建依赖，media_core 改为公开仓库固定 commit 依赖",
   "prerelease":false,
-  "android_abis": ["arm64-v8a", "armeabi-v7a", "x86_64"],
+  "android_abis": ["armeabi-v7a", "arm64-v8a"],
   "download_url": "https://github.com/muzhi621/pu_tv_client/releases"
 }

@@ -11,6 +11,11 @@ on:
         description: 'Branch or tag to build (leave empty to use the triggering ref)'
         required: false
         default: ''
+      include_skia:
+        description: '额外构建 Skia 兼容版（仅当 Impeller 画面异常/黑屏时勾选）'
+        required: false
+        type: boolean
+        default: false
   push:
     tags:
       - "v*"
@@ -26,9 +31,9 @@ jobs:
     # Android only: nothing here needs the macOS toolchain, and a Linux runner
     # costs a tenth of a macOS minute and is usually faster for Gradle.
     runs-on: ubuntu-latest
-    # Two renderer flavors x three ABIs with R8 on a cold Gradle cache can take
-    # well over an hour on a fresh runner; keep a hard ceiling but give the first
-    # release build enough room to finish.
+    # One renderer flavor x two ABIs with R8 on a cold Gradle cache can take
+    # well over an hour on a fresh runner; keep a hard ceiling but give the
+    # first release build enough room to finish.
     timeout-minutes: 90
     permissions:
       contents: write
@@ -92,11 +97,15 @@ jobs:
       - name: 更新Flutter的packages
         run: flutter pub get
 
-      - name: 打包APK（Impeller 渲染器）
-        run: flutter build apk --release --flavor impeller --split-per-abi --target-platform android-arm,android-arm64,android-x64 --android-skip-build-dependency-validation
+      # 电视盒子绝大多数是 32 位系统（armeabi-v7a），少数 64 位系统设备用
+      # arm64-v8a；x86_64 只服务模拟器与极少数 x86 盒子，不再发布。
+      - name: 打包APK（Impeller 渲染器，默认唯一产物）
+        run: flutter build apk --release --flavor impeller --split-per-abi --target-platform android-arm,android-arm64 --android-skip-build-dependency-validation
 
-      - name: 打包APK（Skia 渲染器）
-        run: flutter build apk --release --flavor skia --split-per-abi --target-platform android-arm,android-arm64,android-x64 --android-skip-build-dependency-validation
+      # Skia 仅作兼容兜底：tag 发版不构建，手动触发时勾选 include_skia 才出包。
+      - name: 打包APK（Skia 渲染器，按需）
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.include_skia == 'true' }}
+        run: flutter build apk --release --flavor skia --split-per-abi --target-platform android-arm,android-arm64 --android-skip-build-dependency-validation
 
       - name: 重命名 APK 文件
         run: |
@@ -117,6 +126,22 @@ jobs:
             echo "::error::没有找到 release APK，产物命名与预期不符"
             exit 1
           fi
+
+      # 体积归因：把每个 APK 里最大的条目写进运行摘要，后续瘦身可精确对比，
+      # 不必下载 100 MB 的 APK 或抓 ZIP 中央目录。
+      - name: 输出 APK 体积清单
+        run: |
+          {
+            echo "## 📊 APK 体积清单（按条目大小倒序，前 25 项）"
+            echo ""
+            for f in build/app/outputs/flutter-apk/PureLive-TV-*.apk; do
+              [ -e "$f" ] || continue
+              echo "### $(basename "$f") · $(du -h "$f" | cut -f1)"
+              echo '```'
+              unzip -l "$f" | sort -k1,1nr | head -25
+              echo '```'
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: 读取版本信息
         id: version
@@ -148,9 +173,11 @@ jobs:
             本次更新内容：
             ${{ steps.version.outputs.desc }}
             📺 版本说明：
-            • Impeller 版：新渲染器，文件名带 -impeller，推荐优先尝试
-            • Skia 版：旧渲染器，文件名带 -skia，画面异常/黑屏时改用此版
-            • 每个渲染器均按 ABI 拆分：arm64-v8a（绝大多数设备）、armeabi-v7a（老设备）、x86_64（模拟器）
+            • 默认只发布 **Impeller 渲染器**；若画面异常/黑屏，可手动触发构建并勾选 include_skia 单独生成 Skia 兼容版
+            • **armeabi-v7a：绝大多数电视盒子（32 位系统），推荐先装这个**
+            • arm64-v8a：仅 64 位系统设备（如 NVIDIA Shield、部分新旗舰）
+            • 不再发布 x86_64（只用于模拟器）
+            • 不确定选哪个：adb shell getprop ro.product.cpu.abilist，列表含 arm64-v8a 才用 arm64 包
 
             本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。
           prerelease: false
@@ -158,8 +185,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Every download path in one place on the run page: the six APK URLs, the
-      # release page, and this run's artifacts.
+      # Every download path in one place on the run page: the release page,
+      # the APK URLs, and this run's artifacts.
       - name: 汇总下载路径
         run: |
           tag="${{ steps.meta.outputs.tag }}"

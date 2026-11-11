@@ -27,6 +27,15 @@ android {
         buildConfig = true
     }
 
+    // 电视端只保留中文：AGP 会把 app 与所有依赖库里 values-xx 的非中文语言
+    // 资源在打包时剔除（默认 values/ 与 values-zh* 保留）。系统为非中文时
+    // 第三方库回退到默认字符串，不会缺资源崩溃。
+    // 注意：这只作用于 Android res；应用内 easy_localization 的
+    // assets/translations/{zh,en}.json 属于 Flutter asset，不受影响。
+    androidResources {
+        localeFilters += listOf("zh")
+    }
+
     // Pinned rather than inherited so the TV build does not silently shift when
     // the Flutter SDK bumps its defaults.
     compileSdk = 37

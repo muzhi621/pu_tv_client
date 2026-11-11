@@ -1555,7 +1555,7 @@
   "update_renderer": "渲染器",
   "update_renderer_impeller": "Impeller（新渲染器）",
   "update_renderer_skia": "Skia（兼容渲染器）",
-  "update_renderer_desc": "画面异常或黑屏时改用 Skia 版；选择会记住，下载源按所选变体解析",
+  "update_renderer_desc": "默认发布仅 Impeller；画面异常时可手动触发构建生成 Skia 兼容版，下载源按所选变体解析（无对应包时回退到该 ABI 的可用包）",
   "version_history": "版本历史",
   "version_history_load_failed": "版本历史刷新失败，已保留当前列表。",
   "version_history_open_release": "打开发布页面",
