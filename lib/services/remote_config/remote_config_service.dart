@@ -10,6 +10,7 @@ import 'package:pure_live/core/common/http_client.dart';
 import 'package:pure_live/core/utils/hive_pref_util.dart';
 import 'package:pure_live/modules/live/iptv/services/iptv_import_manager.dart';
 import 'package:pure_live/services/settings/settings.dart';
+import 'package:pure_live/services/vod/vod_config.dart';
 import 'remote_config_model.dart';
 import 'remote_config_store.dart';
 
@@ -333,6 +334,15 @@ class RemoteConfigService {
     final raw = _section('navigation')['groups'];
     return raw is List ? raw : const <dynamic>[];
   }
+
+  // ------------------------------------------------------------------
+  // TVBox 影音（影音板块读取）
+  // ------------------------------------------------------------------
+
+  /// 云端已把「设备引用哪些源」展开成扁平的 sources / sites，
+  /// 这里直接读，终端不需要再关心资源库与 id 引用。
+  /// 未接管（`managed` 缺失）时返回空配置，影音板块走原有局域网推送路径。
+  static VodConfig get vod => VodConfig.fromSection(_section('vod'));
 
   // ------------------------------------------------------------------
   // 协议（路由守卫与协议页读取）

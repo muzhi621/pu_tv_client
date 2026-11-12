@@ -129,3 +129,30 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+/**
+ * TVBox 爬虫运行时宿主依赖。
+ *
+ * 第三方 spider.jar 是用 `compileOnly` 编译的（见 FongMi/CatVodSpider 的
+ * app/build.gradle），jar 里只有 `com.github.catvod.spider.*` 等业务类，
+ * 而下面这些「宿主契约」必须由 APK 自己提供，否则反射加载时立刻
+ * NoClassDefFoundError：
+ *
+ *   com.github.catvod.crawler.Spider   基类，jar 里的类全继承它
+ *   com.github.catvod.net.*            OkHttp 封装（Spider.net 字段）
+ *   com.github.catvod.utils.*          Local / Js / Dialog / Task / Decoder
+ *
+ * catvod-api.jar 只有 148 KB，直接打进 classes.dex 供 DexClassLoader 的
+ * parent 使用——这正是 TVBox 家族的通行做法。
+ */
+dependencies {
+    implementation(files("libs/catvod-api.jar"))
+
+    // catvod-api 的 net 包全部方法签名直接暴露 okhttp3 类型，版本需 >= 3.14。
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // gson 2.11 才引入 Strictness，catvod-api 的 utils 用到了它。
+    implementation("com.google.code.gson:gson:2.11.0")
+    // com.github.catvod.utils.Task / Decoder 用 Futures、MoreExecutors。
+    // R8 会按实际引用裁剪，最终增量只有几十 KB。
+    implementation("com.google.guava:guava:33.8.0-android")
+}

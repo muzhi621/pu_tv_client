@@ -1,7 +1,7 @@
 {
-  "version": "3.0.14",
-  "version_num": 130015,
-  "version_desc": "-New: 左侧导航重构为 IPTV / 影音 / 直播 / 设置 四大类，启动默认进入 IPTV，右侧展开二级菜单，原功能全部保留\\n-New: 退出 App 弹窗的标题、正文、是否可关闭、捐赠区改由云端下发\\n-New: 云端编辑器免配置自动连接，可逐台编辑设置并一键配置下发、批量管理、显示在线 / 离线\\n-New: IPTV 支持网络链接与本地 txt / m3u 文件导入，可组合套餐按终端下发\\n-Perf: 前台每 15 分钟静默同步一次配置，无变更时走 304 几乎零流量\\n-Note: 压缩打包模式首次安装需解压 native 库，稍慢属正常",
+  "version": "3.0.15",
+  "version_num": 130016,
+  "version_desc": "-New: 影音板块接入 TVBox 爬虫宿主，可直接加载第三方 spider.jar（csp_ 站点）\\n-New: 云端资源库的 TVBox 源支持配置 spider jar 地址，终端可一键选源与站点\\n-New: 影音板块新增「TVBox 诊断」页，逐步显示 jar 下载 / 类加载 / 实例化 / 调用结果\\n-New: 服务端按终端所选源展开 TVBox 站点下发，支持站点白名单与锁定快照\\n-Note: 本版为爬虫链路验证版，站点浏览界面在下一版开放",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",

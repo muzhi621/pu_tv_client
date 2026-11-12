@@ -1,5 +1,6 @@
 import 'package:pure_live/exports/exports.dart';
 import 'package:pure_live/domains/device/tv_remote_receiver.dart';
+import 'package:pure_live/modules/live/movie_playback/vod_diag_page.dart';
 
 class MoviePlaybackPage extends ConsumerStatefulWidget {
   const MoviePlaybackPage({super.key});
@@ -141,6 +142,19 @@ class _MoviePlaybackPageState extends ConsumerState<MoviePlaybackPage> {
             ),
           ),
           Spacer(),
+          if (VodSpiderChannel.isSupported)
+            Padding(
+              padding: EdgeInsets.only(right: 12.ts(context)),
+              child: TvButton(
+                title: 'TVBox 诊断',
+                size: TvButtonSize.small,
+                isSecondary: true,
+                // 接入期工具：验证 spider.jar 能否加载、homeContent 能否返回。
+                // 站点浏览做起来之后这个入口可以撤掉。
+                onTap: () =>
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const VodDiagPage())),
+              ),
+            ),
           Container(
             padding: EdgeInsets.symmetric(horizontal: 16.ts(context), vertical: 8.ts(context)),
             decoration: BoxDecoration(

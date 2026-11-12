@@ -57,3 +57,5 @@ export 'theme_settings/theme_settings_controller.dart';
 export 'theme_settings/theme_settings_model.dart';
 export 'volume_settings/volume_settings_controller.dart';
 export 'volume_settings/volume_settings_model.dart';
+export 'vod/vod_config.dart';
+export 'vod/vod_spider_channel.dart';
