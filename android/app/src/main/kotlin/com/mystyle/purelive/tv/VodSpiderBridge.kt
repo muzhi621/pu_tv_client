@@ -315,7 +315,7 @@ internal class VodSpiderBridge(
         val value: Any? = when (method) {
             "homeContent" -> {
                 val filter = call.argument<Boolean>("filter") == true
-                invokeTyped(clazz, handle.instance, "homeContent", arrayOf(Boolean::class.javaPrimitiveType!!), arrayOf(filter))
+                invokeTyped(clazz, handle.instance, "homeContent", arrayOf<Class<*>>(Boolean::class.javaPrimitiveType!!), arrayOf<Any?>(filter))
             }
             "homeVideoContent" -> {
                 invokeTyped(clazz, handle.instance, "homeVideoContent", emptyArray<Class<*>>(), emptyArray<Any?>())
@@ -327,20 +327,20 @@ internal class VodSpiderBridge(
                 val extend = stringMap(call.argument<Map<*, *>>("extend"))
                 invokeTyped(
                     clazz, handle.instance, "categoryContent",
-                    arrayOf(
+                    arrayOf<Class<*>>(
                         String::class.java,
                         String::class.java,
                         Boolean::class.javaPrimitiveType!!,
                         HashMap::class.java,
                     ),
-                    arrayOf(tid, pg, filter, extend),
+                    arrayOf<Any?>(tid, pg, filter, extend),
                 )
             }
             "detailContent" -> {
                 val ids = stringList(call.argument<List<*>>("ids"))
                 invokeTyped(
                     clazz, handle.instance, "detailContent",
-                    arrayOf(List::class.java), arrayOf(ids),
+                    arrayOf<Class<*>>(List::class.java), arrayOf<Any?>(ids),
                 )
             }
             "searchContent" -> {
@@ -358,15 +358,15 @@ internal class VodSpiderBridge(
                     } else {
                         invokeTyped(
                             clazz, handle.instance, "searchContent",
-                            arrayOf(String::class.java, Boolean::class.javaPrimitiveType!!),
-                            arrayOf(key, quick),
+                            arrayOf<Class<*>>(String::class.java, Boolean::class.javaPrimitiveType!!),
+                            arrayOf<Any?>(key, quick),
                         )
                     }
                 } else {
                     invokeTyped(
                         clazz, handle.instance, "searchContent",
-                        arrayOf(String::class.java, Boolean::class.javaPrimitiveType!!),
-                        arrayOf(key, quick),
+                        arrayOf<Class<*>>(String::class.java, Boolean::class.javaPrimitiveType!!),
+                        arrayOf<Any?>(key, quick),
                     )
                 }
             }
@@ -376,21 +376,21 @@ internal class VodSpiderBridge(
                 val vipFlags = stringList(call.argument<List<*>>("vipFlags"))
                 invokeTyped(
                     clazz, handle.instance, "playerContent",
-                    arrayOf(String::class.java, String::class.java, List::class.java),
-                    arrayOf(flag, id, vipFlags),
+                    arrayOf<Class<*>>(String::class.java, String::class.java, List::class.java),
+                    arrayOf<Any?>(flag, id, vipFlags),
                 )
             }
             "liveContent" -> {
                 val url = call.argument<String>("url").orEmpty()
-                invokeTyped(clazz, handle.instance, "liveContent", arrayOf(String::class.java), arrayOf(url))
+                invokeTyped(clazz, handle.instance, "liveContent", arrayOf<Class<*>>(String::class.java), arrayOf<Any?>(url))
             }
             "action" -> {
                 val action = call.argument<String>("action").orEmpty()
-                invokeTyped(clazz, handle.instance, "action", arrayOf(String::class.java), arrayOf(action))
+                invokeTyped(clazz, handle.instance, "action", arrayOf<Class<*>>(String::class.java), arrayOf<Any?>(action))
             }
             "isVideoFormat" -> {
                 val url = call.argument<String>("url").orEmpty()
-                invokeTyped(clazz, handle.instance, "isVideoFormat", arrayOf(String::class.java), arrayOf(url))
+                invokeTyped(clazz, handle.instance, "isVideoFormat", arrayOf<Class<*>>(String::class.java), arrayOf<Any?>(url))
             }
             "manualVideoCheck" -> {
                 invokeTyped(clazz, handle.instance, "manualVideoCheck", emptyArray<Class<*>>(), emptyArray<Any?>())
@@ -561,7 +561,7 @@ internal class VodSpiderBridge(
      * NoSuchMethodException 堆栈——后者对用户毫无意义。
      *
      * `types` / `args` 用 out 投影：Kotlin 的 Array 不协变，而调用点写的是
-     * `arrayOf(Boolean::class.javaPrimitiveType!!)` / `arrayOf(filter)` 这类
+     * `arrayOf<Class<*>>(Boolean::class.javaPrimitiveType!!)` / `arrayOf<Any?>(filter)` 这类
      * 具体类型数组，不加投影会直接编译不过。
      */
     private fun invokeTyped(
