@@ -144,6 +144,12 @@ flutter {
  *
  * catvod-api.jar 只有 148 KB，直接打进 classes.dex 供 DexClassLoader 的
  * parent 使用——这正是 TVBox 家族的通行做法。
+ *
+ * 注意 androidx.preference：catvod-api 的 utils.Prefers 只用到
+ * PreferenceManager.getDefaultSharedPreferences 一个静态方法，但这里**不能**
+ * 自己写同名 shim——构建实测该库已随其他插件作为传递依赖进入 classpath
+ * （preference-1.2.1-runtime.jar），自建 shim 会让 R8 报
+ * "Type androidx.preference.PreferenceManager is defined multiple times"。
  */
 dependencies {
     implementation(files("libs/catvod-api.jar"))

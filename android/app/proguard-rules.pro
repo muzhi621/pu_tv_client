@@ -58,11 +58,6 @@
 -keep interface com.github.catvod.** { *; }
 -dontwarn com.github.catvod.**
 
-# androidx.preference 只用到 PreferenceManager.getDefaultSharedPreferences
-# 一个静态方法（com.github.catvod.utils.Prefers），为它引入整个
-# preference + appcompat 不划算，改为 app 内自带的同名 shim，必须保名。
--keep class androidx.preference.PreferenceManager { *; }
-
 # 宿主侧桥接类由 Dart 按固定名字调用，混淆后方法名变化会破坏协议。
 -keep class com.mystyle.purelive.tv.VodSpiderBridge { *; }
 
