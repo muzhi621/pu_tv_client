@@ -34,7 +34,9 @@ build warning and misleads readers into thinking it still has an effect.
 	<uses-feature android:name="android.hardware.gamepad" android:required="false" />
 	<uses-feature android:name="android.software.leanback" android:required="true" />
 	<uses-feature android:name="android.hardware.type.television" android:required="true" />
-	<application android:label="@string/AppName" android:name="${applicationName}" android:icon="@mipmap/ic_launcher" android:banner="@drawable/app_banner" android:theme="@style/Theme.App" android:usesCleartextTraffic="true" android:requestLegacyExternalStorage="true" android:networkSecurityConfig="@xml/network_security_config" android:enableOnBackInvokedCallback="true" android:allowNativeHeapPointerTagging="false" android:allowBackup="false">
+	<!-- extractNativeLibs=true 与 build.gradle.kts 的 jniLibs.useLegacyPackaging=true
+	     成对出现：允许 .so 以压缩形式进 APK，把下载包从约 74 MB 降到约 38 MB。 -->
+	<application android:label="@string/AppName" android:name="${applicationName}" android:icon="@mipmap/ic_launcher" android:banner="@drawable/app_banner" android:theme="@style/Theme.App" android:usesCleartextTraffic="true" android:requestLegacyExternalStorage="true" android:networkSecurityConfig="@xml/network_security_config" android:enableOnBackInvokedCallback="true" android:allowNativeHeapPointerTagging="false" android:allowBackup="false" android:extractNativeLibs="true">
 		<activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:taskAffinity="" android:theme="@style/Theme.App" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize" android:screenOrientation="landscape">
 			<meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/Theme.App" />
 			<intent-filter>

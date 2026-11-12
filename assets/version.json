@@ -1,7 +1,7 @@
 {
-  "version": "3.0.12",
-  "version_num": 130013,
-  "version_desc": "-New: 终端自动生成 UUID 上报，云端可逐台独立下发配置、改名与重置\\n-New: 云端 IPTV 源（M3U/TXT）随配置下发，自动写入本地播放列表 cloud_iptv\\n-Perf: 收敛为单 MPV 播放内核、表情 PNG 转 WebP、清理无效表情资源，安装包大幅缩小\\n-Perf: FFmpeg 改用 small 精简包，构建剥离 Dart 符号（--obfuscate --split-debug-info）",
+  "version": "3.0.13",
+  "version_num": 130014,
+  "version_desc": "-New: 终端自动生成 UUID 上报，云端可逐台独立下发配置、改名与重置\\n-New: 云端 IPTV 源（M3U/TXT）随配置下发，自动写入本地播放列表 cloud_iptv\\n-Perf: 单 MPV 内核、表情 PNG 转 WebP、清理无效表情资源、FFmpeg small 精简包\\n-Perf: native 库改为压缩打包，安装包再降约 36MB（电视通用版约 38MB）\\n-Note: 压缩模式安装时系统会解压 native 库，首次安装稍慢、占用略增",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",

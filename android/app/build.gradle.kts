@@ -36,6 +36,19 @@ android {
         localeFilters += listOf("zh")
     }
 
+    // 电视盒子下载/侧载的是 APK 文件本身，体积优先。
+    // 默认（extractNativeLibs=false）要求 .so 以「未压缩 + 页对齐」存进 APK，
+    // 仅四个大库就占 62 MB；改成 legacy packaging 后 .so 走 deflate 压缩，
+    // 实测整包可从 74 MB 降到约 38 MB。代价是安装时系统把 .so 解压到
+    // /data/app/.../lib，安装后 APK + 解压库合计约 100 MB、首次安装稍慢。
+    // 业务逻辑与 native 加载方式（System.loadLibrary）完全不变。
+    // 回退：删掉本块 + 清单里的 android:extractNativeLibs="true" 即可。
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     // Pinned rather than inherited so the TV build does not silently shift when
     // the Flutter SDK bumps its defaults.
     compileSdk = 37
