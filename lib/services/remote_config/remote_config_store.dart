@@ -15,6 +15,7 @@ class RemoteConfigKeys {
   static const String navigationManaged = 'remoteConfigNavigationManaged';
   static const String agreementAcceptedVersion = 'agreementAcceptedVersion';
   static const String noticeShownRevision = 'noticeShownRevision';
+  static const String exitDialogShownRevision = 'exitDialogShownRevision';
   static const String lastUpdateCheckAt = 'remoteConfigLastUpdateCheckAt';
   static const String deviceId = 'remoteConfigDeviceId';
   static const String lastIptvStamp = 'remoteConfigLastIptvStamp';
@@ -108,6 +109,14 @@ class RemoteConfigStore {
 
   static Future<void> setNoticeShownRevision(int value) async {
     await HivePrefUtil.setInt(RemoteConfigKeys.noticeShownRevision, value);
+  }
+
+  /// 退出确认弹窗「按 revision 仅展示一次」已展示到的 revision（-1 = 从未展示）。
+  static int get exitDialogShownRevision =>
+      HivePrefUtil.getInt(RemoteConfigKeys.exitDialogShownRevision) ?? -1;
+
+  static Future<void> setExitDialogShownRevision(int value) async {
+    await HivePrefUtil.setInt(RemoteConfigKeys.exitDialogShownRevision, value);
   }
 
   static int get lastUpdateCheckAt =>

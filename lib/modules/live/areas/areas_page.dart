@@ -7,7 +7,9 @@ import 'package:pure_live/modules/live/areas/platform_provider.dart';
 import 'package:pure_live/modules/live/areas/area_display_config.dart';
 
 class AreasPage extends ConsumerStatefulWidget {
-  const AreasPage({super.key});
+  /// 非空时只显示该站点的频道目录（IPTV 专用页），不显示其它平台 tab。
+  final String? onlySiteId;
+  const AreasPage({super.key, this.onlySiteId});
 
   @override
   ConsumerState<AreasPage> createState() => _AreasPageState();
@@ -17,13 +19,24 @@ class _AreasPageState extends ConsumerState<AreasPage> {
   @override
   Widget build(BuildContext context) {
     final platformState = ref.watch(platformTabProvider);
-    if (platformState.siteList.isEmpty) {
+    // 专用页（如 IPTV）只保留一个站点。站点即使没出现在用户的平台可见性配置
+    // (hotAreasList) 里，也从注册表直接取，保证 IPTV 频道页始终能列出频道。
+    List<Site> sites = widget.onlySiteId == null
+        ? platformState.siteList
+        : platformState.siteList.where((s) => s.id == widget.onlySiteId).toList();
+    if (sites.isEmpty && widget.onlySiteId != null) {
+      sites = Sites.supportSites.where((s) => s.id == widget.onlySiteId).toList();
+    }
+    if (sites.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    final List<TvTabItemData> tabItems = platformState.siteList.map(TvTabItemData.site).toList();
+    final int index = widget.onlySiteId == null
+        ? platformState.currentPlatformIndex.clamp(0, sites.length - 1)
+        : 0;
+    final List<TvTabItemData> tabItems = sites.map(TvTabItemData.site).toList();
 
-    final currentSite = platformState.siteList[platformState.currentPlatformIndex];
+    final currentSite = sites[index];
 
     return TvScaffold(
       child: Row(
@@ -34,13 +47,13 @@ class _AreasPageState extends ConsumerState<AreasPage> {
               children: [
                 AreasPlatformTabs(
                   tabs: tabItems,
-                  currentIndex: platformState.currentPlatformIndex,
+                  currentIndex: index,
                   siteId: currentSite.id,
                 ),
                 SizedBox(height: 16.ts(context)),
                 Expanded(
                   child: TvTabView(
-                    memoryKey: "areas_tab_view_content_${platformState.currentPlatformIndex}",
+                    memoryKey: "areas_tab_view_content_$index",
                     verticalEdge: DpadEdgeBehavior.leave,
                     horizontalEdge: DpadEdgeBehavior.stop,
                     child: AreasPlatformGridBridge(key: ValueKey('site_${currentSite.id}'), site: currentSite),

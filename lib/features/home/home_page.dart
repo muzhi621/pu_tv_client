@@ -47,6 +47,15 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   FocusNode _sectionNode(String key) => _sectionFocusNodes.putIfAbsent(key, FocusNode.new);
 
+  /// One stable focus node per primary navigation group.
+  final Map<String, FocusNode> _groupFocusNodes = {};
+
+  FocusNode _groupNode(String id) => _groupFocusNodes.putIfAbsent(id, FocusNode.new);
+
+  /// Currently selected primary group (iptv / vod / live). 'settings' never
+  /// lives here: its primary item opens the settings route directly.
+  late String _currentGroupId;
+
   /// The mode switch button (in the old backup slot): shows the active mode,
   Widget _buildModeButton(AppMode mode, bool isExpanded) {
     final (String label, String short, IconData icon) = switch (mode) {
@@ -139,16 +148,59 @@ class _HomePageState extends ConsumerState<HomePage> {
     ref.read(appModeControllerProvider.notifier).setMode(selected);
   }
 
+  /// Select a primary nav group and land on its first visible secondary item.
+  /// The settings group keeps the existing "open the settings route" behaviour.
+  void _selectNavGroup(String groupId) {
+    if (groupId == 'settings') {
+      const SettingsMenuRoute().push(context);
+      return;
+    }
+    setState(() => _currentGroupId = groupId);
+    final childIndexes = navChildIndexes(resolveNavGroups(), groupId);
+    final items = ref
+        .read(sideMenuListProvider)
+        .where((item) => childIndexes.contains(item.index))
+        .toList();
+    if (items.isNotEmpty) {
+      ref.read(sideMenuIndexProvider.notifier).changeIndex(items.first.index);
+    }
+  }
+
   /// The active mode's own rail entries. Live reuses the configured side menu;
   /// music and video carry their fixed section lists, selected through their
   /// section-index providers.
-  List<Widget> _buildModeRailItems(AppMode mode, bool isExpanded) {
+  List<Widget> _buildModeRailItems(AppMode mode, bool isExpanded, List<NavGroup> groups) {
     switch (mode) {
       case AppMode.live:
         final menuList = ref.watch(sideMenuListProvider);
         final currentIndex = ref.watch(sideMenuIndexProvider);
-        return [
+        final childIndexes = navChildIndexes(groups, _currentGroupId);
+        // 二级菜单 = 当前一级块的 children，按 railMenuIds 白名单过滤（iptv 常驻）。
+        final secondary = <AppMenuItem>[
           for (final item in menuList)
+            if (childIndexes.contains(item.index)) item,
+        ];
+        return <Widget>[
+          // 一级栏：4 个常驻块，不受二级白名单隐藏。
+          for (final group in groups)
+            Padding(
+              padding: EdgeInsets.only(bottom: 12.ts(context)),
+              child: _buildAdaptiveItem(
+                ref: ref,
+                item: AppMenuItem(
+                  index: -1 - groups.indexOf(group),
+                  title: i18n(group.labelKey),
+                  shortTitle: i18n(group.labelKey),
+                  icon: group.icon,
+                ),
+                isExpanded: isExpanded,
+                isSelected: _currentGroupId == group.id,
+                focusNode: _groupNode(group.id),
+                onTap: () => _selectNavGroup(group.id),
+              ),
+            ),
+          SizedBox(height: 8.ts(context)),
+          for (final item in secondary)
             Padding(
               padding: EdgeInsets.only(bottom: 20.ts(context)),
               child: _buildAdaptiveItem(
@@ -253,6 +305,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   void initState() {
     super.initState();
+    // 一级栏启动默认块：云端 navigation.defaultGroupId，旧配置/非法值回退 iptv。
+    _currentGroupId = resolveDefaultGroupId(resolveNavGroups());
     // Shows the update dialog once per session, after the startup check.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -269,6 +323,9 @@ class _HomePageState extends ConsumerState<HomePage> {
     for (final node in _sectionFocusNodes.values) {
       node.dispose();
     }
+    for (final node in _groupFocusNodes.values) {
+      node.dispose();
+    }
     _modeFocusNode.dispose();
     super.dispose();
   }
@@ -279,6 +336,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     final menuList = ref.watch(sideMenuListProvider);
     final mySettingsItem = ref.watch(mySettingsMenuItemProvider);
     final isExpanded = ref.watch(isMenuExpandedProvider);
+    final groups = resolveNavGroups();
     final currentTvTheme = context.tvTheme;
     // settings refresh -> home cache: on top of the widget default, the user can turn the
     // page cache off so every switch rebuilds the content fresh (and clears
@@ -286,16 +344,15 @@ class _HomePageState extends ConsumerState<HomePage> {
     final bool effectiveKeepAlive =
         widget.keepAlive && ref.watch(refreshConfigControllerProvider.select((s) => s.homeKeepAlive));
 
-    // A menu entry hidden in navigation visibility while its page is on screen leaves the
-    // sidebar with no selection and the old page lingering. Auto-correct once
-    // per menu-list change — to follows when it is visible (the app's landing
-    // page, whatever the menu order), otherwise to the first visible entry.
-    final visibleIndexes = menuList.map((item) => item.index).toSet();
-    final currentIndexVisible = currentIndex == TvMenuType.settings.value || visibleIndexes.contains(currentIndex);
-    if (!currentIndexVisible && visibleIndexes.isNotEmpty) {
-      final landing = visibleIndexes.contains(TvMenuType.favorite.value)
-          ? TvMenuType.favorite.value
-          : visibleIndexes.first;
+    // 二级菜单只在当前一级块的 children 里选中；选中项被白名单隐藏或切换了一级块
+    // 时，自动落到该块首个可见二级项（IPTV 块固定落到 iptv(7)）。
+    final childIndexes = navChildIndexes(groups, _currentGroupId);
+    final visibleIndexes = menuList
+        .map((item) => item.index)
+        .where((index) => childIndexes.contains(index))
+        .toSet();
+    if (!visibleIndexes.contains(currentIndex) && visibleIndexes.isNotEmpty) {
+      final landing = visibleIndexes.first;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(sideMenuIndexProvider.notifier).changeIndex(landing);
       });
@@ -423,19 +480,22 @@ class _HomePageState extends ConsumerState<HomePage> {
                         // Edge fades mark the clipped entries as scroll
                         // content: at the largest font scale a half-shown
                         // item otherwise reads as a broken rail.
-                        child: SingleChildScrollView(child: Column(children: _buildModeRailItems(appMode, isExpanded))),
+                        child: SingleChildScrollView(child: Column(children: _buildModeRailItems(appMode, isExpanded, groups))),
                       ),
-                      _buildAdaptiveItem(
-                        ref: ref,
-                        item: mySettingsItem,
-                        isExpanded: isExpanded,
-                        isSelected: currentIndex == mySettingsItem.index,
-                        focusNode: _nodeFor(mySettingsItem.index),
-                        // Settings opens as its own page (title bar, back button
-                        // and the configuration-preview action), like the desktop
-                        // app, instead of swapping the content pane.
-                        onTap: () => const SettingsMenuRoute().push(context),
-                      ),
+                      // Live mode uses the 设置 primary block instead; the other
+                      // modes keep their persistent settings footer button.
+                      if (!isLiveMode)
+                        _buildAdaptiveItem(
+                          ref: ref,
+                          item: mySettingsItem,
+                          isExpanded: isExpanded,
+                          isSelected: currentIndex == mySettingsItem.index,
+                          focusNode: _nodeFor(mySettingsItem.index),
+                          // Settings opens as its own page (title bar, back button
+                          // and the configuration-preview action), like the desktop
+                          // app, instead of swapping the content pane.
+                          onTap: () => const SettingsMenuRoute().push(context),
+                        ),
                     ],
                   ),
                 ),
@@ -582,6 +642,9 @@ class _HomePageState extends ConsumerState<HomePage> {
         return const TvSearchPage();
       case TvMenuType.history:
         return const HistoryPage();
+      case TvMenuType.iptv:
+        // IPTV 专用频道页：只保留 iptv 站点的频道目录（Sites.iptvSite == 'iptv'）。
+        return const AreasPage(onlySiteId: 'iptv');
     }
   }
 }

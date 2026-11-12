@@ -18,6 +18,7 @@ String navigationMenuTitle(HomeMenu menu) => switch (menu) {
   HomeMenu.moviePlayback => i18n('ui_link_playback'),
   HomeMenu.search => i18n('search_live'),
   HomeMenu.history => i18n('watch_history'),
+  HomeMenu.iptv => i18n('menu_iptv'),
 };
 
 /// Second line of an entry, or null when the mobile page labels it with the bare
@@ -28,6 +29,7 @@ String? navigationMenuSubtitle(HomeMenu menu) => switch (menu) {
   HomeMenu.moviePlayback => i18n('movie_playback'),
   HomeMenu.search => i18n('search'),
   HomeMenu.history => i18n('history'),
+  HomeMenu.iptv => i18n('menu_iptv'),
 };
 
 /// Kept in step with the icons the side menu itself uses.
@@ -39,6 +41,7 @@ IconData navigationMenuIcon(HomeMenu menu) => switch (menu) {
   HomeMenu.moviePlayback => Icons.movie_creation_outlined,
   HomeMenu.search => Icons.search_rounded,
   HomeMenu.history => Icons.history,
+  HomeMenu.iptv => Icons.live_tv_outlined,
 };
 
 /// The visible entries, in their stored order.

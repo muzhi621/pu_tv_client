@@ -179,11 +179,78 @@ class AppSettingsController extends _$AppSettingsController {
     HivePrefUtil.setBool('enableNewWindowPlay', state.enableNewWindowPlay);
   }
 
-  /// 云端下发的导航白名单（需求文档 FR-05）。
+  /// 一级块固定 id（与云端 navigation.groups 契约一致）。
+  static const Set<String> _navGroupIds = <String>{'iptv', 'vod', 'live', 'settings'};
+
+  /// 最近一次云端解析出的导航分组 / 默认块（applyRemoteNavigation 写入）。
+  /// navigation.managed=false 时该路径不触发，home_provider 会直接读 _current 的
+  /// 原始 groups，二者同源、结果一致；解析失败一律留空让调用方回退内置默认。
+  static List<dynamic>? _lastNavGroups;
+  static String? _lastDefaultGroupId;
+
+  static List<dynamic>? get lastNavGroups => _lastNavGroups;
+  static String? get lastDefaultGroupId => _lastDefaultGroupId;
+
+  /// 校验一条导航分组：id 必须是四个固定块之一；children 只保留已知菜单 id 或
+  /// 字面量 'settings'（去重、丢弃未知项）。整条非法返回 null。
+  static Map<String, dynamic>? parseNavGroup(Object? raw) {
+    if (raw is! Map) return null;
+    final id = raw['id'];
+    if (id is! String || !_navGroupIds.contains(id)) return null;
+    final childrenRaw = raw['children'];
+    final children = <String>[];
+    if (childrenRaw is List) {
+      for (final c in childrenRaw) {
+        if (c is! String) continue;
+        final valid = HomeMenu.fromId(c) != null || c == 'settings';
+        if (valid && !children.contains(c)) children.add(c);
+      }
+    }
+    return <String, dynamic>{'id': id, 'children': children};
+  }
+
+  /// 校验并去重云端 navigation.groups；缺失 / 类型错误 / 全非法都返回空列表，
+  /// 由调用方回退内置四大类默认分组。
+  static List<dynamic> parseNavGroups(Object? raw) {
+    if (raw is! List) return const <dynamic>[];
+    final result = <dynamic>[];
+    final seen = <String>{};
+    for (final entry in raw) {
+      final parsed = parseNavGroup(entry);
+      if (parsed == null) continue;
+      final id = parsed['id'] as String;
+      if (!seen.add(id)) continue;
+      result.add(parsed);
+    }
+    return result;
+  }
+
+  /// defaultGroupId 必须是 groups 里存在的固定块 id，否则返回 null（回退默认）。
+  static String? normalizeDefaultGroupId(Object? raw, List<dynamic> groups) {
+    final id = raw is String ? raw.trim().toLowerCase() : '';
+    if (!_navGroupIds.contains(id)) return null;
+    if (!groups.any((g) => g is Map && g['id'] == id)) return null;
+    return id;
+  }
+
+  /// 云端下发的导航白名单（需求文档 FR-05）与一级分组 / 默认块。
   ///
-  /// 必须写入显式完整数组：normalizeMenuIds 会把缺失的 known id 全部补回，
+  /// 白名单必须写入显式完整数组：normalizeMenuIds 会把缺失的 known id 全部补回，
   /// 而 _visibleMenuIds 把空列表解释为「全部默认序」，两者都与白名单语义冲突。
-  void applyRemoteNavigation({required List<String> railMenuIds, bool? sidebarExpanded}) {
+  /// groups / defaultGroupId 的解析独立于白名单：即使 railMenuIds 为空或不含
+  /// iptv（线上旧配置），4 个一级块也始终由内置默认补齐，白名单只影响块内二级项。
+  void applyRemoteNavigation({
+    required List<String> railMenuIds,
+    bool? sidebarExpanded,
+    Object? groups,
+    Object? defaultGroupId,
+  }) {
+    // 先解析分组 / 默认块，再处理白名单：旧配置无 groups 时得到空列表，调用方
+    // 回退内置四大类，绝不会白屏或空菜单。
+    final parsedGroups = parseNavGroups(groups);
+    _lastNavGroups = parsedGroups.isEmpty ? null : parsedGroups;
+    _lastDefaultGroupId = normalizeDefaultGroupId(defaultGroupId, parsedGroups);
+
     final ids = <String>[];
     for (final raw in railMenuIds) {
       final id = raw.trim();

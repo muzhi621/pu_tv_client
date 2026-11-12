@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/widgets.dart';
 import 'package:pure_live/core/common/http_client.dart';
 import 'package:pure_live/core/utils/hive_pref_util.dart';
 import 'package:pure_live/modules/live/iptv/services/iptv_import_manager.dart';
@@ -77,6 +79,37 @@ class RemoteConfigService {
     }
   }
 
+  // ------------------------------------------------------------------
+  // 轻量心跳（App 首帧之后启动）
+  // ------------------------------------------------------------------
+
+  static Timer? _heartbeatTimer;
+
+  /// 启动 15 分钟定时同步 + 「回到前台立即同步」监听。
+  ///
+  /// 复用现有 [syncNow]：`GET /api/config?since=...`，云端无变更即 304，流量极小，
+  /// 不新增任何 API 路径。幂等：以 [_heartbeatTimer] 为标记，重复调用不会重复建
+  /// Timer、也不会重复注册 observer。
+  ///
+  /// 调用时机应在 WidgetsBinding 就绪之后（本项目挂在 runApp 首帧之后）；内部再
+  /// 兜底一次 ensureInitialized，绝不影响「bootstrap 必须在 runApp 之前」的既有顺序。
+  static void startHeartbeat() {
+    if (_heartbeatTimer != null) return;
+    WidgetsFlutterBinding.ensureInitialized();
+
+    // syncNow 内部已全程 try/catch 静默降级；定时回调再包一层，杜绝未捕获异常。
+    _heartbeatTimer = Timer.periodic(const Duration(minutes: 15), (_) {
+      try {
+        unawaited(syncNow());
+      } catch (error) {
+        debugPrint('[RemoteConfig] 心跳同步异常（已忽略）: $error');
+      }
+    });
+
+    // WidgetsBinding 会强引用已注册的 observer，无需另存；幂等由上面的 guard 保证。
+    WidgetsBinding.instance.addObserver(_RemoteConfigLifecycleObserver());
+  }
+
   static Future<RemoteConfigDocument?> _fetch(String endpoint, String token, int revision) async {
     final base = endpoint.replaceAll(RegExp(r'/+$'), '');
     try {
@@ -144,18 +177,20 @@ class RemoteConfigService {
       if (ids.isNotEmpty) SettingsService.to.fav.applyRemoteSiteWhitelist(ids);
     }
 
-    // 导航白名单与顺序。
+    // 导航白名单与顺序。groups / defaultGroupId 独立于白名单传入：线上旧配置
+    // 只有 7 项 railMenuIds、无 groups，也要走一遍解析以回退内置四大类分组，
+    // 保证 4 个一级块始终可见。
     if (document.managed('navigation')) {
       final navigation = document.section('navigation');
       final ids = rcStringList(navigation['railMenuIds']);
-      if (ids.isNotEmpty) {
-        SettingsService.to.app.applyRemoteNavigation(
-          railMenuIds: ids,
-          sidebarExpanded: navigation.containsKey('sidebarExpanded')
-              ? rcBool(navigation['sidebarExpanded'], false)
-              : null,
-        );
-      }
+      SettingsService.to.app.applyRemoteNavigation(
+        railMenuIds: ids,
+        sidebarExpanded: navigation.containsKey('sidebarExpanded')
+            ? rcBool(navigation['sidebarExpanded'], false)
+            : null,
+        groups: navigation['groups'],
+        defaultGroupId: navigation['defaultGroupId'],
+      );
     }
 
     // 启动页与更新开关写进 AppSettingsModel（state + Hive 一起写）。
@@ -277,6 +312,29 @@ class RemoteConfigService {
   static bool get navigationManaged => _current?.managed('navigation') ?? false;
 
   // ------------------------------------------------------------------
+  // 一级导航分组（四大类；home_provider / home_page 读取）
+  // ------------------------------------------------------------------
+
+  /// 合法的四个一级块 id，与云端 navigation.groups 契约一致。
+  static const Set<String> navGroupIds = <String>{'iptv', 'vod', 'live', 'settings'};
+
+  /// 启动默认选中的一级块。云端 navigation.defaultGroupId 缺失 / 非法时回退
+  /// iptv，保证线上旧配置（无该字段的 7 项白名单）也能平滑升级。
+  static String get navigationDefaultGroupId {
+    final raw = _section('navigation')['defaultGroupId'];
+    final id = raw is String ? raw.trim().toLowerCase() : '';
+    return navGroupIds.contains(id) ? id : 'iptv';
+  }
+
+  /// 云端 navigation.groups 原始数组；缺失 / 类型错误返回空数组，由 home_provider
+  /// 解析并回退内置四大类分组。不设 managed 门槛：_current 在 syncNow 里无条件
+  /// 赋值，导航节是否整节接管都不影响分组读取（线上旧配置无 groups 亦返回空）。
+  static List<dynamic> get navigationGroupsRaw {
+    final raw = _section('navigation')['groups'];
+    return raw is List ? raw : const <dynamic>[];
+  }
+
+  // ------------------------------------------------------------------
   // 协议（路由守卫与协议页读取）
   // ------------------------------------------------------------------
 
@@ -329,6 +387,46 @@ class RemoteConfigService {
   }
 
   // ------------------------------------------------------------------
+  // 退出确认弹窗（首页 PopScope 读取，对齐 notice* 的写法与兜底语义）
+  // ------------------------------------------------------------------
+
+  /// 仅看 exitDialog.enabled（缺省 false）：不设 startup.managed 门槛。
+  /// _section/_sub 读的是 _current 完整文档，syncNow 会无条件赋值；_apply 里的
+  /// managed 只控制是否把整节写进 AppSettingsModel，不会删掉 startup 节。云端
+  /// seed 的 startup.managed 保持 false，避免一改就把协议页/公告/闪屏整节接管。
+  /// enabled=false 时零影响，沿用本地原有弹窗。
+  static bool get exitDialogEnabled =>
+      rcBool(_sub('startup', 'exitDialog')['enabled'], false);
+
+  /// always | once_per_revision | never。缺省兜底为 always，与本地「每次返回都
+  /// 确认」的既有行为一致，也对应云端 seed 的默认值。
+  static String get exitDialogMode => rcString(_sub('startup', 'exitDialog')['mode'], 'always');
+
+  /// 解析异常也返回 true：宁可保留「取消」，也不能把用户锁进只能退出的弹窗。
+  static bool get exitDialogDismissible =>
+      rcBool(_sub('startup', 'exitDialog')['dismissible'], true);
+
+  /// 解析异常也返回 true：保持原有捐赠二维码区域可见，零影响。
+  static bool get exitDialogShowDonate =>
+      rcBool(_sub('startup', 'exitDialog')['showDonate'], true);
+
+  static String get exitDialogTitle =>
+      rcLocalized(_sub('startup', 'exitDialog')['titleI18n'], _locale);
+
+  static String get exitDialogBody =>
+      rcLocalized(_sub('startup', 'exitDialog')['bodyI18n'], _locale);
+
+  static bool get shouldShowExitDialog {
+    if (!exitDialogEnabled || exitDialogMode == 'never') return false;
+    if (exitDialogMode == 'always') return true;
+    return RemoteConfigStore.exitDialogShownRevision != (_current?.revision ?? 0);
+  }
+
+  static Future<void> markExitDialogShown() async {
+    await RemoteConfigStore.setExitDialogShownRevision(_current?.revision ?? 0);
+  }
+
+  // ------------------------------------------------------------------
   // 更新策略（VersionUtil / HomeUpdateDialog 读取）
   // ------------------------------------------------------------------
 
@@ -369,5 +467,19 @@ class RemoteConfigService {
 
   static Future<void> markUpdateChecked() async {
     await RemoteConfigStore.setLastUpdateCheckAt(DateTime.now().millisecondsSinceEpoch);
+  }
+}
+
+/// App 生命周期监听：回到前台（resumed）时静默拉取一次配置，让云端及时感知
+/// 设备在线并下发最新文档，无需等到下一个 15 分钟心跳。
+class _RemoteConfigLifecycleObserver with WidgetsBindingObserver {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    try {
+      unawaited(RemoteConfigService.syncNow());
+    } catch (error) {
+      debugPrint('[RemoteConfig] 前台恢复同步异常（已忽略）: $error');
+    }
   }
 }

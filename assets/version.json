@@ -1,7 +1,7 @@
 {
-  "version": "3.0.13",
-  "version_num": 130014,
-  "version_desc": "-New: 终端自动生成 UUID 上报，云端可逐台独立下发配置、改名与重置\\n-New: 云端 IPTV 源（M3U/TXT）随配置下发，自动写入本地播放列表 cloud_iptv\\n-Perf: 单 MPV 内核、表情 PNG 转 WebP、清理无效表情资源、FFmpeg small 精简包\\n-Perf: native 库改为压缩打包，安装包再降约 36MB（电视通用版约 38MB）\\n-Note: 压缩模式安装时系统会解压 native 库，首次安装稍慢、占用略增",
+  "version": "3.0.14",
+  "version_num": 130015,
+  "version_desc": "-New: 左侧导航重构为 IPTV / 影音 / 直播 / 设置 四大类，启动默认进入 IPTV，右侧展开二级菜单，原功能全部保留\\n-New: 退出 App 弹窗的标题、正文、是否可关闭、捐赠区改由云端下发\\n-New: 云端编辑器免配置自动连接，可逐台编辑设置并一键配置下发、批量管理、显示在线 / 离线\\n-New: IPTV 支持网络链接与本地 txt / m3u 文件导入，可组合套餐按终端下发\\n-Perf: 前台每 15 分钟静默同步一次配置，无变更时走 304 几乎零流量\\n-Note: 压缩打包模式首次安装需解压 native 库，稍慢属正常",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",

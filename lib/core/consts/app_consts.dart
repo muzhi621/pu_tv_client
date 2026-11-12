@@ -10,7 +10,8 @@ enum HomeMenu {
   favoriteAreas('favoriteAreas'),
   moviePlayback('moviePlayback'),
   search('search'),
-  history('history');
+  history('history'),
+  iptv('iptv');
 
   final String id;
   const HomeMenu(this.id);

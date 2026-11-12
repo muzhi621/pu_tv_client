@@ -82,6 +82,9 @@ List<String> rcStringList(dynamic value) {
 }
 
 String rcLocalized(dynamic value, String locale, [String fallback = '']) {
+  // 云端 i18n 既可能是 {"zh": "..."} 这样的 map，也可能直接是一个字符串。
+  // 字符串按「已本地化」直接返回；map 行为保持既有写法不变。
+  if (value is String) return value.isNotEmpty ? value : fallback;
   if (value is! Map) return fallback;
   final direct = value[locale];
   if (direct is String && direct.isNotEmpty) return direct;
