@@ -102,12 +102,11 @@ jobs:
           run_case() {
             echo "########## $1"
             cp "$2" app/build.gradle.kts
-            ./gradlew -q :app:dependencyInsight \
-              --configuration impellerReleaseCompileClasspath --dependency okhttp 2>&1 | head -12
-            ./gradlew -q :app:dependencyInsight \
-              --configuration impellerReleaseCompileClasspath --dependency catvod 2>&1 | head -6
+            ./gradlew :app:compileImpellerReleaseKotlin 2>&1 \
+              | grep -E "^e: |BUILD SUCCESSFUL|BUILD FAILED|Could not resolve|no matching variant" | head -14
           }
-          run_case "C 保留 chaquopy_java 依赖，去掉插件/ndk/chaquopy 块" app/build_diag_c.gradle.kts
+          run_case "E 晚绑定 afterEvaluate 补依赖" app/build_diag_e.gradle.kts
+          run_case "C 去掉 chaquopy 插件，保留 chaquopy_java 依赖" app/build_diag_c.gradle.kts
           run_case "B 保留插件，去掉 chaquopy_java 依赖" app/build_diag_b.gradle.kts
 
       # 体积是 #64 的硬指标（用户批准上限 ~72 MB），所以把账算在日志里：
