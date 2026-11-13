@@ -100,6 +100,8 @@ internal class VodSpiderBridge(
             "okhttp3.OkHttpClient",
             "com.google.gson.Gson",
             "com.google.common.util.concurrent.MoreExecutors",
+            // utils/Js 走 RuntimeModule.QUICKJS.entry(...)，类必须存在（#63）。
+            "com.github.catvod.utils.RuntimeModule",
         )
 
         /**
@@ -123,26 +125,33 @@ internal class VodSpiderBridge(
             "com.github.catvod.net.interceptor.AuthInterceptor",
             "com.github.catvod.utils.Auth",
             "com.github.catvod.bean.Doh",
-            // 兼容类：catvod 的 Util 读它的 VERSION 拼 UA。
+            // okhttp 4.12 自带：catvod 的 Util 读它的 VERSION 拼 UA。
             "okhttp3.OkHttp",
             // SpiderDebug / Path 的日志出口。
             "com.orhanobut.logger.Logger",
             // Prefers 的存储入口 / Download 的线程切换。
             "androidx.preference.PreferenceManager",
             "androidx.core.os.HandlerCompat",
+            // ---- QuickJS 运行时（#63）：实现已编进 APK，缺了就是构建配置问题 ----
+            "com.github.catvod.runtime.RuntimePlugin",
+            "com.github.catvod.runtime.QuickJsRuntime",
+            "com.fongmi.quickjs.RuntimeEntry",
+            "com.fongmi.quickjs.host.Host",
+            // RuntimeModule 读 assets / PackageAbi 供字节码缓存分目录，
+            // Trans 供 JS 侧的 s2t/t2s。
+            "com.github.catvod.utils.PackageAbi",
+            "com.github.catvod.utils.Trans",
+            // HtmlQuery 的 DOM 选择器实现。
+            "org.jsoup.Jsoup",
         )
 
         /**
          * 可选能力：缺了不报错，只影响特定站点特性。
          *
-         * `Js` 走 `RuntimeModule.QUICKJS.entry(QuickJsRuntime.class)`，需要 QuickJS
-         * 的 native 运行时；在 #63 接入之前，只要 spider 不主动 `new Js()` 就
-         * 不会触发，所以单独分组，避免把「还没做」渲染成「坏了」。
+         * 目前没有剩余项 —— QuickJS 已在 #63 内置并升到必检。保留这个分组是
+         * 为了后续接 Python / Node.js 运行时（#64）时有一个「可降级」的口子。
          */
-        private val OPTIONAL_HOST_CLASSES = listOf(
-            "com.github.catvod.utils.RuntimeModule",
-            "com.github.catvod.runtime.QuickJsRuntime",
-        )
+        private val OPTIONAL_HOST_CLASSES = emptyList<String>()
     }
 
     private val channel = MethodChannel(binaryMessenger, CHANNEL)
@@ -169,6 +178,11 @@ internal class VodSpiderBridge(
     )
 
     init {
+        // catvod 的 Runtime 是 Path / RuntimeModule 取 Context 的唯一入口：
+        // 没有它，Runtime.context() 直接 NPE。#63 之前宿主从未设置，
+        // 只是因为当时没有代码路径真的走到那里才没暴露。
+        runCatching { com.github.catvod.Runtime.set(context) }
+            .onFailure { Log.w(TAG, "Runtime.set(context) 失败，QuickJS 可能不可用", it) }
         channel.setMethodCallHandler(this)
     }
 
@@ -229,6 +243,8 @@ internal class VodSpiderBridge(
             "hostClassesMissing" to missingHost,
             "runtimeClassesMissing" to missingRuntime,
             "optionalClassesMissing" to missingOptional,
+            // QuickJS 是否可用（#63）：installed=so 在，checked=真求值成功。
+            "quickjs" to probeQuickJs(),
             "loadedSites" to spiders.keys.toList(),
             "cachedJars" to jarFiles.map {
                 mapOf("name" to it.name, "bytes" to it.length(), "readOnly" to !it.canWrite())
@@ -766,4 +782,38 @@ internal class VodSpiderBridge(
 
     private fun rootMessage(error: Throwable): String =
         unwrap(error).message ?: unwrap(error).javaClass.simpleName
+
+    /**
+     * QuickJS 能力探测（#63）。
+     *
+     * 三类失败要能分开：类没进 APK / .so 没打进当前 ABI / native 注册失败。
+     * `check()` 会真跑一次 `6 * 7`，这是唯一能证明「JS 引擎真的活着」的手段，
+     * 比只看类是否存在有意义得多。
+     *
+     * 首次调用会加载 1.5 MB 的 .so，耗时约几十毫秒；diagnostics 本来就在
+     * 后台线程执行，可以接受。
+     */
+    private fun probeQuickJs(): Map<String, Any?> {
+        val module = com.github.catvod.utils.RuntimeModule.QUICKJS
+        val installed = runCatching { module.isInstalled() }.getOrDefault(false)
+        var checked = false
+        var error: String? = null
+        if (installed) {
+            try {
+                val entry = module.entry(com.github.catvod.runtime.QuickJsRuntime::class.java)
+                entry.check()
+                checked = true
+            } catch (t: Throwable) {
+                error = rootMessage(t)
+            }
+        } else {
+            error = "libquickjs-wrapper.so 未出现在当前 ABI 的 nativeLibraryDir"
+        }
+        return mapOf(
+            "installed" to installed,
+            "checked" to checked,
+            "error" to error,
+            "compatibilityId" to runCatching { module.compatibilityId }.getOrNull(),
+        )
+    }
 }

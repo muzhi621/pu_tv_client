@@ -61,6 +61,74 @@
 > 另：早期曾补过一个 `okhttp3.OkHttp` 兼容类，事后核对 okhttp **4.12.0 本身就带**
 > 这个类和 `VERSION` 字段，属于多余并导致 R8 重复类报错，已删除。
 
+---
+
+## 1A. FongMi/TV —— QuickJS 运行时（#63）
+
+同一仓库 `b27ba75` 的 `quickjs` 模块与 `catvod` 模块的部分源码。
+
+- **许可证**：GPL-3.0（与上文同源，兼容性依据同为 GPLv3 §13）
+- **纳入原因**：TVBox 生态里 `new Js()` 与独立 `.js` 站点的执行都依赖 QuickJS。
+
+### 1A.1 `android/app/libs/quickjs-wrapper.jar`
+
+上游 `quickjs/libs/wrapper-java.jar`，Java 侧的 QuickJS 绑定
+（`com.fongmi.quickjs.QuickJS` / `QuickJSContext` / `ModuleBytecodeCache` 等）。
+
+该 jar 里**还附带**了 `com.dylibso.chicory`（纯 Java WASM 解释器，180 个类）。
+只有 `com.fongmi.quickjs.Wasm*` 引用它，而 `Wasm*` 在 native 路径下没有静态
+调用方，release 构建由 R8 整体裁掉，不进 APK。`proguard-rules.pro` 里刻意
+**没有** `-keep com.dylibso.chicory.**`。
+
+### 1A.2 `android/app/src/main/jniLibs/{arm64-v8a,armeabi-v7a}/libquickjs-wrapper.so`
+
+来自上游 `quickjs/libs/runtime-release.aar` 的 `jni/` 目录（该 aar 的
+`classes.jar` 是空的，只提供 .so）。体积 1.53 MB / 1.09 MB，压缩后约
+0.67 MB / 0.61 MB。
+
+### 1A.3 `android/app/src/main/assets/js/`
+
+上游 `quickjs/src/main/assets/js/`：
+
+| 路径 | 作用 |
+|---|---|
+| `lib/spider.js` | JS spider 基类骨架 |
+| `lib/catvod.js` | JS 侧 catvod 兼容层 |
+| `lib/net.js` | JS 侧网络请求实现 |
+| `lib/dialog.js` | JS 侧对话框 |
+| `vendor/cheerio.min.js` | HTML 选择器（对应 Java 侧 jsoup） |
+| `vendor/crypto-js.js` | JS 侧加解密 |
+| `vendor/gbk.js` | GBK 编解码表 |
+
+第三方 JS 库各自保留原有许可证头。
+
+### 1A.4 `android/app/src/main/java/com/fongmi/quickjs/`（17 个源文件）
+
+`QuickJSLoader` / `RuntimeEntry` / `crawler/{Loader,Spider}` /
+`method/{Cache,Dialogs,Global,Invocation,Network,ProxyBody,Sockets,Streams}` /
+`utils/{Connect,HtmlQuery,Module,Scripts}` / `host/Host`。
+
+其中 `host/Host.java` 来自上游 `catvod` 模块（不在 `apiJar` 白名单内）。
+**未修改业务逻辑**，只做集成适配。
+
+### 1A.5 自写的 `com.github.catvod.utils.RuntimeModule`
+
+**不是上游逐字拷贝**。上游把 QuickJS 当作独立插件 APK（`com.fongmi.runtime.quickjs`），
+校验签名/ABI/payload 后用 `DexClassLoader` 加载，且显式拒绝宿主自带实现：
+`throw new IOException("Runtime implementation is bundled in the host")`。
+
+本项目是单 APK 直装，不引入插件包。因此保留上游的枚举名与二进制签名
+（`catvod-api.jar` 里的 `Js` 只用到 `QUICKJS` 常量与 `entry(Class)` 两个成员），
+把实现换成「内置」：`entry()` 直接返回宿主内的 `RuntimeEntry`，`load()` 加载
+`nativeLibraryDir` 下的 .so，`readAsset()` 从宿主 `assets/` 读取。
+文件头有完整说明。
+
+### 1A.6 补齐的 catvod 类
+
+`utils/PackageAbi.java`、`utils/Trans.java`、`runtime/RuntimePlugin.java`、
+`runtime/QuickJsRuntime.java` —— 均来自上游 `b27ba75`，未被 `apiJar` 导出，
+由 QuickJS 模块静态引用。
+
 ## 2. 未采用的评估对象
 
 以下项目做过融合评估，**未纳入任何代码**，在此记录以免重复调研：
@@ -82,5 +150,6 @@
 | `androidx.preference:preference:1.2.1` | `Prefers` 的 `PreferenceManager` |
 | `androidx.core:core:1.13.1` | `Download` 的 `HandlerCompat` |
 | `com.orhanobut:logger:2.2.0` | `SpiderDebug` / `Path` 的日志出口 |
+| `org.jsoup:jsoup:1.23.2` | QuickJS 侧 `HtmlQuery` 的 DOM 选择器 |
 
 以上均为 Apache-2.0 或同等宽松许可证。

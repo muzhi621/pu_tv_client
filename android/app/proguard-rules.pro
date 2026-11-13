@@ -61,10 +61,24 @@
 # 宿主侧桥接类由 Dart 按固定名字调用，混淆后方法名变化会破坏协议。
 -keep class com.mystyle.purelive.tv.VodSpiderBridge { *; }
 
-# okhttp3/OkHttp.java 是我们自己补的兼容类（见该文件头注释）。catvod 的 Util
-# 只读它的 VERSION 静态字段，R8 本来就会保留；这里显式声明是为了防止将来
-# 有人改动 Util 引用方式后字段被裁成空字符串。
+# okhttp3/OkHttp 由 okhttp 4.12.0 自身提供，catvod 的 Util 只读它的 VERSION
+# 静态字段（见 THIRD_PARTY_NOTICES.md 里那次误判纠正）。显式 keep 是防御性的。
 -keep class okhttp3.OkHttp { *; }
+
+# QuickJS 运行时（#63）。
+# com.fongmi.quickjs.QuickJS / QuickJSContext 的方法由 libquickjs-wrapper.so 通过
+# JNI 按字面名查找，混淆后 native 注册会直接失败，所以整包保留。
+# catvod 的 com.github.catvod.utils.Js 还会反射实例化
+# com.fongmi.quickjs.RuntimeEntry，类名同样不能变。
+-keep class com.fongmi.quickjs.** { *; }
+-keep interface com.fongmi.quickjs.** { *; }
+-dontwarn com.fongmi.quickjs.**
+
+# 注意：不要 -keep com.dylibso.chicory.**。
+# 那是 wrapper-java.jar 里附带的纯 Java WASM 解释器，只有 com.fongmi.quickjs.Wasm*
+# 引用它，而 Wasm* 在 native 路径下没有调用方；放开 keep 会让 APK 多出约 700 KB
+# 死代码。这里只消除「被裁掉之后的残留引用」告警。
+-dontwarn com.dylibso.**
 
 # SpiderDebug / Path 通过 com.orhanobut.logger 输出日志。该库大量依赖反射与
 # 泛型擦除后的 StringBuilder 拼接，R8 全量混淆会让日志直接抛异常；而多数

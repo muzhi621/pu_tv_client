@@ -159,6 +159,17 @@ flutter {
 dependencies {
     implementation(files("libs/catvod-api.jar"))
 
+    // QuickJS 的 Java 绑定（com.fongmi.quickjs.QuickJS / QuickJSContext / ModuleBytecodeCache…），
+    // 来自 FongMi/TV 的 quickjs/libs/wrapper-java.jar（commit b27ba75，GPL-3.0）。
+    // 该 jar 里还带了 com.dylibso.chicory（纯 Java WASM 解释器），只有 com.fongmi.quickjs.Wasm*
+    // 引它，而 Wasm* 自身没有静态调用方，release 构建时由 R8 一并裁掉。
+    // 配套的 libquickjs-wrapper.so 见 src/main/jniLibs/{arm64-v8a,armeabi-v7a}。
+    implementation(files("libs/quickjs-wrapper.jar"))
+
+    // com.fongmi.quickjs.utils.HtmlQuery 用 jsoup 实现 JS 侧的 html 选择器
+    // （Selector.evaluatorOf / NodeTraversor / DataNode 等），版本与上游一致。
+    implementation("org.jsoup:jsoup:1.23.2")
+
     // catvod-api 的 net 包全部方法签名直接暴露 okhttp3 类型，版本需 >= 3.14。
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // gson 2.11 才引入 Strictness，catvod-api 的 utils 用到了它。
