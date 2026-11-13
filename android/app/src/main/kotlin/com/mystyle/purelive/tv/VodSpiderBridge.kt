@@ -143,6 +143,11 @@ internal class VodSpiderBridge(
             "com.github.catvod.utils.Trans",
             // HtmlQuery 的 DOM 选择器实现。
             "org.jsoup.Jsoup",
+            // ---- Python 运行时（#64）：Chaquopy 侧 ----
+            "com.chaquo.python.Python",
+            "com.chaquo.python.android.AndroidPlatform",
+            "com.github.catvod.runtime.PythonRuntime",
+            "com.fongmi.chaquo.RuntimeEntry",
         )
 
         /**
@@ -245,6 +250,9 @@ internal class VodSpiderBridge(
             "optionalClassesMissing" to missingOptional,
             // QuickJS 是否可用（#63）：installed=so 在，checked=真求值成功。
             "quickjs" to probeQuickJs(),
+            // Python 是否可用（#64）。注意首次调用会解压标准库，
+            // 耗时可达十几秒 —— diagnostics 本来就跑在后台线程。
+            "python" to probePython(),
             "loadedSites" to spiders.keys.toList(),
             "cachedJars" to jarFiles.map {
                 mapOf("name" to it.name, "bytes" to it.length(), "readOnly" to !it.canWrite())
@@ -814,6 +822,36 @@ internal class VodSpiderBridge(
             "checked" to checked,
             "error" to error,
             "compatibilityId" to runCatching { module.compatibilityId }.getOrNull(),
+        )
+    }
+
+    /**
+     * Python 能力探测（#64）。
+     *
+     * `check()` 会真的 `Python.start()` 并求值 `6 * 7`。首次启动要把标准库
+     * 解压到 files 目录，耗时可达十几秒，之后走缓存。这个代价换来的是
+     * 「解释器真的活着」，而不是「类名拼对了」。
+     */
+    private fun probePython(): Map<String, Any?> {
+        val module = com.github.catvod.utils.RuntimeModule.PYTHON
+        val installed = runCatching { module.isInstalled() }.getOrDefault(false)
+        var checked = false
+        var error: String? = null
+        if (installed) {
+            try {
+                val entry = module.entry(com.github.catvod.runtime.PythonRuntime::class.java)
+                entry.check()
+                checked = true
+            } catch (t: Throwable) {
+                error = rootMessage(t)
+            }
+        } else {
+            error = "Chaquopy 运行时类不在 APK 内"
+        }
+        return mapOf(
+            "installed" to installed,
+            "checked" to checked,
+            "error" to error,
         )
     }
 }

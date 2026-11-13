@@ -76,13 +76,21 @@ public enum RuntimeModule {
         };
     }
 
-    /** 宿主只内置了 QuickJS，其余模块以「未安装」上报，便于界面显示真实能力。 */
+    /** 宿主只内置了 QuickJS 与 Python，其余模块以「未安装」上报，便于界面显示真实能力。 */
     public boolean isInstalled() {
-        if (this != QUICKJS) return false;
         try {
-            return nativeLibrary().isFile();
-        } catch (RuntimeException e) {
-            // Runtime 还没 set(context) 时不应让能力探测抛异常。
+            return switch (this) {
+                case QUICKJS -> nativeLibrary().isFile();
+                // Python 的 .so 由 Chaquopy 的 AndroidPlatform 自己加载，
+                // 这里只确认运行时类真的在 classpath 上。
+                case PYTHON -> {
+                    Class.forName("com.chaquo.python.Python");
+                    yield true;
+                }
+                default -> false;
+            };
+        } catch (ClassNotFoundException | RuntimeException e) {
+            // Runtime 还没 set(context) 或类被裁掉时都不应让能力探测抛异常。
             return false;
         }
     }
@@ -91,16 +99,33 @@ public enum RuntimeModule {
         return false;
     }
 
+    /** 能力前置检查：上游插件模型用它确认「已安装且可加载」，这里做同等语义的内置检查。 */
+    public void require() {
+        if (!isInstalled()) throw new IllegalStateException(title + " 未随宿主内置");
+    }
+
     public synchronized <T extends RuntimePlugin> T entry(Class<T> type) {
-        if (this != QUICKJS) throw new IllegalStateException(title + " 未随宿主内置");
-        if (entry == null) {
-            load(System::load);
-            entry = new com.fongmi.quickjs.RuntimeEntry();
+        if (this == QUICKJS) {
+            if (entry == null) {
+                load(System::load);
+                entry = new com.fongmi.quickjs.RuntimeEntry();
+            }
+            return type.cast(entry);
         }
-        return type.cast(entry);
+        if (this == PYTHON) {
+            if (entry == null) entry = new com.fongmi.chaquo.RuntimeEntry();
+            return type.cast(entry);
+        }
+        throw new IllegalStateException(title + " 未随宿主内置");
     }
 
     public synchronized void load(Consumer<String> loader) {
+        // Python 的 native 库（libpython3.x.so 等）由 Chaquopy 的 AndroidPlatform
+        // 在 Python.start() 时自行加载，宿主不需要也不应该抢先 System.load。
+        if (this == PYTHON) {
+            require();
+            return;
+        }
         if (this != QUICKJS) throw new IllegalStateException(title + " 未随宿主内置");
         if (loaded) return;
         File file = nativeLibrary();

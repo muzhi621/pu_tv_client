@@ -39,8 +39,11 @@ class VodSpiderChannel {
       hostClassesMissing: _asStringList(raw['hostClassesMissing']),
       runtimeClassesMissing: _asStringList(raw['runtimeClassesMissing']),
       optionalClassesMissing: _asStringList(raw['optionalClassesMissing']),
-      quickJs: VodQuickJsStatus.fromMap(
+      quickJs: VodRuntimeStatus.fromMap(
         (raw['quickjs'] as Map?)?.cast<Object?, Object?>(),
+      ),
+      python: VodRuntimeStatus.fromMap(
+        (raw['python'] as Map?)?.cast<Object?, Object?>(),
       ),
       cachedJars: _asMapList(raw['cachedJars'])
           .map(
@@ -328,7 +331,8 @@ class VodHostDiagnostics {
     this.cachedJars = const <VodCachedJar>[],
     this.runtimeClassesMissing = const <String>[],
     this.optionalClassesMissing = const <String>[],
-    this.quickJs = const VodQuickJsStatus(),
+    this.quickJs = const VodRuntimeStatus(),
+    this.python = const VodRuntimeStatus(),
   });
 
   final bool ok;
@@ -348,27 +352,30 @@ class VodHostDiagnostics {
   final List<String> optionalClassesMissing;
 
   /// QuickJS 是否真的可用（#63）。看类是否存在没用，必须真求值一次。
-  final VodQuickJsStatus quickJs;
+  final VodRuntimeStatus quickJs;
+
+  /// Python 是否真的可用（#64）。
+  final VodRuntimeStatus python;
 
   final List<VodCachedJar> cachedJars;
 }
 
-/// QuickJS 运行时状态。
+/// 内嵌脚本运行时的可用性。
 ///
-/// [installed] 表示当前 ABI 的 `libquickjs-wrapper.so` 已随 APK 解压到
-/// nativeLibraryDir；[checked] 表示宿主真的跑通了一次 `6 * 7`。
-/// 两者都为真才算 JS 引擎可用 —— 只看类存在会被「.so 漏打进某个 ABI」骗过去。
-class VodQuickJsStatus {
-  const VodQuickJsStatus({
+/// [installed] 表示运行时资源已随 APK 就位；[checked] 表示宿主真的跑通了一次
+/// `6 * 7`。两者都为真才算可用 —— 只看类存在会被「.so 漏打进某个 ABI」
+/// 或「标准库没解压」这类问题骗过去。
+class VodRuntimeStatus {
+  const VodRuntimeStatus({
     this.installed = false,
     this.checked = false,
     this.error,
     this.compatibilityId,
   });
 
-  factory VodQuickJsStatus.fromMap(Map<Object?, Object?>? raw) {
-    if (raw == null) return const VodQuickJsStatus();
-    return VodQuickJsStatus(
+  factory VodRuntimeStatus.fromMap(Map<Object?, Object?>? raw) {
+    if (raw == null) return const VodRuntimeStatus();
+    return VodRuntimeStatus(
       installed: raw['installed'] == true,
       checked: raw['checked'] == true,
       error: raw['error']?.toString(),
