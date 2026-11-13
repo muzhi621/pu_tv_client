@@ -86,7 +86,7 @@ jobs:
       # 来自 ffmpeg_kit_extended_flutter 的 build hook 下载 aar，Flutter 会自动
       # 重跑该阶段，不影响结果。
       - name: 完整编译验证（release APK，与发版同构）
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.full_build == 'true' && github.event.inputs.diag != 'true' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.full_build == 'true' }}
         run: >
           flutter build apk --release --flavor impeller --target-platform android-arm64
           --android-skip-build-dependency-validation
