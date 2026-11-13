@@ -15,7 +15,6 @@ import android.text.TextUtils;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.github.catvod.crawler.R;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.annotations.SerializedName;
@@ -36,12 +35,17 @@ public class Doh {
     @SerializedName("ips")
     private List<String> ips;
 
+    /**
+     * 上游实现是从 catvod 模块自己的 `string-array` 资源里读预置 DoH 服务器列表
+     * （`R.array.doh_url` / `R.array.doh_name`）。我们是集成方，namespace 不同，
+     * 没有这套资源，因此返回空列表。
+     *
+     * 空列表是安全默认：`OkDns` 在没有 DoH 时回退到 `Dns.SYSTEM`，
+     * `Spider.safeDns()` 主流程不受影响；只是不再走加密 DNS。
+     * 需要自定义 DoH 时由调用方用 `OkDns.setDoh(Doh)` 传入。
+     */
     public static List<Doh> get(Context context) {
-        List<Doh> items = new ArrayList<>();
-        String[] urls = context.getResources().getStringArray(R.array.doh_url);
-        String[] names = context.getResources().getStringArray(R.array.doh_name);
-        for (int i = 0; i < names.length; i++) items.add(new Doh().name(names[i]).url(urls[i]));
-        return items;
+        return new ArrayList<>();
     }
 
     public static Doh objectFrom(String str) {

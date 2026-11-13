@@ -54,11 +54,16 @@ android {
     compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
+    // 这里刻意保持 target 17（现有链路都在 17 上验证过），但**编译用的 JDK
+    // 必须是 21**：catvod-api.jar 是上游用 Java 21 编的（class major 65），
+    // javac 17 读不了，会报 "class file has wrong version 65.0, should be 61.0"。
+    // 之前只有 Kotlin 引用这个 jar（Kotlin 编译器不校验 class 版本）所以问题
+    // 一直没暴露，加入 src/main/java/com/github/catvod 的 Java 源码后才触发。
+    // 对应 CI 配置见 .github/workflows/*.yml 的 java-version: "21"。
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
     defaultConfig {
         applicationId = "com.mystyle.purelive.tv"
         // FFmpeg (ffmpeg_kit_extended_flutter) requires API 26; the DASH merge
