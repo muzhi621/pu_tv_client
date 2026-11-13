@@ -8,6 +8,7 @@ enum HomeMenu {
   hot('hot'),
   areas('areas'),
   favoriteAreas('favoriteAreas'),
+  vodBrowse('vodBrowse'),
   moviePlayback('moviePlayback'),
   search('search'),
   history('history'),

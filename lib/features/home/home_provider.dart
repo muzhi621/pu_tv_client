@@ -83,6 +83,7 @@ enum TvMenuType {
   search(5),
   history(6),
   iptv(7),
+  vodBrowse(8),
   settings(99);
 
   final int value;
@@ -128,7 +129,7 @@ class NavGroup {
 /// 四个一级块，顺序即左侧一级栏顺序。children 用菜单 id 或字面量 'settings'。
 const List<NavGroup> kNavGroups = <NavGroup>[
   NavGroup(id: 'iptv', labelKey: 'nav_group_iptv', icon: Icons.live_tv_outlined, children: <String>['iptv']),
-  NavGroup(id: 'vod', labelKey: 'nav_group_vod', icon: Icons.movie_outlined, children: <String>['moviePlayback']),
+  NavGroup(id: 'vod', labelKey: 'nav_group_vod', icon: Icons.movie_outlined, children: <String>['vodBrowse', 'moviePlayback']),
   NavGroup(
     id: 'live',
     labelKey: 'nav_group_live',
@@ -145,6 +146,7 @@ int? navIndexForId(String id) => switch (id) {
       'areas' => TvMenuType.areas.value,
       'favoriteAreas' => TvMenuType.favoriteAreas.value,
       'moviePlayback' => TvMenuType.moviePlayback.value,
+      'vodBrowse' => TvMenuType.vodBrowse.value,
       'search' => TvMenuType.search.value,
       'history' => TvMenuType.history.value,
       'iptv' => TvMenuType.iptv.value,
@@ -283,6 +285,12 @@ AppMenuItem? _sideMenuItem(String id, Map<String, IconData> overrides) {
       title: i18n('favorite_areas'),
       shortTitle: i18n('menu_short_areas'),
       icon: withOverride(Icons.collections_bookmark_outlined),
+    ),
+    HomeMenu.vodBrowse => AppMenuItem(
+      index: TvMenuType.vodBrowse.value,
+      title: i18n('vod_browse'),
+      shortTitle: i18n('menu_short_vod_browse'),
+      icon: withOverride(Icons.video_library_outlined),
     ),
     HomeMenu.moviePlayback => AppMenuItem(
       index: TvMenuType.moviePlayback.value,

@@ -21,6 +21,7 @@ import 'package:pure_live/features/settings/tv_settings_page.dart';
 import 'package:pure_live/modules/live/favorite/favorite_page.dart';
 import 'package:pure_live/modules/music/widgets/music_mini_bar.dart';
 import 'package:pure_live/modules/live/movie_playback/movie_playback_page.dart';
+import 'package:pure_live/modules/live/movie_playback/vod_browse_page.dart';
 import 'package:pure_live/modules/live/favorite_areas/favorite_areas_page.dart';
 import 'package:pure_live/services/refresh_config/refresh_config_controller.dart';
 
@@ -638,6 +639,9 @@ class _HomePageState extends ConsumerState<HomePage> {
         return const FavoriteAreasPage();
       case TvMenuType.moviePlayback:
         return const MoviePlaybackPage();
+      case TvMenuType.vodBrowse:
+        // 点播浏览：源与站点全部来自云端下发的 vod 节，本地没有任何内置源。
+        return const VodBrowsePage();
       case TvMenuType.search:
         return const TvSearchPage();
       case TvMenuType.history:
