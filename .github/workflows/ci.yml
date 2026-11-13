@@ -14,6 +14,10 @@ on:
         description: '额外编译一个 debug APK 做完整编译验证'
         type: boolean
         default: false
+      diag:
+        description: '只跑 Gradle 类路径诊断，跳过 APK 编译'
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -82,7 +86,7 @@ jobs:
       # 来自 ffmpeg_kit_extended_flutter 的 build hook 下载 aar，Flutter 会自动
       # 重跑该阶段，不影响结果。
       - name: 完整编译验证（release APK，与发版同构）
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.full_build == 'true' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.full_build == 'true' && github.event.inputs.diag != 'true' }}
         run: >
           flutter build apk --release --flavor impeller --target-platform android-arm64
           --android-skip-build-dependency-validation
@@ -90,19 +94,21 @@ jobs:
       # 临时排查步骤：Kotlin 编译期解析不到 implementation 里的 okhttp3 /
       # catvod-api.jar（javac 阶段却正常），先把 variant 的真实类路径打出来。
       - name: 诊断 Kotlin 编译类路径
-        if: ${{ always() && github.event_name == 'workflow_dispatch' && github.event.inputs.full_build == 'true' }}
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && (github.event.inputs.full_build == 'true' || github.event.inputs.diag == 'true') }}
         continue-on-error: true
         working-directory: android
         run: |
           set +e
-          for cfg in impellerReleaseCompileClasspath impellerReleaseRuntimeClasspath; do
-            echo "########## $cfg"
-            ./gradlew -q :app:dependencies --configuration "$cfg" > "/tmp/$cfg.txt" 2>&1
-            echo "总行数: $(wc -l < "/tmp/$cfg.txt")"
-            grep -nE "catvod|quickjs|okhttp|jsoup|chaquopy|gson|guava|logger|preference|androidx.collection" "/tmp/$cfg.txt" | head -30
-          done
-          echo "########## dependencyInsight okhttp"
-          ./gradlew -q :app:dependencyInsight --configuration impellerReleaseCompileClasspath --dependency okhttp 2>&1 | head -30
+          run_case() {
+            echo "########## $1"
+            cp "$2" app/build.gradle.kts
+            ./gradlew -q :app:dependencyInsight \
+              --configuration impellerReleaseCompileClasspath --dependency okhttp 2>&1 | head -12
+            ./gradlew -q :app:dependencyInsight \
+              --configuration impellerReleaseCompileClasspath --dependency catvod 2>&1 | head -6
+          }
+          run_case "C 保留 chaquopy_java 依赖，去掉插件/ndk/chaquopy 块" app/build_diag_c.gradle.kts
+          run_case "B 保留插件，去掉 chaquopy_java 依赖" app/build_diag_b.gradle.kts
 
       # 体积是 #64 的硬指标（用户批准上限 ~72 MB），所以把账算在日志里：
       # 整体体积、Python 相关条目（chaquopy 标准库 + libpython）、native 库。
