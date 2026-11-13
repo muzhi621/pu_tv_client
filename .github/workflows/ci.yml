@@ -64,11 +64,10 @@ jobs:
       # Java / R8 的错误，避免为了验证构建而白白发布一个 Release。
       #
       # 为什么用 --release 而不是 --debug：
-      # catvod-api.jar 是「白名单导出」，com.github.catvod.utils.Decoder 缺了
-      # 嵌套类 Decoder$Content。debug 分支不开 R8，D8 直接 dex 整包 jar，
-      # 报 “requires its nest mates … (unavailable)” 而失败；release 分支先由
-      # R8 裁剪再 dex，不触发该检查 —— 也就是说 debug 编不过是 jar 的固有属性，
-      # 不是我们的代码问题。发版走的就是 release，验证它对得上真实产物。
+      # 发版走的就是 release（R8 开启），验证它对得上真实产物。
+      # debug 分支曾因 catvod-api.jar 缺嵌套类 Decoder$Content 在 D8 阶段失败，
+      # 现已由 src/main/java/com/github/catvod/utils/Decoder$Content.java 补上；
+      # 这里仍统一用 release，避免两条路径给出不同结论。
       # 没有 release 签名时 build.gradle.kts 自动回退 debug 签名，CI 无需密钥。
       #
       # 日志里会看到若干次 “File modified during build. Build must be rerun.”，

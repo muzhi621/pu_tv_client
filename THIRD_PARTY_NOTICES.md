@@ -43,11 +43,23 @@
 
 每个文件头部都写有来源与许可证说明。**未修改业务逻辑**，仅做集成适配。
 
-### 1.3 `android/app/src/main/java/okhttp3/OkHttp.java`
+### 1.3 `android/app/src/main/java/com/github/catvod/utils/Decoder$Content.java`
 
-**不是** OkHttp 官方代码。上游使用 okhttp 5.x，其新增的 `okhttp3.OkHttp` 只承载
-一个 `VERSION` 常量；本宿主停留在 4.12.0（其余链路已验证），为满足 `Util` 的
-静态初始化而补了这个兼容类。文件头有完整说明。
+**不是**上游源码文件，是我们按上游 API 补的兼容类。
+
+`catvod-api.jar` 是上游用白名单导出的编译契约，只导出了
+`com.github.catvod.utils.Decoder`，漏掉了它的嵌套类 `Decoder$Content`：
+
+- debug 构建时 D8 报「requires its nest mates … (unavailable)」，整包 dex 失败；
+- 运行期任何 spider 调到 `Decoder.load()` / `Decoder.getJson()` 都会
+  `NoClassDefFoundError`。
+
+上游定义见 `catvod/.../utils/Decoder.java`（commit `b27ba75`）里的
+`public record Content(String text, String url, String authorization, boolean successful)`。
+我们用普通 final 类实现同样的四参构造与访问器，避免依赖 D8 的 record 反糖。
+
+> 另：早期曾补过一个 `okhttp3.OkHttp` 兼容类，事后核对 okhttp **4.12.0 本身就带**
+> 这个类和 `VERSION` 字段，属于多余并导致 R8 重复类报错，已删除。
 
 ## 2. 未采用的评估对象
 
