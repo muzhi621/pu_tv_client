@@ -146,9 +146,13 @@ class _VodDiagPageState extends ConsumerState<VodDiagPage> {
       setState(() {
         _diagnostics = diag;
         _output = diag.ok
-            ? '宿主环境正常。填入 spider jar 地址后点「检查 jar」。'
+            ? '宿主基础契约正常。填入 spider jar 地址后点「检查 jar」。'
             : '宿主依赖缺失：${diag.hostClassesMissing.join(', ')}\n'
                 '这说明 catvod-api.jar 没打进 APK，或被打包器裁掉了。';
+        if (diag.runtimeClassesMissing.isNotEmpty) {
+          _output += '\n\n待补齐的运行时实现类（基础链路可用，复杂 spider 可能失败）：\n'
+              '${diag.runtimeClassesMissing.join(', ')}';
+        }
       });
     });
   }
@@ -422,6 +426,12 @@ class _VodDiagPageState extends ConsumerState<VodDiagPage> {
               ? '完整（com.github.catvod.crawler.Spider 已就位）'
               : '缺失 ${diag.hostClassesMissing.join(', ')}',
         ),
+        if (diag.runtimeClassesMissing.isNotEmpty)
+          _line(
+            tvTheme,
+            '运行时待补',
+            '${diag.runtimeClassesMissing.length} 个：${diag.runtimeClassesMissing.join(', ')}',
+          ),
         _line(
           tvTheme,
           '已缓存 jar',

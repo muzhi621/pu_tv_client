@@ -45,9 +45,11 @@ import java.util.zip.ZipFile
  *   DexClassLoader 的 parent 设为 app 的 ClassLoader 即可命中。
  * - **targetSdk 34+ 要求 dex 文件只读**。Android 14 起 DexClassLoader
  *   拒绝加载可写文件，因此下载完成后必须先 chmod 只读再交给加载器。
- * - **两套 init 签名并存**。FongMi 版基类只有 `init(Context, String)`，
- *   Q 版另有 `init(Context)`。两个都尝试调用，避免某分支编译的 jar
- *   初始化静默不生效。
+ * - **init 只能调一次，且两参优先**。FongMi / Q 版基类的
+ *   `init(Context, String)` 默认实现都会自己转调 `init(Context)`；若宿主
+ *   再补调一次一参版，override 了两参版的 spider 会被重复初始化甚至重置
+ *   状态（FongMi `SpiderLoader.createSpider` 就只调两参版）。只有极老的
+ *   jar 才只有一参签名，那种情况才退到一参。
  *
  * ## 为什么每个方法都返回结构化的失败原因
  *
@@ -71,9 +73,48 @@ internal class VodSpiderBridge(
         private const val JAR_DIR = "vod_spider"
         private const val DEX_DIR = "vod_spider_dex"
 
-        /** 宿主必须提供的类，缺一个就说明 catvod-api.jar 没进包或被打包器裁了。 */
+        /**
+         * 基础链路必须提供的契约类（全部来自 catvod-api.jar 与宿主三方库）。
+         * 只查 `Spider` 一个是不够的：jar 里的 Spider/Net/Json 会互相引用，
+         * 少任何一个都会在反射调用时才 NoClassDefFoundError。
+         */
         private val REQUIRED_HOST_CLASSES = listOf(
             "com.github.catvod.crawler.Spider",
+            "com.github.catvod.crawler.SpiderDebug",
+            "com.github.catvod.Proxy",
+            "com.github.catvod.Runtime",
+            "com.github.catvod.net.Net",
+            "com.github.catvod.net.Download",
+            "com.github.catvod.utils.Json",
+            "com.github.catvod.utils.Path",
+            "com.github.catvod.utils.Prefers",
+            "com.github.catvod.utils.Util",
+            "com.github.catvod.utils.UriUtil",
+            "com.github.catvod.utils.Archive",
+            "com.github.catvod.utils.Crypto",
+            "com.github.catvod.utils.Decoder",
+            "com.github.catvod.utils.Dialog",
+            "com.github.catvod.utils.Js",
+            "com.github.catvod.utils.Local",
+            "com.github.catvod.utils.Task",
+            "okhttp3.OkHttpClient",
+            "com.google.gson.Gson",
+            "com.google.common.util.concurrent.MoreExecutors",
+        )
+
+        /**
+         * `:catvod` 的运行时实现类。它们**不在** FongMi `apiJar` 导出清单里，
+         * 而是由宿主 App 提供；复杂 spider 调 `Spider.safeDns()` /
+         * `OkHttp.client()` 时会静态引用。缺失不阻断基础链路，但要如实报出来，
+         * 作为 #61 补齐宿主的输入 —— 否则诊断页全绿、真机却在具体站点上炸。
+         */
+        private val RUNTIME_HOST_CLASSES = listOf(
+            "com.github.catvod.net.OkHttp",
+            "com.github.catvod.net.OkDns",
+            "com.github.catvod.net.NetRequest",
+            "com.github.catvod.net.NetOptions",
+            "com.github.catvod.utils.Asset",
+            "com.github.catvod.utils.Auth",
         )
     }
 
@@ -147,6 +188,8 @@ internal class VodSpiderBridge(
      */
     private fun handleDiagnostics(call: MethodCall): Map<String, Any?> {
         val missingHost = REQUIRED_HOST_CLASSES.filter { !classAvailable(it) }
+        // 运行时实现类缺失不算基础链路失败，只作为待补清单展示。
+        val missingRuntime = RUNTIME_HOST_CLASSES.filter { !classAvailable(it) }
         val jarFiles = jarDir().listFiles()?.filter { it.isFile }?.sortedBy { it.name }.orEmpty()
         return mapOf(
             "ok" to missingHost.isEmpty(),
@@ -154,6 +197,7 @@ internal class VodSpiderBridge(
             "androidRelease" to Build.VERSION.RELEASE,
             "abis" to Build.SUPPORTED_ABIS.toList(),
             "hostClassesMissing" to missingHost,
+            "runtimeClassesMissing" to missingRuntime,
             "loadedSites" to spiders.keys.toList(),
             "cachedJars" to jarFiles.map {
                 mapOf("name" to it.name, "bytes" to it.length(), "readOnly" to !it.canWrite())
@@ -266,31 +310,30 @@ internal class VodSpiderBridge(
     }
 
     /**
-     * 两套 init 签名都试。
+     * init 只调一次，两参优先。
      *
-     * 先 `init(Context, String)`：这是 FongMi 版基类的唯一入口，也是
-     * 绝大多数新 spider 覆写的那个。再单独看子类**自己声明**的
-     * `init(Context)`（Q 版风格）——用 getDeclaredMethod 而不是 getMethod，
-     * 避免把基类继承来的空实现也当命中，白跑一次。
+     * FongMi 与 Q 版基类的 `init(Context, String)` 默认实现都会自己转调
+     * `init(Context)`，所以宿主再补调一参版属于重复初始化：override 了
+     * 两参版的 spider 可能被重置状态。FongMi 自己的
+     * `SpiderLoader.createSpider` 也只调 `spider.init(context, ext)`。
+     *
+     * 只有「两参签名整个继承链都找不到」的极老 jar 才退到一参；此时用
+     * getMethod（沿继承链）而不是 getDeclaredMethod，避免漏掉父类实现。
      */
     private fun initSpider(instance: Any, clazz: Class<*>, ext: String): List<String> {
-        val modes = ArrayList<String>()
         val two = findMethod(clazz, "init", Context::class.java, String::class.java)
         if (two != null) {
             two.invoke(instance, context, ext)
-            modes.add("init(Context,String)")
+            return listOf("init(Context,String)")
         }
-        val one = runCatching { clazz.getDeclaredMethod("init", Context::class.java) }.getOrNull()
+        val one = findMethod(clazz, "init", Context::class.java)
         if (one != null) {
             one.isAccessible = true
             one.invoke(instance, context)
-            modes.add("init(Context)")
+            return listOf("init(Context)")
         }
-        if (modes.isEmpty()) {
-            // 没有 init 不算致命：基类方法都是空实现，部分纯静态 spider 也能跑。
-            modes.add("no-init")
-        }
-        return modes
+        // 没有 init 不算致命：基类方法都是空实现，部分纯静态 spider 也能跑。
+        return listOf("no-init")
     }
 
     // --------------------------------------------------------------- 调用

@@ -37,6 +37,7 @@ class VodSpiderChannel {
       androidRelease: raw['androidRelease']?.toString(),
       abis: _asStringList(raw['abis']),
       hostClassesMissing: _asStringList(raw['hostClassesMissing']),
+      runtimeClassesMissing: _asStringList(raw['runtimeClassesMissing']),
       cachedJars: _asMapList(raw['cachedJars'])
           .map(
             (item) => VodCachedJar(
@@ -321,13 +322,20 @@ class VodHostDiagnostics {
     this.androidRelease,
     this.abis = const <String>[],
     this.cachedJars = const <VodCachedJar>[],
+    this.runtimeClassesMissing = const <String>[],
   });
 
   final bool ok;
   final int androidSdk;
   final String? androidRelease;
   final List<String> abis;
+
+  /// 基础契约类缺失：会导致 csp_ 链路整体不可用。
   final List<String> hostClassesMissing;
+
+  /// `:catvod` 运行时实现类缺失：基础链路能跑，但部分复杂 spider 会失败。
+  /// 这是「待补齐」清单而非回归，见 #61。
+  final List<String> runtimeClassesMissing;
   final List<VodCachedJar> cachedJars;
 }
 

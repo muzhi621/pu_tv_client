@@ -83,6 +83,8 @@ class VodSource {
     required this.name,
     this.jar = '',
     this.url = '',
+    this.spiderMd5 = '',
+    this.spiderFlavor = 'fongmi',
   });
 
   factory VodSource.fromJson(Map<String, dynamic> json) => VodSource(
@@ -90,6 +92,10 @@ class VodSource {
         name: _str(json['name']),
         jar: _str(json['jar']),
         url: _str(json['url']),
+        spiderMd5: _str(json['spiderMd5']),
+        spiderFlavor: _str(json['spiderFlavor']).isEmpty
+            ? 'fongmi'
+            : _str(json['spiderFlavor']),
       );
 
   final String id;
@@ -101,7 +107,17 @@ class VodSource {
   /// TVBox 配置 json 地址（管理用，终端不直接拉）。
   final String url;
 
+  /// 配置里 `spider` 字段附带的 `;md5;<hash>` 校验和。
+  /// 宿主下载 jar 后应比对，防止第三方源被替换（见 #61）。
+  final String spiderMd5;
+
+  /// spider 契约流派：`fongmi`（现有 catvod-api.jar）或 `tvboxos`。
+  /// 两套 Spider 基类互不兼容，宿主加载前要据此分流。
+  final String spiderFlavor;
+
   bool get hasJar => jar.isNotEmpty;
+
+  bool get isFongmi => spiderFlavor != 'tvboxos';
 }
 
 class VodSite {
