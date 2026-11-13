@@ -60,24 +60,22 @@ jobs:
       - name: TVBox 解析层单测
         run: flutter test test/vod_parser_test.dart
 
-      # 预热 ffmpeg 的 build hook。
-      # ffmpeg_kit_extended_flutter 用 Dart build hook 在编译期下载 aar 到
-      # .dart_tool/hooks_runner/…。冷缓存时这次下载发生在 kernel_snapshot
-      # 期间，Flutter 检测到输入文件被改写，直接抛
-      # 「File modified during build. Build must be rerun.」并失败 ——
-      # 不是代码问题，是 hook 与快照的竞态。
-      # 先跑一次 --config-only 把 aar 落进缓存，正式编译就不会再动文件。
-      # continue-on-error：万一某个 Flutter 版本不支持该参数，也不要因此拦住构建。
-      - name: 预热原生依赖（ffmpeg build hook）
+      # 手动触发时可选：按发版同样的方式编译一次，提前暴露 Dart / Kotlin /
+      # Java / R8 的错误，避免为了验证构建而白白发布一个 Release。
+      #
+      # 为什么用 --release 而不是 --debug：
+      # catvod-api.jar 是「白名单导出」，com.github.catvod.utils.Decoder 缺了
+      # 嵌套类 Decoder$Content。debug 分支不开 R8，D8 直接 dex 整包 jar，
+      # 报 “requires its nest mates … (unavailable)” 而失败；release 分支先由
+      # R8 裁剪再 dex，不触发该检查 —— 也就是说 debug 编不过是 jar 的固有属性，
+      # 不是我们的代码问题。发版走的就是 release，验证它对得上真实产物。
+      # 没有 release 签名时 build.gradle.kts 自动回退 debug 签名，CI 无需密钥。
+      #
+      # 日志里会看到若干次 “File modified during build. Build must be rerun.”，
+      # 来自 ffmpeg_kit_extended_flutter 的 build hook 下载 aar，Flutter 会自动
+      # 重跑该阶段，不影响结果。
+      - name: 完整编译验证（release APK，与发版同构）
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.full_build == 'true' }}
-        continue-on-error: true
-        run: flutter build apk --debug --flavor impeller --target-platform android-arm64 --config-only
-
-      # 手动触发时可选：真正编译一次，提前暴露 Dart / Gradle 编译错误，
-      # 避免为了验证构建而白白发布一个 Release。
-      # 失败后重试一次：即使预热没生效，第二次编译时 aar 已在缓存里。
-      - name: 完整编译验证（debug APK）
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.full_build == 'true' }}
-        run: |
-          flutter build apk --debug --flavor impeller --target-platform android-arm64 \
-            || flutter build apk --debug --flavor impeller --target-platform android-arm64
+        run: >
+          flutter build apk --release --flavor impeller --target-platform android-arm64
+          --android-skip-build-dependency-validation
