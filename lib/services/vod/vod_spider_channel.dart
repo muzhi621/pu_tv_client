@@ -39,6 +39,9 @@ class VodSpiderChannel {
       hostClassesMissing: _asStringList(raw['hostClassesMissing']),
       runtimeClassesMissing: _asStringList(raw['runtimeClassesMissing']),
       optionalClassesMissing: _asStringList(raw['optionalClassesMissing']),
+      quickJs: VodQuickJsStatus.fromMap(
+        (raw['quickjs'] as Map?)?.cast<Object?, Object?>(),
+      ),
       cachedJars: _asMapList(raw['cachedJars'])
           .map(
             (item) => VodCachedJar(
@@ -325,6 +328,7 @@ class VodHostDiagnostics {
     this.cachedJars = const <VodCachedJar>[],
     this.runtimeClassesMissing = const <String>[],
     this.optionalClassesMissing = const <String>[],
+    this.quickJs = const VodQuickJsStatus(),
   });
 
   final bool ok;
@@ -340,10 +344,44 @@ class VodHostDiagnostics {
   /// 因此与 [hostClassesMissing] 一起计入 [ok]。
   final List<String> runtimeClassesMissing;
 
-  /// 可选能力缺失，例如 QuickJS 运行时。只影响 `new Js()` 那一类站点，
-  /// 不参与 [ok] 判定。
+  /// 可选能力缺失，例如尚未内置的 Python / Node.js 运行时。不参与 [ok] 判定。
   final List<String> optionalClassesMissing;
+
+  /// QuickJS 是否真的可用（#63）。看类是否存在没用，必须真求值一次。
+  final VodQuickJsStatus quickJs;
+
   final List<VodCachedJar> cachedJars;
+}
+
+/// QuickJS 运行时状态。
+///
+/// [installed] 表示当前 ABI 的 `libquickjs-wrapper.so` 已随 APK 解压到
+/// nativeLibraryDir；[checked] 表示宿主真的跑通了一次 `6 * 7`。
+/// 两者都为真才算 JS 引擎可用 —— 只看类存在会被「.so 漏打进某个 ABI」骗过去。
+class VodQuickJsStatus {
+  const VodQuickJsStatus({
+    this.installed = false,
+    this.checked = false,
+    this.error,
+    this.compatibilityId,
+  });
+
+  factory VodQuickJsStatus.fromMap(Map<Object?, Object?>? raw) {
+    if (raw == null) return const VodQuickJsStatus();
+    return VodQuickJsStatus(
+      installed: raw['installed'] == true,
+      checked: raw['checked'] == true,
+      error: raw['error']?.toString(),
+      compatibilityId: raw['compatibilityId']?.toString(),
+    );
+  }
+
+  final bool installed;
+  final bool checked;
+  final String? error;
+  final String? compatibilityId;
+
+  bool get available => installed && checked;
 }
 
 class VodJarInspection {

@@ -165,6 +165,12 @@ class _VodDiagPageState extends ConsumerState<VodDiagPage> {
           _output += '\n\n可选能力未启用（只影响特定站点，不阻断基础链路）：\n'
               '${diag.optionalClassesMissing.join(', ')}';
         }
+        // QuickJS 单独一行：它决定 `new Js()` 那类 jar 站点能不能跑，
+        // 而「类在不在」看不出来，只能看真求值结果。
+        _output += diag.quickJs.available
+            ? '\n\nQuickJS：可用（已求值 6 × 7 = 42）。'
+            : '\n\nQuickJS：不可用 —— ${diag.quickJs.error ?? '当前 ABI 未打包运行时'}。'
+                '用到 Js 的站点会失败，其余站点不受影响。';
       });
     });
   }
@@ -453,6 +459,15 @@ class _VodDiagPageState extends ConsumerState<VodDiagPage> {
             '未启用 ${diag.optionalClassesMissing.length} 个：'
                 '${diag.optionalClassesMissing.join(', ')}',
           ),
+        _line(
+          tvTheme,
+          'QuickJS',
+          diag.quickJs.available
+              ? '可用（已求值 6 × 7 = 42）'
+              : diag.quickJs.installed
+                  ? '已安装但求值失败：${diag.quickJs.error ?? '未知原因'}'
+                  : '不可用：${diag.quickJs.error ?? '当前 ABI 未打包运行时'}',
+        ),
         _line(
           tvTheme,
           '已缓存 jar',
