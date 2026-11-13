@@ -276,7 +276,9 @@ class TvboxHttpEngine {
     if (root == null) return const VodHome();
     return VodHome(
       categories: _categoriesFromXml(root),
-      items: _itemsFromXml(root.findAllElements('video')),
+      // `_itemsFromXml` 给的是还原后的 vod_* 节点：详情分支要的就是原始节点
+      // （选集还要拼 play_from/play_url），列表分支则统一走 parseVodItems。
+      items: parseVodItems(_itemsFromXml(root.findAllElements('video'))),
     );
   }
 
@@ -288,7 +290,7 @@ class TvboxHttpEngine {
     if (root == null) return VodPage(page: fallbackPage);
     final list = _first(root.findAllElements('list'));
     return VodPage(
-      items: _itemsFromXml(root.findAllElements('video')),
+      items: parseVodItems(_itemsFromXml(root.findAllElements('video'))),
       page: _asInt(list?.getAttribute('page')) ?? fallbackPage,
       pageCount: _asInt(list?.getAttribute('pagecount')) ?? 1,
       total: _asInt(list?.getAttribute('recordcount')) ?? 0,
