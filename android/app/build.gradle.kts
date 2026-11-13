@@ -161,4 +161,26 @@ dependencies {
     // com.github.catvod.utils.Task / Decoder 用 Futures、MoreExecutors。
     // R8 会按实际引用裁剪，最终增量只有几十 KB。
     implementation("com.google.guava:guava:33.8.0-android")
+
+    // ---- 以下是 src/main/java/com/github/catvod 那批「运行时实现类」的依赖 ----
+    // 这些类不在 catvod-api.jar 里（上游 apiJar task 是白名单导出，只导出 spider
+    // 编译需要的契约类），由宿主 App 提供实现。缺任何一个，spider 走到对应分支
+    // 就是 NoClassDefFoundError。
+
+    // net/OkHttp 用 ArrayMap 收集请求头。
+    implementation("androidx.collection:collection:1.4.5")
+    // crawler/SpiderDebug 与 utils/Path 用 Logger.t(tag).d(msg)、Printer。
+    // 与上游同款（libs.logger = com.orhanobut:logger:2.2.0），API 完全一致。
+    implementation("com.orhanobut:logger:2.2.0")
+    // utils/Prefers 用 PreferenceManager。上游 preference = 1.2.1。
+    // 注意：此前曾因手写 PreferenceManager shim 与这个包的传递依赖重复而编译失败，
+    // 现在改为显式声明同一 artifact，由 Gradle 去重。
+    implementation("androidx.preference:preference:1.2.1")
+    // net/Download$MainThread 用 androidx.core.os.HandlerCompat。
+    implementation("androidx.core:core:1.13.1")
+    // net/OkDns 用 okhttp3.dnsoverhttps.DnsOverHttps 做 DoH 解析。
+    implementation("com.squareup.okhttp3:okhttp-dnsoverhttps:4.12.0")
+    // net/OkHttp 用 HttpLoggingInterceptor。版本必须与 okhttp 保持一致，
+    // 混版本会导致 Interceptor 接口不匹配。
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 }

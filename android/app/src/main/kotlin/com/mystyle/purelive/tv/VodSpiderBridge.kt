@@ -103,18 +103,45 @@ internal class VodSpiderBridge(
         )
 
         /**
-         * `:catvod` 的运行时实现类。它们**不在** FongMi `apiJar` 导出清单里，
-         * 而是由宿主 App 提供；复杂 spider 调 `Spider.safeDns()` /
-         * `OkHttp.client()` 时会静态引用。缺失不阻断基础链路，但要如实报出来，
-         * 作为 #61 补齐宿主的输入 —— 否则诊断页全绿、真机却在具体站点上炸。
+         * 由宿主 App 提供的运行时实现类。
+         *
+         * FongMi 的 `apiJar` task 是**白名单导出**（见其根 build.gradle 的 include
+         * 列表：`net/Net*.class` 匹配不到 `OkHttp`/`CacheOptions`），所以这批类
+         * 只在宿主里存在。我们的宿主源码在 `src/main/java/com/github/catvod/`
+         * 下（14 个文件，来源与许可证见各文件头），这里逐个核实它们真的进了
+         * APK —— R8 配置漏写或依赖漏声明都会导致整批消失。
          */
         private val RUNTIME_HOST_CLASSES = listOf(
             "com.github.catvod.net.OkHttp",
             "com.github.catvod.net.OkDns",
-            "com.github.catvod.net.NetRequest",
-            "com.github.catvod.net.NetOptions",
-            "com.github.catvod.utils.Asset",
+            "com.github.catvod.net.CacheOptions",
+            "com.github.catvod.net.OkAuthenticator",
+            "com.github.catvod.net.OkProxySelector",
+            "com.github.catvod.net.ProxyRedirectInterceptor",
+            "com.github.catvod.net.interceptor.RequestInterceptor",
+            "com.github.catvod.net.interceptor.ResponseInterceptor",
+            "com.github.catvod.net.interceptor.AuthInterceptor",
             "com.github.catvod.utils.Auth",
+            "com.github.catvod.bean.Doh",
+            // 兼容类：catvod 的 Util 读它的 VERSION 拼 UA。
+            "okhttp3.OkHttp",
+            // SpiderDebug / Path 的日志出口。
+            "com.orhanobut.logger.Logger",
+            // Prefers 的存储入口 / Download 的线程切换。
+            "androidx.preference.PreferenceManager",
+            "androidx.core.os.HandlerCompat",
+        )
+
+        /**
+         * 可选能力：缺了不报错，只影响特定站点特性。
+         *
+         * `Js` 走 `RuntimeModule.QUICKJS.entry(QuickJsRuntime.class)`，需要 QuickJS
+         * 的 native 运行时；在 #63 接入之前，只要 spider 不主动 `new Js()` 就
+         * 不会触发，所以单独分组，避免把「还没做」渲染成「坏了」。
+         */
+        private val OPTIONAL_HOST_CLASSES = listOf(
+            "com.github.catvod.utils.RuntimeModule",
+            "com.github.catvod.runtime.QuickJsRuntime",
         )
     }
 
@@ -188,16 +215,20 @@ internal class VodSpiderBridge(
      */
     private fun handleDiagnostics(call: MethodCall): Map<String, Any?> {
         val missingHost = REQUIRED_HOST_CLASSES.filter { !classAvailable(it) }
-        // 运行时实现类缺失不算基础链路失败，只作为待补清单展示。
+        // 运行时实现类现在是我们自己编进 APK 的源码，缺了就是构建配置出问题，
+        // 与基础契约类同样致命（spider 调 safeDns / Decoder 立刻炸），所以
+        // 一并计入 ok。可选能力（QuickJS）缺了只提示，不影响 ok。
         val missingRuntime = RUNTIME_HOST_CLASSES.filter { !classAvailable(it) }
+        val missingOptional = OPTIONAL_HOST_CLASSES.filter { !classAvailable(it) }
         val jarFiles = jarDir().listFiles()?.filter { it.isFile }?.sortedBy { it.name }.orEmpty()
         return mapOf(
-            "ok" to missingHost.isEmpty(),
+            "ok" to (missingHost.isEmpty() && missingRuntime.isEmpty()),
             "androidSdk" to Build.VERSION.SDK_INT,
             "androidRelease" to Build.VERSION.RELEASE,
             "abis" to Build.SUPPORTED_ABIS.toList(),
             "hostClassesMissing" to missingHost,
             "runtimeClassesMissing" to missingRuntime,
+            "optionalClassesMissing" to missingOptional,
             "loadedSites" to spiders.keys.toList(),
             "cachedJars" to jarFiles.map {
                 mapOf("name" to it.name, "bytes" to it.length(), "readOnly" to !it.canWrite())

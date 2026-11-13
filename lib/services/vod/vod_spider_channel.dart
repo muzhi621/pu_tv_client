@@ -38,6 +38,7 @@ class VodSpiderChannel {
       abis: _asStringList(raw['abis']),
       hostClassesMissing: _asStringList(raw['hostClassesMissing']),
       runtimeClassesMissing: _asStringList(raw['runtimeClassesMissing']),
+      optionalClassesMissing: _asStringList(raw['optionalClassesMissing']),
       cachedJars: _asMapList(raw['cachedJars'])
           .map(
             (item) => VodCachedJar(
@@ -323,6 +324,7 @@ class VodHostDiagnostics {
     this.abis = const <String>[],
     this.cachedJars = const <VodCachedJar>[],
     this.runtimeClassesMissing = const <String>[],
+    this.optionalClassesMissing = const <String>[],
   });
 
   final bool ok;
@@ -333,9 +335,14 @@ class VodHostDiagnostics {
   /// 基础契约类缺失：会导致 csp_ 链路整体不可用。
   final List<String> hostClassesMissing;
 
-  /// `:catvod` 运行时实现类缺失：基础链路能跑，但部分复杂 spider 会失败。
-  /// 这是「待补齐」清单而非回归，见 #61。
+  /// 由宿主源码提供的运行时实现类缺失（OkHttp / OkDns / Auth / logger 等）。
+  /// 缺了同样致命 —— spider 一调 safeDns 或 Decoder 就 NoClassDefFoundError，
+  /// 因此与 [hostClassesMissing] 一起计入 [ok]。
   final List<String> runtimeClassesMissing;
+
+  /// 可选能力缺失，例如 QuickJS 运行时。只影响 `new Js()` 那一类站点，
+  /// 不参与 [ok] 判定。
+  final List<String> optionalClassesMissing;
   final List<VodCachedJar> cachedJars;
 }
 

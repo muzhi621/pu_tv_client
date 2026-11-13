@@ -1,7 +1,7 @@
 {
-  "version": "3.0.15",
-  "version_num": 130016,
-  "version_desc": "-New: 影音板块接入 TVBox 爬虫宿主，可直接加载第三方 spider.jar（csp_ 站点）\\n-New: 云端资源库的 TVBox 源支持配置 spider jar 地址，终端可一键选源与站点\\n-New: 影音板块新增「TVBox 诊断」页，逐步显示 jar 下载 / 类加载 / 实例化 / 调用结果\\n-New: 服务端按终端所选源展开 TVBox 站点下发，支持站点白名单与锁定快照\\n-Note: 本版为爬虫链路验证版，站点浏览界面在下一版开放",
+  "version": "3.0.16",
+  "version_num": 130017,
+  "version_desc": "-New: 补入 TVBox 爬虫宿主的 14 个运行时实现类（OkHttp / OkDns / Auth / 拦截器等），复杂 spider 不再因缺类失败\\n-Fix: spider 的 init 改为两参优先、仅缺失时退回一参，避免重复初始化重置状态\\n-New: TVBox 诊断页细分「契约类 / 运行时实现类 / 可选能力」三级自检，缺什么直接点名\\n-Fix: 云端解析 spider 的 md5 校验和与相对路径，导入 FongMi 系配置不再丢 jar\\n-Note: 本版仍是爬虫链路验证版，站点浏览界面在下一版开放",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",

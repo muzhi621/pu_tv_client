@@ -145,13 +145,25 @@ class _VodDiagPageState extends ConsumerState<VodDiagPage> {
       if (!mounted) return;
       setState(() {
         _diagnostics = diag;
-        _output = diag.ok
-            ? '宿主基础契约正常。填入 spider jar 地址后点「检查 jar」。'
-            : '宿主依赖缺失：${diag.hostClassesMissing.join(', ')}\n'
-                '这说明 catvod-api.jar 没打进 APK，或被打包器裁掉了。';
-        if (diag.runtimeClassesMissing.isNotEmpty) {
-          _output += '\n\n待补齐的运行时实现类（基础链路可用，复杂 spider 可能失败）：\n'
-              '${diag.runtimeClassesMissing.join(', ')}';
+        if (diag.ok) {
+          _output = '宿主环境正常：契约类与运行时实现类都已就位。'
+              '填入 spider jar 地址后点「检查 jar」。';
+        } else {
+          final parts = <String>[];
+          if (diag.hostClassesMissing.isNotEmpty) {
+            parts.add('契约类缺失：${diag.hostClassesMissing.join(', ')}\n'
+                'catvod-api.jar 没打进 APK，或被打包器裁掉了。');
+          }
+          if (diag.runtimeClassesMissing.isNotEmpty) {
+            parts.add('运行时实现类缺失：${diag.runtimeClassesMissing.join(', ')}\n'
+                '这些类由 src/main/java/com/github/catvod 提供，'
+                '缺了说明依赖没声明或 R8 规则漏写。');
+          }
+          _output = parts.join('\n\n');
+        }
+        if (diag.optionalClassesMissing.isNotEmpty) {
+          _output += '\n\n可选能力未启用（只影响特定站点，不阻断基础链路）：\n'
+              '${diag.optionalClassesMissing.join(', ')}';
         }
       });
     });
@@ -421,16 +433,25 @@ class _VodDiagPageState extends ConsumerState<VodDiagPage> {
         _line(tvTheme, 'ABI', diag.abis.isEmpty ? '-' : diag.abis.join(', ')),
         _line(
           tvTheme,
-          '宿主依赖',
+          '宿主契约类',
           diag.hostClassesMissing.isEmpty
-              ? '完整（com.github.catvod.crawler.Spider 已就位）'
+              ? '完整（Spider / Net / Json 等契约类已就位）'
               : '缺失 ${diag.hostClassesMissing.join(', ')}',
         ),
-        if (diag.runtimeClassesMissing.isNotEmpty)
+        _line(
+          tvTheme,
+          '运行时实现类',
+          diag.runtimeClassesMissing.isEmpty
+              ? '完整（OkHttp / OkDns / Auth / logger 等已编入 APK）'
+              : '缺失 ${diag.runtimeClassesMissing.length} 个：'
+                  '${diag.runtimeClassesMissing.join(', ')}',
+        ),
+        if (diag.optionalClassesMissing.isNotEmpty)
           _line(
             tvTheme,
-            '运行时待补',
-            '${diag.runtimeClassesMissing.length} 个：${diag.runtimeClassesMissing.join(', ')}',
+            '可选能力',
+            '未启用 ${diag.optionalClassesMissing.length} 个：'
+                '${diag.optionalClassesMissing.join(', ')}',
           ),
         _line(
           tvTheme,

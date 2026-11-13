@@ -61,6 +61,21 @@
 # 宿主侧桥接类由 Dart 按固定名字调用，混淆后方法名变化会破坏协议。
 -keep class com.mystyle.purelive.tv.VodSpiderBridge { *; }
 
+# okhttp3/OkHttp.java 是我们自己补的兼容类（见该文件头注释）。catvod 的 Util
+# 只读它的 VERSION 静态字段，R8 本来就会保留；这里显式声明是为了防止将来
+# 有人改动 Util 引用方式后字段被裁成空字符串。
+-keep class okhttp3.OkHttp { *; }
+
+# SpiderDebug / Path 通过 com.orhanobut.logger 输出日志。该库大量依赖反射与
+# 泛型擦除后的 StringBuilder 拼接，R8 全量混淆会让日志直接抛异常；而多数
+# spider 在 init 阶段就会打日志，异常会冒泡成失败。关掉它的混淆。
+-keep class com.orhanobut.logger.** { *; }
+-dontwarn com.orhanobut.logger.**
+
+# net/OkDns 的 DoH 走 okhttp-dnsoverhttps，内部引用 Kotlin 协程与 metadata。
+-dontwarn okhttp3.dnsoverhttps.**
+-dontwarn org.jetbrains.annotations.**
+
 -dontwarn org.slf4j.**
 -dontwarn com.hierynomus.**
 -dontwarn javax.annotation.**
