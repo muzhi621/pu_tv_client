@@ -87,6 +87,20 @@ jobs:
           flutter build apk --release --flavor impeller --target-platform android-arm64
           --android-skip-build-dependency-validation
 
+      # 临时排查步骤：Kotlin 编译期解析不到 implementation 里的 okhttp3 /
+      # catvod-api.jar（javac 阶段却正常），先把 variant 的真实类路径打出来。
+      - name: 诊断 Kotlin 编译类路径
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && github.event.inputs.full_build == 'true' }}
+        continue-on-error: true
+        working-directory: android
+        run: |
+          cat local.properties || true
+          echo "===== impellerReleaseCompileClasspath ====="
+          ./gradlew -q :app:dependencies --configuration impellerReleaseCompileClasspath 2>&1 | head -80
+          echo "===== kotlin 任务的实际入参 ====="
+          ./gradlew :app:compileImpellerReleaseKotlin --info 2>&1 \
+            | grep -iE "classpath|jvmtarget|kotlin compiler|Unresolved" | head -60
+
       # 体积是 #64 的硬指标（用户批准上限 ~72 MB），所以把账算在日志里：
       # 整体体积、Python 相关条目（chaquopy 标准库 + libpython）、native 库。
       - name: 统计 APK 体积与 Python 占比
