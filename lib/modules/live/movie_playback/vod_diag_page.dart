@@ -171,10 +171,6 @@ class _VodDiagPageState extends ConsumerState<VodDiagPage> {
             ? '\n\nQuickJS：可用（已求值 6 × 7 = 42）。'
             : '\n\nQuickJS：不可用 —— ${diag.quickJs.error ?? '当前 ABI 未打包运行时'}。'
                 '用到 Js 的站点会失败，其余站点不受影响。';
-        _output += diag.python.available
-            ? '\nPython：可用（已求值 6 × 7 = 42）。'
-            : '\nPython：不可用 —— ${diag.python.error ?? '运行时未编入 APK'}。'
-                'py 站点会失败，其余站点不受影响。';
       });
     });
   }
@@ -471,15 +467,6 @@ class _VodDiagPageState extends ConsumerState<VodDiagPage> {
               : diag.quickJs.installed
                   ? '已安装但求值失败：${diag.quickJs.error ?? '未知原因'}'
                   : '不可用：${diag.quickJs.error ?? '当前 ABI 未打包运行时'}',
-        ),
-        _line(
-          tvTheme,
-          'Python',
-          diag.python.available
-              ? '可用（已求值 6 × 7 = 42）'
-              : diag.python.installed
-                  ? '已安装但求值失败：${diag.python.error ?? '未知原因'}'
-                  : '不可用：${diag.python.error ?? '运行时未编入 APK'}',
         ),
         _line(
           tvTheme,

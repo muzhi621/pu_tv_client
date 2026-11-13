@@ -94,14 +94,6 @@ jobs:
           channel: stable
           cache: true
 
-      # Chaquopy 的 buildPython 会校验构建机 Python 大版本必须与
-      # app/build.gradle.kts 里的 chaquopy.version 一致（本项目锁 3.10，
-      # 因为 3.11+ 只出 64 位，而我们必须继续发 armeabi-v7a 包）。
-      - name: 设置构建机 Python（Chaquopy buildPython）
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
       - name: 更新Flutter的packages
         run: flutter pub get
 

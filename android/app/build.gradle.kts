@@ -4,8 +4,6 @@ plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android Gradle plugin.
     id("dev.flutter.flutter-gradle-plugin")
-    // Python 运行时（#64），版本在 settings.gradle.kts 的 plugins 块里锁定。
-    id("com.chaquo.python")
 }
 
 // Signing material lives outside version control. When it is missing the build
@@ -77,13 +75,6 @@ android {
         multiDexEnabled = true
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-
-        // Chaquopy 要求显式声明 ABI（Python 解释器是 native 组件）。
-        // 只列这两个：本项目发版也只发这两个。注意 Python 3.10 是最后一个
-        // 支持 32 位（armeabi-v7a）的版本之一，所以 chaquopy.version 锁 3.10。
-        ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
-        }
     }
 
     signingConfigs {
@@ -140,27 +131,6 @@ kotlin {
     }
 }
 
-/**
- * Python 运行时（#64）。
- *
- * 首批只带 CPython 标准库，**不装任何 pip 包**：运行时自身的 Python 代码
- * （`app.py` / `runtime/*.py`）只 import 标准库，唯一的三方依赖 `yapf` 只在
- * 「格式化源码」这条可选路径上用（`runtime/format.py`），缺了只会在调用时报
- * ModuleNotFoundError，不影响站点运行。
- *
- * numpy / lxml / cryptography / pycryptodome 这类原生扩展需要 Chaquopy 专用的
- * Android wheel，不在 PyPI（FongMi 为此单独维护了 FongMi/python-android 二进制
- * 仓库）。那批东西单个 ABI 约 17 MB，其中 numpy 一家就 4.9 MB，会把包体推到
- * 60 MB 以上 —— 先不带，遇到依赖它们的站点再按需补。
- *
- * 版本锁 3.10：3.11 及更早才支持 armeabi-v7a，本项目的 v7a 包必须保留。
- */
-chaquopy {
-    defaultConfig {
-        version = "3.10"
-    }
-}
-
 flutter {
     source = "../.."
 }
@@ -199,10 +169,6 @@ dependencies {
     // com.fongmi.quickjs.utils.HtmlQuery 用 jsoup 实现 JS 侧的 html 选择器
     // （Selector.evaluatorOf / NodeTraversor / DataNode 等），版本与上游一致。
     implementation("org.jsoup:jsoup:1.23.2")
-
-    // Chaquopy 的 Java 运行时（Python.isStarted / PyObject 等）。上游 chaquo 模块
-    // 也是显式声明的 —— 插件只负责打包 Python 侧资源，不含这个 jar。
-    implementation("com.chaquo.python.runtime:chaquopy_java:17.2.0@jar")
 
     // catvod-api 的 net 包全部方法签名直接暴露 okhttp3 类型，版本需 >= 3.14。
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

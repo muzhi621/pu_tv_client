@@ -129,56 +129,6 @@
 `runtime/QuickJsRuntime.java` —— 均来自上游 `b27ba75`，未被 `apiJar` 导出，
 由 QuickJS 模块静态引用。
 
-## 1B. FongMi/TV + Chaquopy —— Python 运行时（#64）
-
-### 1B.1 运行时来源：Chaquopy 17.2.0
-
-| 组件 | 许可证 |
-|---|---|
-| Chaquopy Gradle 插件与 Android 运行时（`com.chaquo.python`、`com.chaquo.python.runtime:chaquopy_java`） | MIT，Copyright (c) 2017-2025 Chaquo Ltd and contributors |
-| 随包分发的 CPython 3.10 解释器（`libpython3.10.so` 等） | PSF License Agreement（Python Software Foundation） |
-
-Chaquopy 自 13.0 起整体改为 MIT 免费版，早期版本的商业授权限制已不存在；
-本项目使用其开源发行版，未使用任何付费功能。
-
-首批**不打包任何 pip 包**：`numpy` / `lxml` / `cryptography` / `pycryptodome` 这类
-原生扩展需要 Chaquopy 专用的 Android wheel（上游 FongMi 为此单独维护
-`FongMi/python-android` 二进制仓库），单个 ABI 约 17 MB。缺包时站点会在
-`import` 处抛 `ModuleNotFoundError` 并经桥接层回到 Dart 侧，不会被静默吞掉。
-
-### 1B.2 `android/app/src/main/java/com/fongmi/chaquo/`（7 个源文件）
-
-`CacheException` / `Loader` / `ProxyBody` / `RuntimeEntry` / `Spider` /
-`StreamReader` / `Streams` —— 来自 FongMi/TV commit `b27ba75` 的 `chaquo` 模块，
-**GPL-3.0**，与本项目其他 FongMi 代码同一许可。
-
-改动只有两处，均写在文件注释里：
-
-- **删除了 `Platform.java`（254 行）**。上游这个类重写 asset 查找，前提是 Python
-  运行时以「插件 APK」形式挂在 `lib/<abi>/chaquopy/` 下；本项目把运行时直接打进
-  宿主 APK，布局就是 Chaquopy 的标准布局，用官方 `AndroidPlatform` 即可，
-  自写 `Platform` 反而会去错位置找资源。
-- **`Loader.java` 两处**：构造函数改用 `AndroidPlatform(Runtime.context())`；
-  `check()` 去掉上游用来验证原生 wheel 是否齐全的 `ujson` / `Crypto` /
-  `cryptography` 三行 import（首批不带这些包，见 1B.1）。
-
-### 1B.3 `android/app/src/main/java/com/github/catvod/runtime/PythonRuntime.java`
-
-自写的运行时间接口（**不是上游拷贝**）。上游 `PythonRuntime` 不在 `apiJar`
-白名单内，且其方法签名带插件模型特有的 `siteKey` / `Supplier<String>` 形态。
-这里只保留宿主真正会调到的最小面：`initialize()` / `check()` /
-`format(String)` / `spider(api, siteKey, cookies, userAgent)`。
-
-### 1B.4 `android/app/src/main/python/`（6 个 `.py`）
-
-`app.py` / `base/spider.py` / `runtime/{dialog,format,loader,net}.py` —— 来自上游
-`b27ba75` 的 `chaquo/src/main/python/`，**GPL-3.0**，未修改。
-
-只有标准库依赖，唯一的三方依赖 `yapf`（Apache-2.0）只在「格式化源码」这条可选
-路径上用（`runtime/format.py` 顶层 import），未随包分发，缺失时只影响该功能。
-
-注意这些目录**没有 `__init__.py`**，与上游一致，靠 Python 3 的隐式命名空间包工作。
-
 ## 2. 未采用的评估对象
 
 以下项目做过融合评估，**未纳入任何代码**，在此记录以免重复调研：
@@ -186,6 +136,25 @@ Chaquopy 自 13.0 起整体改为 MIT 免费版，早期版本的商业授权限
 - `j4Uq/TVBoxOSC`（AGPL-3.0）—— CI 分发壳，主仓库仅 8 个文件，源码在 Release 附包
 - `yuluoos/TVBox-tvs`（MIT）—— Flutter 源码从未公开，运行时为 Node.js + QuickJS
 - `sky22333/sky-tv`（GPL-3.0）—— 源码完整但缺少云端下发中枢，与架构不匹配
+- **Chaquopy 17.2.0（MIT）+ FongMi 的 `chaquo` 模块（GPL-3.0）** —— 用于 Python 站点。
+  做完了完整接入（7 个 Java 胶水类、6 个 `.py`、Chaquopy 插件与运行时依赖），
+  但**构建通不过**：只要应用 `com.chaquo.python` 插件，宿主 app 自己的
+  `implementation` 依赖（okhttp / `catvod-api.jar` / jsoup / gson …）在
+  Kotlin 编译期就全部不可见，报 `Unresolved reference 'okhttp3'` 等一串错误；
+  去掉插件则立刻 `BUILD SUCCESSFUL`。
+
+  已用 CI 做过三组对照，排除了「依赖声明方式」这个方向：
+
+  | 变体 | 配置 | 结果 |
+  |---|---|---|
+  | C | 去掉插件、保留 `chaquopy_java` 依赖 | 编译通过 |
+  | B | 保留插件、去掉 `chaquopy_java` 依赖 | 失败 |
+  | E | 保留插件、`afterEvaluate` 里晚绑定补依赖 | 失败 |
+
+  Chaquopy 17.2 官方声明支持 AGP 7.3–9.5（本项目 9.4.0），所以不是版本越界，
+  而是它与 AGP 9 的「内置 Kotlin」＋ Flutter Gradle 插件的变体配置存在冲突。
+  Python 支持已排期，等上游修复或改投影到独立 library 模块后再接。
+  **当前版本未包含上述任何代码**。
 
 ## 3. 运行期依赖（Gradle 坐标）
 
@@ -201,6 +170,5 @@ Chaquopy 自 13.0 起整体改为 MIT 免费版，早期版本的商业授权限
 | `androidx.core:core:1.13.1` | `Download` 的 `HandlerCompat` |
 | `com.orhanobut:logger:2.2.0` | `SpiderDebug` / `Path` 的日志出口 |
 | `org.jsoup:jsoup:1.23.2` | QuickJS 侧 `HtmlQuery` 的 DOM 选择器 |
-| `com.chaquo.python.runtime:chaquopy_java:17.2.0` | Python 侧 `Python` / `PyObject` 互操作运行时（MIT，见 1B.1） |
 
-以上均为 Apache-2.0 / MIT 或同等宽松许可证。
+以上均为 Apache-2.0 或同等宽松许可证。

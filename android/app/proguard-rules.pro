@@ -80,18 +80,6 @@
 # 死代码。这里只消除「被裁掉之后的残留引用」告警。
 -dontwarn com.dylibso.**
 
-# Python 运行时（#64）。
-# com.chaquo.python.** 的 Java↔Python 互操作大量依赖反射（PyObject 方法解析、
-# android 模块的 initialize/import 回调），必须整包保留；Chaquopy 自身带有
-# consumer rules，这里再声明一次是为了防止被 minify 顺手裁掉。
-# com.fongmi.chaquo.** 是 Python 侧通过 `from com.github.catvod import Proxy`
-# 这类语句反向引用的宿主类，名字同样不能变。
--keep class com.chaquo.** { *; }
--dontwarn com.chaquo.**
--keep class com.fongmi.chaquo.** { *; }
--dontwarn com.fongmi.chaquo.**
--keep class com.github.catvod.runtime.PythonRuntime { *; }
-
 # SpiderDebug / Path 通过 com.orhanobut.logger 输出日志。该库大量依赖反射与
 # 泛型擦除后的 StringBuilder 拼接，R8 全量混淆会让日志直接抛异常；而多数
 # spider 在 init 阶段就会打日志，异常会冒泡成失败。关掉它的混淆。

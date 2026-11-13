@@ -1,7 +1,7 @@
 {
   "version": "3.0.16",
   "version_num": 130017,
-  "version_desc": "-New: 补入 TVBox 爬虫宿主的 14 个运行时实现类（OkHttp / OkDns / Auth / 拦截器等），复杂 spider 不再因缺类失败\\n-Fix: spider 的 init 改为两参优先、仅缺失时退回一参，避免重复初始化重置状态\\n-New: TVBox 诊断页细分「契约类 / 运行时实现类 / 可选能力」三级自检，缺什么直接点名\\n-Fix: 云端解析 spider 的 md5 校验和与相对路径，导入 FongMi 系配置不再丢 jar\\n-Note: 本版仍是爬虫链路验证版，站点浏览界面在下一版开放",
+  "version_desc": "-New: 内置 QuickJS 运行时，Js 类站点可直接运行（含 cheerio / crypto-js / gbk 三套前端库）\\n-New: 诊断页新增 QuickJS 真求值自检，跑一次 6×7 而不是只看类是否存在\\n-New: 补入 TVBox 爬虫宿主的 14 个运行时实现类（OkHttp / OkDns / Auth / 拦截器等），复杂 spider 不再因缺类失败\\n-Fix: spider 的 init 改为两参优先、仅缺失时退回一参，避免重复初始化重置状态\\n-New: TVBox 诊断页细分「契约类 / 运行时实现类 / 可选能力」三级自检，缺什么直接点名\\n-Fix: 云端解析 spider 的 md5 校验和与相对路径，导入 FongMi 系配置不再丢 jar\\n-Note: Python 站点本版未支持（运行时与当前构建工具链冲突，已排期）\\n-Note: 本版仍是爬虫链路验证版，站点浏览界面在下一版开放",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",

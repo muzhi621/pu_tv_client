@@ -14,10 +14,6 @@ on:
         description: '额外编译一个 debug APK 做完整编译验证'
         type: boolean
         default: false
-      diag:
-        description: '只跑 Gradle 类路径诊断，跳过 APK 编译'
-        type: boolean
-        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -43,14 +39,6 @@ jobs:
         with:
           channel: stable
           cache: true
-
-      # Chaquopy（#64）的 buildPython 必须与 app 的 Python 版本一致，
-      # 否则 pip / pyc 编译会直接报版本不匹配。app 侧锁定 3.10（3.11 及更早
-      # 才支持 armeabi-v7a，而本项目要发 v7a 包）。
-      - name: 设置构建机 Python（Chaquopy buildPython）
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
 
       - name: 打印工具链版本
         run: flutter --version
@@ -90,35 +78,3 @@ jobs:
         run: >
           flutter build apk --release --flavor impeller --target-platform android-arm64
           --android-skip-build-dependency-validation
-
-      # 临时排查步骤：Kotlin 编译期解析不到 implementation 里的 okhttp3 /
-      # catvod-api.jar（javac 阶段却正常），先把 variant 的真实类路径打出来。
-      - name: 诊断 Kotlin 编译类路径
-        if: ${{ always() && github.event_name == 'workflow_dispatch' && (github.event.inputs.full_build == 'true' || github.event.inputs.diag == 'true') }}
-        continue-on-error: true
-        working-directory: android
-        run: |
-          set +e
-          run_case() {
-            echo "########## $1"
-            cp "$2" app/build.gradle.kts
-            ./gradlew :app:compileImpellerReleaseKotlin 2>&1 \
-              | grep -E "^e: |BUILD SUCCESSFUL|BUILD FAILED|Could not resolve|no matching variant" | head -14
-          }
-          run_case "E 晚绑定 afterEvaluate 补依赖" app/build_diag_e.gradle.kts
-          run_case "C 去掉 chaquopy 插件，保留 chaquopy_java 依赖" app/build_diag_c.gradle.kts
-          run_case "B 保留插件，去掉 chaquopy_java 依赖" app/build_diag_b.gradle.kts
-
-      # 体积是 #64 的硬指标（用户批准上限 ~72 MB），所以把账算在日志里：
-      # 整体体积、Python 相关条目（chaquopy 标准库 + libpython）、native 库。
-      - name: 统计 APK 体积与 Python 占比
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.full_build == 'true' }}
-        run: |
-          set -e
-          ls -l build/app/outputs/flutter-apk/*.apk || true
-          apk=$(ls build/app/outputs/flutter-apk/*.apk | head -1)
-          echo "===== $apk ====="
-          unzip -l "$apk" | awk '/chaquopy/ {s+=$1; n++} END {printf "chaquopy 条目 %d 个，合计 %.2f MB\n", n, s/1048576}'
-          unzip -l "$apk" | awk '/libpython|libchaquopy/ {s+=$1; n++} END {printf "python native %d 个，合计 %.2f MB\n", n, s/1048576}'
-          unzip -l "$apk" | awk '/lib\/arm64-v8a\// {s+=$1; n++} END {printf "arm64 native %d 个，合计 %.2f MB\n", n, s/1048576}'
-          unzip -l "$apk" | awk '/assets\/flutter/ {s+=$1} END {printf "flutter assets %.2f MB\n", s/1048576}'
