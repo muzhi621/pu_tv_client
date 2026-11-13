@@ -343,12 +343,7 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
         active: state.showSidePanel && state.panel == LivePlayPanel.danmakuSettings,
         onSelect: () => controller.togglePanel(LivePlayPanel.danmakuSettings),
       ),
-      _PanelAction(
-        icon: Icons.dynamic_feed_rounded,
-        label: i18n('danmaku_filter'),
-        active: state.showSidePanel && state.panel == LivePlayPanel.shield,
-        onSelect: () => controller.togglePanel(LivePlayPanel.shield),
-      ),
+      // #68 减法：弹幕过滤（屏蔽词）系统已降级，入口移除
       _PanelAction(
         icon: Icons.high_quality_rounded,
         label: _qualityLabel(state),

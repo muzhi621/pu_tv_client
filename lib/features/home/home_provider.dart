@@ -23,7 +23,8 @@ class AppModeController extends _$AppModeController {
   AppMode build() {
     final saved = HivePrefUtil.getString('appMode');
     for (final mode in AppMode.values) {
-      if (mode.name == saved) return mode;
+      // #68 减法：music 模式已屏蔽，老用户残留的 'music' 回退到 live
+      if (mode.name == saved && mode != AppMode.music) return mode;
     }
     return AppMode.live;
   }
@@ -34,10 +35,12 @@ class AppModeController extends _$AppModeController {
   }
 
   /// on, no submenu needed on a remote.
+  ///
+  /// #68 减法：跳过 music 模式（入口已屏蔽），只在 live ↔ video 间循环。
   void cycle() => setMode(switch (state) {
     AppMode.live => AppMode.video,
-    AppMode.video => AppMode.music,
-    AppMode.music => AppMode.live,
+    AppMode.video => AppMode.live,
+    AppMode.music => AppMode.live, // 不可达，防御回退
   });
 }
 

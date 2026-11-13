@@ -4,7 +4,6 @@ import 'package:pure_live/modules/live/playback/player_panel_layout.dart';
 import 'package:pure_live/modules/live/playback/models/live_play_args.dart';
 import 'package:pure_live/modules/live/playback/states/live_play_state.dart';
 import 'package:pure_live/modules/live/playback/widgets/player_key_scope.dart';
-import 'package:pure_live/modules/live/playback/widgets/panels/shield_panel.dart';
 import 'package:pure_live/modules/live/playback/widgets/panels/playlist_panel.dart';
 import 'package:pure_live/modules/live/playback/controllers/live_play_controller.dart';
 import 'package:pure_live/modules/live/playback/widgets/panels/danmaku_settings_panel.dart';
@@ -125,7 +124,8 @@ class _SidePanel extends ConsumerWidget {
       case LivePlayPanel.danmakuSettings:
         return DanmakuSettingsPanel(key: const ValueKey('live-play-panel-danmaku'), onClose: onTogglePanel);
       case LivePlayPanel.shield:
-        return ShieldPanel(key: const ValueKey('live-play-panel-shield'), onClose: onTogglePanel);
+        // #68 减法：弹幕过滤（屏蔽词）系统已降级，返回空面板
+        return const SizedBox.shrink();
     }
   }
 }

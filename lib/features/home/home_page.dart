@@ -6,11 +6,9 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:pure_live/exports/package_export.dart';
 import 'package:pure_live/app/router/app/app_router.dart';
 import 'package:pure_live/modules/live/hot/hot_page.dart';
-import 'package:pure_live/modules/music/music_section.dart';
 import 'package:pure_live/features/home/home_provider.dart';
 import 'package:pure_live/modules/video/video_section.dart';
 import 'package:pure_live/modules/live/areas/areas_page.dart';
-import 'package:pure_live/modules/music/music_section_view.dart';
 import 'package:pure_live/modules/video/video_section_view.dart';
 import 'package:pure_live/features/home/home_update_dialog.dart';
 import 'package:pure_live/features/home/remote_notice_dialog.dart';
@@ -19,7 +17,6 @@ import 'package:pure_live/features/home/exit_confirm_dialog.dart';
 import 'package:pure_live/modules/live/search/tv_search_page.dart';
 import 'package:pure_live/features/settings/tv_settings_page.dart';
 import 'package:pure_live/modules/live/favorite/favorite_page.dart';
-import 'package:pure_live/modules/music/widgets/music_mini_bar.dart';
 import 'package:pure_live/modules/live/movie_playback/movie_playback_page.dart';
 import 'package:pure_live/modules/live/movie_playback/vod_browse_page.dart';
 import 'package:pure_live/modules/live/favorite_areas/favorite_areas_page.dart';
@@ -62,7 +59,8 @@ class _HomePageState extends ConsumerState<HomePage> {
     final (String label, String short, IconData icon) = switch (mode) {
       AppMode.live => (i18n('mode_live'), i18n('menu_short_mode_live'), Icons.live_tv_rounded),
       AppMode.video => (i18n('mode_video'), i18n('menu_short_mode_video'), Icons.movie_outlined),
-      AppMode.music => (i18n('mode_music'), i18n('menu_short_mode_music'), Icons.library_music_outlined),
+      // #68 减法：music 已屏蔽，防御性显示 video 标签（不可达）
+      AppMode.music => (i18n('mode_video'), i18n('menu_short_mode_video'), Icons.movie_outlined),
     };
 
     // A control, not a state: the mode's name on the button already says
@@ -112,7 +110,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                       i18n(switch (mode) {
                         AppMode.live => 'mode_live',
                         AppMode.video => 'mode_video',
-                        AppMode.music => 'mode_music',
+                        // #68 减法：music 已屏蔽
+                        AppMode.music => 'mode_video',
                       }),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -135,7 +134,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             children: [
               modeRow(AppMode.live, Icons.live_tv_rounded),
               modeRow(AppMode.video, Icons.movie_outlined),
-              modeRow(AppMode.music, Icons.library_music_outlined),
+              // #68 减法：music 模式已屏蔽
             ],
           ),
         );
@@ -215,31 +214,8 @@ class _HomePageState extends ConsumerState<HomePage> {
             ),
         ];
       case AppMode.music:
-        // Five rail destinations over the top-tab groups (see kMusicRailGroups):
-        // groups — the tabbed sections live behind the content pane's tab bar.
-        const labels = <(String, IconData)>[
-          ('music_now_playing', Icons.queue_music_rounded),
-          ('music_tab_search', Icons.search_rounded),
-          ('music_playlists', Icons.playlist_add_check_rounded),
-          ('music_discover', Icons.explore_outlined),
-          ('music_mine', Icons.person_outline_rounded),
-        ];
-        final selected = ref.watch(musicSectionIndexProvider);
-        final railIndex = musicRailIndexFor(MusicSection.values[selected.clamp(0, MusicSection.values.length - 1)]);
-        return [
-          for (final (index2, (labelKey, icon)) in labels.indexed)
-            Padding(
-              padding: EdgeInsets.only(bottom: 20.ts(context)),
-              child: _buildAdaptiveItem(
-                ref: ref,
-                item: AppMenuItem(index: index2, title: i18n(labelKey), shortTitle: i18n(labelKey), icon: icon),
-                isExpanded: isExpanded,
-                isSelected: railIndex == index2,
-                focusNode: _sectionNode('music_$index2'),
-                onTap: () => ref.read(musicSectionIndexProvider.notifier).change(kMusicRailGroups[index2].first.index),
-              ),
-            ),
-        ];
+        // #68 减法：music 模式已屏蔽，返回空侧栏（不会到达此处）
+        return const [];
       case AppMode.video:
         // each entry maps to its VideoSection index.
         const entries = <(int, String, IconData)>[
@@ -269,30 +245,11 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   /// The full content pane for the non-live modes: login gate first (the bmsc
   /// pattern — a lock placeholder that opens the QR login page), then the
-  /// selected section, with music pinning its resident mini player bar.
+  /// selected section. (#68 减法：music 模式已屏蔽，回退到 video 内容。)
   Widget _buildModePane(AppMode mode) {
-    if (mode == AppMode.music) {
-      // Once per run — the controller guards repeats: the resume option
-      // restores the last queue the first time the music pane shows.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) ref.read(musicPlayerControllerProvider.notifier).maybeResumeLastSession();
-      });
-      final sectionIndex = ref.watch(musicSectionIndexProvider);
-      return BilibiliLoginGate(
-        child: TvFocusRestorer(
-          child: Column(
-            children: [
-              Expanded(
-                child: MusicSectionView(
-                  section: MusicSection.values[sectionIndex.clamp(0, MusicSection.values.length - 1)],
-                ),
-              ),
-              const MusicMiniBar(),
-            ],
-          ),
-        ),
-      );
-    }
+    // #68 减法：music 模式入口已屏蔽。防御性回退到 video 内容，
+    // 避免残留状态触发 MusicSectionView 导致空引用。
+    // if (mode == AppMode.music) { ... }  ← 已移除
     final sectionIndex = ref.watch(videoSectionIndexProvider);
     return BilibiliLoginGate(
       child: TvFocusRestorer(

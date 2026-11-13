@@ -29,11 +29,7 @@ class VideoDanmakuSettingsGroup extends ConsumerWidget {
                 // that silently changed the whole app font.
                 onTap: () => const FontFamilyDanmakuRoute().push(context),
               ),
-              TvSettingsNavTile(
-                title: i18n('danmaku_filter'),
-                icon: Remix.filter_2_line,
-                onTap: () => const DanmuShieldRoute().push(context),
-              ),
+              // #68 减法：弹幕过滤（屏蔽词）系统已降级，入口移除
             ],
           ),
         ],
