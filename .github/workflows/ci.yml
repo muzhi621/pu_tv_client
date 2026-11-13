@@ -94,12 +94,15 @@ jobs:
         continue-on-error: true
         working-directory: android
         run: |
-          cat local.properties || true
-          echo "===== impellerReleaseCompileClasspath ====="
-          ./gradlew -q :app:dependencies --configuration impellerReleaseCompileClasspath 2>&1 | head -80
-          echo "===== kotlin 任务的实际入参 ====="
-          ./gradlew :app:compileImpellerReleaseKotlin --info 2>&1 \
-            | grep -iE "classpath|jvmtarget|kotlin compiler|Unresolved" | head -60
+          set +e
+          for cfg in impellerReleaseCompileClasspath impellerReleaseRuntimeClasspath; do
+            echo "########## $cfg"
+            ./gradlew -q :app:dependencies --configuration "$cfg" > "/tmp/$cfg.txt" 2>&1
+            echo "总行数: $(wc -l < "/tmp/$cfg.txt")"
+            grep -nE "catvod|quickjs|okhttp|jsoup|chaquopy|gson|guava|logger|preference|androidx.collection" "/tmp/$cfg.txt" | head -30
+          done
+          echo "########## dependencyInsight okhttp"
+          ./gradlew -q :app:dependencyInsight --configuration impellerReleaseCompileClasspath --dependency okhttp 2>&1 | head -30
 
       # 体积是 #64 的硬指标（用户批准上限 ~72 MB），所以把账算在日志里：
       # 整体体积、Python 相关条目（chaquopy 标准库 + libpython）、native 库。
