@@ -6,6 +6,14 @@
  *      此处补齐的正是这批类，否则 spider 调 Spider.safeDns() /
  *      Decoder 时会 NoClassDefFoundError。
  * 改动：仅做集成适配，未修改业务逻辑。
+ *
+ * 与上游的差异（OkHttp 4.12 适配）：
+ *   1. 上游用 `Chain.withProxySelector(policy)` 逐请求换代理，这是 OkHttp 5.x
+ *      才有的 API。本宿主停在 4.12.0，代理统一由 client 的 proxySelector 决定，
+ *      这里只保留「按 policy 打 Proxy-Authorization」的效果。
+ *   2. `Chain.getFollowSslRedirects()` 同样只有 5.x 有，改为常量 true
+ *      （client 已关了自动跟随，是否允许跨协议由本拦截器判断）。
+ *   3. `ResponseBody.EMPTY` 是 5.x 常量，4.x 用 `create(null, byte[0])`。
  */
 package com.github.catvod.net;
 
@@ -18,6 +26,7 @@ import java.net.ProtocolException;
 
 import okhttp3.HttpUrl;
 import okhttp3.Interceptor;
+import okhttp3.MediaType;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
@@ -26,6 +35,12 @@ import okhttp3.ResponseBody;
 final class ProxyRedirectInterceptor implements Interceptor {
 
     private static final int MAX_FOLLOW_UPS = 20;
+
+    /**
+     * OkHttp 4.x 的 Chain 不暴露 followSslRedirects 开关，宿主统一按 true 处理：
+     * 是否真的跟随由 {@link #redirectUrl} 里的同协议判断决定。
+     */
+    private static final boolean FOLLOW_SSL_REDIRECTS = true;
 
     private final OkProxySelector selector;
 
@@ -41,29 +56,26 @@ final class ProxyRedirectInterceptor implements Interceptor {
         Response previousResponse = null;
         int followUpCount = 0;
         while (true) {
-            OkProxySelector.Policy policy = selectPolicy(chain, request, previousPolicy);
+            // 4.x 无法逐请求替换代理：代理由 client 的 proxySelector 全局决定，
+            // 这里只按 policy 补 Proxy-Authorization。
+            OkProxySelector.Policy policy = selector == null ? null : selector.policy(request.url(), previousPolicy);
             request = withPolicy(request, policy, previousPolicy);
-            Chain routed = policy == null ? chain : chain.withProxySelector(policy);
-            Response response = routed.proceed(request);
+            Response response = chain.proceed(request);
             followUpCount += countFollowUps(response);
             response = withPriorResponse(response, previousResponse);
             checkFollowUps(response, followUpCount);
             NetOptions options = request.tag(NetOptions.class);
             if (options != null && !options.isRedirect()) return response;
-            Request followUp = redirect(response, chain.getFollowSslRedirects());
+            Request followUp = redirect(response, FOLLOW_SSL_REDIRECTS);
             if (followUp == null) return response;
             RequestBody body = followUp.body();
             if (body != null && body.isOneShot()) return response;
             response.close();
             if (++followUpCount > MAX_FOLLOW_UPS) throw new ProtocolException("Too many follow-up requests: " + followUpCount);
-            previousResponse = response.newBuilder().body(ResponseBody.EMPTY).build();
+            previousResponse = response.newBuilder().body(ResponseBody.create((MediaType) null, new byte[0])).build();
             previousPolicy = policy;
             request = followUp;
         }
-    }
-
-    private OkProxySelector.Policy selectPolicy(Chain chain, Request request, OkProxySelector.Policy previous) {
-        return chain.getProxy() == null && chain.getProxySelector() == selector ? selector.policy(request.url(), previous) : null;
     }
 
     private Request withPolicy(Request request, OkProxySelector.Policy policy, OkProxySelector.Policy previous) {

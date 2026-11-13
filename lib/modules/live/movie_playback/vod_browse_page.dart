@@ -154,6 +154,7 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
     final picked = await TvDialogUtils.showSelect<VodSite>(
       context: context,
       title: i18n('vod_pick_site'),
+      selectedValue: _site,
       items: _config.sites
           .map((site) => TvSelectItem<VodSite>(
                 title: site.name,
