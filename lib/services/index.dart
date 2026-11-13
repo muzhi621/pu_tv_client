@@ -59,3 +59,7 @@ export 'volume_settings/volume_settings_controller.dart';
 export 'volume_settings/volume_settings_model.dart';
 export 'vod/vod_config.dart';
 export 'vod/vod_spider_channel.dart';
+export 'vod/vod_models.dart';
+export 'vod/tvbox_parser.dart';
+export 'vod/tvbox_http_engine.dart';
+export 'vod/vod_site_engine.dart';

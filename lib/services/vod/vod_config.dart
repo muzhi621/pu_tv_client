@@ -126,6 +126,7 @@ class VodSite {
     required this.sourceId,
     required this.name,
     required this.api,
+    this.key = '',
     this.ext = '',
     this.type = 0,
     this.searchable = false,
@@ -137,6 +138,7 @@ class VodSite {
         sourceId: _str(json['sourceId']),
         name: _str(json['name']),
         api: _str(json['api']),
+        key: _str(json['key']),
         ext: _str(json['ext']),
         type: json['type'] is int ? json['type'] as int : 0,
         searchable: json['searchable'] == 1 || json['searchable'] == true,
@@ -146,6 +148,10 @@ class VodSite {
   final String id;
   final String sourceId;
   final String name;
+
+  /// 站点在 TVBox 配置里的原始 key。`id` 是云端拼的 `源id:key`，
+  /// 传给 spider 或写进收藏时必须用这个裸 key。
+  final String key;
 
   /// `csp_Xxx` 走 jar；http 开头走直连采集接口。
   final String api;
