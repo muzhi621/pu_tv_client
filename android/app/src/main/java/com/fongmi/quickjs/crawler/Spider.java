@@ -337,7 +337,11 @@ public class Spider extends com.github.catvod.crawler.Spider {
 
     private Map<String, String> proxyHeaders(Object header) throws JSONException {
         if (header == null) return null;
-        if (!(header instanceof QuickJS.Json(String text))) throw new IllegalArgumentException("Proxy response headers require an object");
+        // 上游这里用的是 Java 21 的 record 解构模式
+        // `header instanceof QuickJS.Json(String text)`；本工程 source/target 是 17，
+        // 改成等价的两步写法（访问器 text() 不变）。
+        if (!(header instanceof QuickJS.Json)) throw new IllegalArgumentException("Proxy response headers require an object");
+        String text = ((QuickJS.Json) header).text();
         JSONObject object = new JSONObject(text);
         Map<String, String> headers = new LinkedHashMap<>();
         for (Iterator<String> keys = object.keys(); keys.hasNext(); ) {
@@ -359,7 +363,9 @@ public class Spider extends com.github.catvod.crawler.Spider {
     }
 
     private InputStream proxyBody(Invocation current, Object value) throws JSONException {
-        if (value instanceof QuickJS.Json(String text)) value = new JSONTokener(text).nextValue();
+        // 同上：把 Java 21 的 record 解构 `instanceof QuickJS.Json(String text)`
+        // 展开成 17 可编译的两步形式。
+        if (value instanceof QuickJS.Json) value = new JSONTokener(((QuickJS.Json) value).text()).nextValue();
         if (value instanceof JSONObject stream && stream.has("$tvStream")) return current.takeStream(stream.getString("$tvStream"));
         if (value instanceof byte[] bytes) return new ByteArrayInputStream(bytes);
         if (value instanceof String text) return new ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8));
