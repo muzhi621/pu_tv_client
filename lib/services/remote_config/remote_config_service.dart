@@ -59,6 +59,14 @@ class RemoteConfigService {
   // 冷启动注入
   // ------------------------------------------------------------------
 
+  /// 冷启动注入：只应用本地缓存，**不等网络**。
+  ///
+  /// 曾经在 runApp 之前 `await syncNow()`，网络上限 8 秒，于是电视盒子冷启动
+  /// 会先黑屏 8~10 秒才出画面——用户的原话是「打开会黑屏 10s」。配置不是首帧
+  /// 的硬依赖：导航三大类是内置的，页面各自有默认值与空态，所以这里只读缓存
+  /// （纯本地，毫秒级），真正的网络同步交给首帧之后的 [startHeartbeat]。
+  ///
+  /// 顺序仍是「迁移之后、runApp 之前」，避免首帧读到旧菜单/旧弹窗。
   static Future<void> bootstrap() async {
     if (_bootstrapped) return;
     _bootstrapped = true;
@@ -69,7 +77,6 @@ class RemoteConfigService {
         _current = cached;
         await _apply(cached);
       }
-      await syncNow();
     } catch (error) {
       debugPrint('[RemoteConfig] bootstrap 已降级到本地配置: $error');
     }
@@ -142,6 +149,14 @@ class RemoteConfigService {
   static void startHeartbeat() {
     if (_heartbeatTimer != null) return;
     WidgetsFlutterBinding.ensureInitialized();
+
+    // 首帧已经画出来了，此刻立刻同步一次：bootstrap 只应用了本地缓存，
+    // 云端的新配置必须在这一刻补上，否则要等 3 分钟才生效。
+    try {
+      unawaited(syncNow());
+    } catch (error) {
+      debugPrint('[RemoteConfig] 首帧同步异常（已忽略）: $error');
+    }
 
     // syncNow 内部已全程 try/catch 静默降级；定时回调再包一层，杜绝未捕获异常。
     _heartbeatTimer = Timer.periodic(const Duration(minutes: 3), (_) {

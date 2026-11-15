@@ -61,9 +61,39 @@
 # 宿主侧桥接类由 Dart 按固定名字调用，混淆后方法名变化会破坏协议。
 -keep class com.mystyle.purelive.tv.VodSpiderBridge { *; }
 
-# okhttp3/OkHttp 由 okhttp 4.12.0 自身提供，catvod 的 Util 只读它的 VERSION
-# 静态字段（见 THIRD_PARTY_NOTICES.md 里那次误判纠正）。显式 keep 是防御性的。
--keep class okhttp3.OkHttp { *; }
+# ------------------------------------------------------------------
+# 7.1 spider.jar 是「预编译字节码」，按字面名引用宿主的公共库
+#
+# DexClassLoader 在运行时才加载 spider.jar，R8 静态分析完全看不到它的引用。
+# 对 R8 来说 okhttp3 / gson / jsoup 只是「我们自己的 Java 类用了一点」，
+# 于是照常重命名（okhttp3.Dns → a.a.b）甚至裁掉未用成员；而 jar 里的
+# 常量池写的是 `Lokhttp3/Dns;`，运行时就找不到类。实测终端进入影音直接报：
+#
+#     Failed resolution of: Lokhttp3/Dns;   (prepare 阶段)
+#
+# 这跟 com.github.catvod.** 必须整包 keep 是同一个原因，之前只补了 catvod
+# 却漏了它引用的库。以下整包保留原始类名（不混淆），未用成员仍由 R8 裁剪；
+# 空间代价约 1~1.5 MB，换「爬虫能在真机上跑起来」是值得的。
+# ------------------------------------------------------------------
+-keep class okhttp3.** { *; }
+-keep interface okhttp3.** { *; }
+-dontwarn okhttp3.**
+
+-keep class okio.** { *; }
+-keep interface okio.** { *; }
+-dontwarn okio.**
+
+# spider 里大量 new Gson().fromJson(...)，且 TypeToken 依赖泛型签名反射。
+-keep class com.google.gson.** { *; }
+-dontwarn com.google.gson.**
+
+# 部分 spider 用 jsoup 解析 HTML 详情页。
+-keep class org.jsoup.** { *; }
+-dontwarn org.jsoup.**
+
+# 原先只 keep 了 OkHttp（catvod 的 Util 读它的 VERSION 静态字段），
+# 上面整包 keep 已覆盖，这里保留说明不重复写规则。
+# -keep class okhttp3.OkHttp { *; }
 
 # QuickJS 运行时（#63）。
 # com.fongmi.quickjs.QuickJS / QuickJSContext 的方法由 libquickjs-wrapper.so 通过
