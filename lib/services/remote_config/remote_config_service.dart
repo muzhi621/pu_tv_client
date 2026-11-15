@@ -11,6 +11,7 @@ import 'package:pure_live/core/utils/hive_pref_util.dart';
 import 'package:pure_live/modules/live/iptv/services/iptv_import_manager.dart';
 import 'package:pure_live/services/settings/settings.dart';
 import 'package:pure_live/services/vod/vod_config.dart';
+import 'package:pure_live/services/vod/tvbox_config_loader.dart';
 import 'remote_config_model.dart';
 import 'remote_config_store.dart';
 
@@ -216,6 +217,14 @@ class RemoteConfigService {
     } catch (error) {
       debugPrint('[RemoteConfig] IPTV 下发失败（沿用本地列表）: $error');
     }
+
+    // TVBox 直连源：同步套用上次成功缓存，网络刷新放后台。
+    // 失败时 _resolvedVod 保持云端 sites，绝不阻断首帧。
+    try {
+      prepareVodUrlSources();
+    } catch (error) {
+      debugPrint('[RemoteConfig] TVBox 直连源准备失败（沿用云端站点）: $error');
+    }
   }
 
 
@@ -342,7 +351,44 @@ class RemoteConfigService {
   /// 云端已把「设备引用哪些源」展开成扁平的 sources / sites，
   /// 这里直接读，终端不需要再关心资源库与 id 引用。
   /// 未接管（`managed` 缺失）时返回空配置，影音板块走原有局域网推送路径。
-  static VodConfig get vod => VodConfig.fromSection(_section('vod'));
+  ///
+  /// 双轨：若源标记为 url 模式且已解析成功，返回替换过站点的版本；
+  /// 否则原样返回云端文档，行为与升级前完全一致。
+  static VodConfig? _resolvedVod;
+  static final TvboxConfigLoader _vodLoader = TvboxConfigLoader();
+
+  static VodConfig get vod =>
+      _resolvedVod ?? VodConfig.fromSection(_section('vod'));
+
+  /// url 模式的源：先用上次成功缓存替换站点（同步，首帧即可用），
+  /// 再后台拉取最新配置。任何失败都保留云端已展开的 sites 作为兜底。
+  /// 该方法不 await 网络，`_apply` 在 runApp 之前执行，绝不能拖慢启动。
+  static void prepareVodUrlSources() {
+    final base = VodConfig.fromSection(_section('vod'));
+    final targets = base.sources.where((source) => source.isUrlMode).toList();
+    if (targets.isEmpty) {
+      _resolvedVod = null;
+      return;
+    }
+    final cached = <String, TvboxConfigResult>{};
+    for (final source in targets) {
+      final result = TvboxConfigLoader.cached(source.url, source.id);
+      if (result != null) cached[source.id] = result;
+    }
+    _resolvedVod = TvboxConfigLoader.apply(base, cached);
+
+    // 后台刷新：成功后更新内存结果，下一次心跳同步 / 冷启动即完全生效。
+    () async {
+      final fresh = <String, TvboxConfigResult>{};
+      for (final source in targets) {
+        final result = await _vodLoader.fetch(source.url, source.id);
+        if (result != null) fresh[source.id] = result;
+      }
+      if (fresh.isNotEmpty) {
+        _resolvedVod = TvboxConfigLoader.apply(base, fresh);
+      }
+    }();
+  }
 
   // ------------------------------------------------------------------
   // 协议（路由守卫与协议页读取）

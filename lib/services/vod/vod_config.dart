@@ -85,6 +85,7 @@ class VodSource {
     this.url = '',
     this.spiderMd5 = '',
     this.spiderFlavor = 'fongmi',
+    this.mode = 'parsed',
   });
 
   factory VodSource.fromJson(Map<String, dynamic> json) => VodSource(
@@ -96,6 +97,9 @@ class VodSource {
         spiderFlavor: _str(json['spiderFlavor']).isEmpty
             ? 'fongmi'
             : _str(json['spiderFlavor']),
+        // 双轨下发模式：parsed = 用云端展开的 sites；url = 终端自己拉配置解析。
+        // 老云端不带这个字段时默认 parsed，行为与升级前完全一致。
+        mode: json['mode'] == 'url' ? 'url' : 'parsed',
       );
 
   final String id;
@@ -104,8 +108,14 @@ class VodSource {
   /// spider.jar 地址，`csp_` 站点全靠它加载代码。
   final String jar;
 
-  /// TVBox 配置 json 地址（管理用，终端不直接拉）。
+  /// TVBox 配置 json 地址。`mode == 'url'` 时终端直接拉它自己解析；
+  /// 其余情况仅作管理展示，站点走云端已展开的 [VodConfig.sites]。
   final String url;
+
+  /// 下发模式：`parsed`（默认，云端解析）或 `url`（终端直连解析）。
+  final String mode;
+
+  bool get isUrlMode => mode == 'url' && url.isNotEmpty;
 
   /// 配置里 `spider` 字段附带的 `;md5;<hash>` 校验和。
   /// 宿主下载 jar 后应比对，防止第三方源被替换（见 #61）。
