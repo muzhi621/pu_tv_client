@@ -736,6 +736,29 @@ final class LivePlayerFacade {
     _bindCurrentHandle();
   }
 
+  /// 当前播放位置（点播进度与快进用）。
+  ///
+  /// 直接读适配器而不是本地镜像：引擎切换时 controller 会换句柄，
+  /// 每次都取当前句柄上的值，切核后进度不会停在旧内核的时间线上。
+  Duration get position {
+    final adapter = _controller.handle?.adapter;
+    return adapter?.position ?? Duration.zero;
+  }
+
+  /// 总时长；直播源或尚未拿到元数据时为 null（此时不画进度条）。
+  Duration? get duration => _controller.handle?.adapter.duration;
+
+  /// 跳转到 [target]。
+  ///
+  /// 越界裁剪交给调用方：只有它知道「直播没有终点」这件事。这里只保证
+  /// 没有句柄/引擎未就绪时静默返回，摇控器连按不会抛异常到 UI。
+  Future<void> seek(Duration target) async {
+    if (_disposed) return;
+    final adapter = _controller.handle?.adapter;
+    if (adapter == null) return;
+    await adapter.seek(target);
+  }
+
   /// Stops playback and releases the player.
   Future<void> close() async {
     if (_disposed) return;

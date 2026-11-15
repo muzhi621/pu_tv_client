@@ -27,6 +27,8 @@ class LivePlayState {
     this.switchingStream = false,
     this.isOffline = false,
     this.fetchingDetail = false,
+    this.position = Duration.zero,
+    this.duration,
   });
 
   final LiveRoom? room;
@@ -92,6 +94,13 @@ class LivePlayState {
   /// control bar stay exactly as they were.
   final bool switchingStream;
 
+  /// 点播播放进度。直播不写这两个字段（恒为 0 / null），进度条据此隐藏。
+  ///
+  /// 由控制器每秒从适配器采样：media_core 只把「状态」推给 UI，
+  /// 时间轴是轮询语义，推流里没有 position 事件。
+  final Duration position;
+  final Duration? duration;
+
   bool get showChannelBanner => channelBanner != null && channelBanner!.isNotEmpty;
 
   /// Whether the failure overlay owns the picture.
@@ -130,6 +139,9 @@ class LivePlayState {
     bool? switchingStream,
     bool? isOffline,
     bool? fetchingDetail,
+    Duration? position,
+    Duration? duration,
+    bool clearDuration = false,
   }) {
     return LivePlayState(
       room: clearRoom ? null : (room ?? this.room),
@@ -151,6 +163,8 @@ class LivePlayState {
       switchingStream: switchingStream ?? this.switchingStream,
       isOffline: isOffline ?? this.isOffline,
       fetchingDetail: fetchingDetail ?? this.fetchingDetail,
+      position: position ?? this.position,
+      duration: clearDuration ? null : (duration ?? this.duration),
     );
   }
 }

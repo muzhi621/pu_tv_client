@@ -49,11 +49,43 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
   static const Duration _channelDebounceWindow = Duration(milliseconds: 300);
 
   @override
+  void initState() {
+    super.initState();
+    // 兜底按键通道（见 [_onGlobalKey]）。
+    HardwareKeyboard.instance.addHandler(_onGlobalKey);
+  }
+
+  @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onGlobalKey);
     _leftTapTimer?.cancel();
     _channelDebounce?.cancel();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  /// 兜底按键通道：不依赖焦点链。
+  ///
+  /// 为什么需要它：播放页的焦点在部分机型/状态下会丢——媒体 surface 换成
+  /// 原生视图、平台层抢走 primaryFocus 之后，[Focus] 树上的 handler 就
+  /// 收不到遥控器按键，表现正是「画面在播、按什么都没反应」，菜单唤不出来。
+  /// 硬件键盘 handler 在焦点派发之前拿到所有按键，只要本页还是当前路由，
+  /// 遥控器就一定有响应。
+  ///
+  /// 但要放行两种情况：控制条/侧栏打开时它们靠焦点导航（抢在前面会把 OK
+  /// 变成「再显示一次控制条」而不是「按下当前按钮」），阻塞浮层有自己的
+  /// 焦点按钮。
+  bool _onGlobalKey(KeyEvent event) {
+    if (!mounted) return false;
+
+    // 只接管当前路由：上一页还在栈里时不能抢它的按键。
+    if (ModalRoute.of(context)?.isCurrent == false) return false;
+
+    final state = ref.read(livePlayControllerProvider(widget.args));
+
+    if (state.showSidePanel || state.showControls || state.hasBlockingOverlay) return false;
+
+    return _onKeyEvent(_focusNode, event) == KeyEventResult.handled;
   }
 
   static bool _isConfirm(LogicalKeyboardKey key) =>
@@ -106,12 +138,40 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     // else. Left/Right/OK belong to the bar and are forwarded by returning
     // ignored (they were already consumed when an option list is open).
     if (state.showControls) {
+      if (widget.args.vod) {
+        // 点播没有「上下换台」，把这两键让给控制条自己（选项列表用它导航）。
+        return KeyEventResult.ignored;
+      }
       if (key == LogicalKeyboardKey.arrowUp) {
         _switchChannel(-1);
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.arrowDown) {
         _switchChannel(1);
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
+
+    // 点播：遥控器左右就是快进 / 后退，上下唤出控制条。
+    //
+    // 直播那套「左键双击关注、右键开播放列表」在点播里全是噪音——用户
+    // 想看的是时间轴。这里优先做时间轴，菜单靠 OK / 上下来唤。
+    if (widget.args.vod) {
+      if (_isConfirm(key)) {
+        controller.showControls();
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.arrowLeft) {
+        unawaited(_seek(controller, -10));
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.arrowRight) {
+        unawaited(_seek(controller, 10));
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.arrowDown) {
+        controller.showControls();
         return KeyEventResult.handled;
       }
       return KeyEventResult.ignored;
@@ -169,9 +229,31 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     LivePlayRoute(LivePlayArgs.fromRoom(target, playlist: rooms, showChannelBanner: true)).replace(context);
   }
 
+  /// 点播快进 / 后退并在画面上回显落点。
+  ///
+  /// 回显是必要的：快进时画面本来就在变，没有时间戳用户不知道跳了多远。
+  /// 时长未知（源没给 metadata）时只显示落点，不显示总长。
+  Future<void> _seek(LivePlayController controller, int seconds) async {
+    final Duration? landed = await controller.seekBy(seconds);
+
+    if (landed == null || !mounted) return;
+
+    final Duration? duration = ref.read(livePlayControllerProvider(widget.args)).duration;
+    final String arrow = seconds > 0 ? '⏩' : '⏪';
+    final String tail = duration == null ? '' : ' / ${_fmtDuration(duration)}';
+
+    ToastUtil.show('$arrow ${_fmtDuration(landed)}$tail');
+  }
+
+  static String _fmtDuration(Duration value) {
+    final int hours = value.inHours;
+    final String minutes = value.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final String seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return hours > 0 ? '$hours:$minutes:$seconds' : '$minutes:$seconds';
+  }
+
   /// Left double-press follows or unfollows the room.
-  void _handleFollowDoublePress() {
-    final room = ref.read(livePlayControllerProvider(widget.args)).room;
+  void _handleFollowDoublePress() {    final room = ref.read(livePlayControllerProvider(widget.args)).room;
     if (room == null) return;
     final fav = ref.read(favoriteRoomControllerProvider.notifier);
     final bool isFavorite = fav.isFavorite(room);

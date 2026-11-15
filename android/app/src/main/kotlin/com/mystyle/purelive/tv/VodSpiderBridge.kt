@@ -697,25 +697,71 @@ internal class VodSpiderBridge(
         }
 
     /**
-     * 按 TVBox 契约调 jar 的 `Init.init(Context)`。
+     * 按 TVBox 契约初始化 jar 运行时：调用 jar 自带 `Init` 里所有
+     * 「静态 + 首参 Context」的方法。
+     *
+     * 为什么不写死 `Init.init(Context)`：加固包（wexguard / ftyguard）的
+     * 入口不止一个——jar 里同时有 `Init`、`Init$Loader`，方法名也不统一
+     * （init / load / prepare），只认一个签名必然漏调，症状就是 Guard 类
+     * 实例化时 `Context` 为 null 或找不到内层类（`DexNative`）。
+     * 逐个调用并把成功的方法名与失败原因写进日志，加固包出问题时只有
+     * 这行日志能说明到底卡在哪一步。
      *
      * 但防白嫖 jar 的 Init 会校验宿主包名并 `Process.killProcess`——进程被杀
      * 比站点不可用严重得多。dex 里同时出现 killProcess 与 getPackageName
      * 就视为带这种保护，跳过原 Init（宁可这个 jar 的 Guard 类不可用）。
      */
     private fun maybeInvokeJarInit(jar: File, loader: ClassLoader) {
-        val initClass = runCatching {
-            Class.forName("com.github.catvod.spider.Init", true, loader)
-        }.getOrNull() ?: return
         if (dexStringsOf(jar).containsAll(listOf("killProcess", "getPackageName"))) {
             Log.w(TAG, "jar Init 含 killProcess 包名校验，跳过 Init 调用：${jar.name}")
             return
         }
-        val method = runCatching { initClass.getMethod("init", android.content.Context::class.java) }.getOrNull()
-            ?: runCatching { initClass.getMethod("init") }.getOrNull()
-            ?: return
-        runCatching { method.invoke(null, context) }
-            .onFailure { Log.w(TAG, "Init.init 失败：${jar.name}", it) }
+
+        val contextClass = android.content.Context::class.java
+        val invoked = mutableListOf<String>()
+        val failed = mutableListOf<String>()
+
+        for (className in listOf(
+            "com.github.catvod.spider.Init",
+            "com.github.catvod.spider.Init\$Loader",
+        )) {
+            val clazz = runCatching { Class.forName(className, true, loader) }.getOrNull() ?: continue
+
+            for (method in clazz.declaredMethods) {
+                if (!java.lang.reflect.Modifier.isStatic(method.modifiers)) continue
+
+                val params = method.parameterTypes
+                // 只调「首参能吃 Context、其余参数是 String」的入口：
+                // 这类方法就是要宿主把环境交进去，其余静态方法（工具函数）
+                // 乱调只会制造副作用。无参的 load / init 也是合法入口
+                // （FongMi 的 Init.load() 就在 Context 之后单独跑）。
+                val acceptsContext = params.isNotEmpty() && params[0].isAssignableFrom(contextClass)
+                val tailIsString = params.drop(1).all { it == String::class.java }
+                val zeroArgEntry = params.isEmpty() && method.name in setOf("load", "init", "prepare")
+                if (!zeroArgEntry && (!acceptsContext || !tailIsString)) continue
+
+                val args = params.mapIndexed { index, _ ->
+                    if (index == 0) context else "" as Any?
+                }.toTypedArray()
+
+                val label = "${clazz.simpleName}.${method.name}/${params.size}"
+                runCatching {
+                    method.isAccessible = true
+                    method.invoke(null, *args)
+                }.onSuccess {
+                    invoked += label
+                }.onFailure {
+                    failed += "$label: ${it.cause?.javaClass?.simpleName ?: it.javaClass.simpleName}"
+                    Log.w(TAG, "jar Init 调用失败 $label（${jar.name}）", it)
+                }
+            }
+        }
+
+        if (invoked.isEmpty() && failed.isEmpty()) {
+            Log.w(TAG, "jar 无可用 Init 入口（${jar.name}）")
+        } else {
+            Log.i(TAG, "jar Init 完成 ${jar.name}: ok=[${invoked.joinToString()}] fail=[${failed.joinToString()}]")
+        }
     }
 
     // ------------------------------------------------------------- 反射工具

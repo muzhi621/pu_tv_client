@@ -308,21 +308,25 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
     final bool isFavorite = room != null && favoriteRooms.any((item) => item.hasSameIdentity(room));
     final bool danmakuOn = danmakuSettings.enableDanmakuDisplay && !danmakuSettings.hideDanmaku;
     final bool audioOnly = playerSettings.audioOnly;
+    // 点播条只留「播放相关」动作：关注、弹幕、换台在影音里没有意义，
+    // 留着只会让遥控器要按更多下才够到快进/暂停。
+    final bool vod = widget.args.vod;
 
     return <_PanelAction>[
-      _PanelAction(
-        icon: isFavorite ? Icons.favorite : Icons.favorite_border,
-        label: isFavorite ? i18n('followed') : i18n('follow'),
-        onSelect: () {
-          if (room == null) return;
-          final fav = ref.read(favoriteRoomControllerProvider.notifier);
-          if (isFavorite) {
-            fav.removeRoom(room);
-          } else {
-            fav.addRoom(room);
-          }
-        },
-      ),
+      if (!vod)
+        _PanelAction(
+          icon: isFavorite ? Icons.favorite : Icons.favorite_border,
+          label: isFavorite ? i18n('followed') : i18n('follow'),
+          onSelect: () {
+            if (room == null) return;
+            final fav = ref.read(favoriteRoomControllerProvider.notifier);
+            if (isFavorite) {
+              fav.removeRoom(room);
+            } else {
+              fav.addRoom(room);
+            }
+          },
+        ),
       _PanelAction(
         icon: playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
         label: playing ? i18n('multiview_pause') : i18n('multiview_play'),
@@ -330,19 +334,21 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
       ),
       _PanelAction(icon: Icons.refresh_rounded, label: i18n('retry'), onSelect: controller.retry),
       // danmaku toggle / danmaku settings / danmaku filter stay adjacent.
-      _PanelAction(
-        asset: danmakuOn ? 'assets/images/video/danmu_open.svg' : 'assets/images/video/danmu_close.svg',
-        label: danmakuOn ? i18n('ui_danmaku_on') : i18n('ui_danmaku_off'),
-        onSelect: () => danmakuNotifier.updateSettings(
-          danmakuSettings.copyWith(enableDanmakuDisplay: !danmakuOn, hideDanmaku: danmakuOn),
+      if (!vod)
+        _PanelAction(
+          asset: danmakuOn ? 'assets/images/video/danmu_open.svg' : 'assets/images/video/danmu_close.svg',
+          label: danmakuOn ? i18n('ui_danmaku_on') : i18n('ui_danmaku_off'),
+          onSelect: () => danmakuNotifier.updateSettings(
+            danmakuSettings.copyWith(enableDanmakuDisplay: !danmakuOn, hideDanmaku: danmakuOn),
+          ),
         ),
-      ),
-      _PanelAction(
-        asset: 'assets/images/video/danmu_setting.svg',
-        label: i18n('danmaku_settings'),
-        active: state.showSidePanel && state.panel == LivePlayPanel.danmakuSettings,
-        onSelect: () => controller.togglePanel(LivePlayPanel.danmakuSettings),
-      ),
+      if (!vod)
+        _PanelAction(
+          asset: 'assets/images/video/danmu_setting.svg',
+          label: i18n('danmaku_settings'),
+          active: state.showSidePanel && state.panel == LivePlayPanel.danmakuSettings,
+          onSelect: () => controller.togglePanel(LivePlayPanel.danmakuSettings),
+        ),
       // #68 减法：弹幕过滤（屏蔽词）系统已降级，入口移除
       _PanelAction(
         icon: Icons.high_quality_rounded,
@@ -373,11 +379,12 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
         label: audioOnly ? i18n('ui_audio_only') : i18n('ui_video_mode'),
         onSelect: () => playerNotifier.updateSettings(playerSettings.copyWith(audioOnly: !audioOnly)),
       ),
-      _PanelAction(
-        icon: Icons.swap_horiz_rounded,
-        label: i18n('switch_live_room'),
-        onSelect: () => unawaited(_switchRoom(state.room)),
-      ),
+      if (!vod)
+        _PanelAction(
+          icon: Icons.swap_horiz_rounded,
+          label: i18n('switch_live_room'),
+          onSelect: () => unawaited(_switchRoom(state.room)),
+        ),
       _PanelAction(
         icon: Icons.memory_rounded,
         label: _engineLabel(),
@@ -476,6 +483,10 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
           children: [
             if (_panel != _OptionsPanel.none && options.isNotEmpty)
               _buildOptionsPanel(options, tvTheme, switching: state.switchingStream),
+            // 点播进度条：控制条出现时一并出现，遥控器左右快进时能看见落点。
+            // 直播没有时长（duration 为 null），这一行自然不存在。
+            if (widget.args.vod && (state.duration ?? Duration.zero) > Duration.zero)
+              _buildVodProgress(state, tvTheme),
             _buildBar(actions, tvTheme),
           ],
         ),
@@ -483,8 +494,49 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
     );
   }
 
-  Widget _buildOptionsPanel(
-    List<({String label, VoidCallback apply, bool active})> options,
+  /// 点播进度行：`当前 / 总长` + 一条细进度条。
+  ///
+  /// 直播没有时间轴，所以这一行只在 [LivePlayArgs.vod] 且拿到时长后出现；
+  /// 位置由控制器每秒采样写入，界面只负责画。
+  Widget _buildVodProgress(LivePlayState state, TvThemeData tvTheme) {
+    final Duration total = state.duration ?? Duration.zero;
+    final double progress = total.inMilliseconds <= 0
+        ? 0
+        : (state.position.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0);
+    final TextStyle style = AppTextStyles.t14.copyWith(color: tvTheme.secondaryTextColor);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(48.ts(context), 0, 48.ts(context), 8.ts(context)),
+      child: Row(
+        children: [
+          Text(_fmtTime(state.position), style: style),
+          SizedBox(width: 12.ts(context)),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(2.ts(context)),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 4.ts(context),
+                backgroundColor: Colors.white24,
+                valueColor: AlwaysStoppedAnimation<Color>(tvTheme.focusColor),
+              ),
+            ),
+          ),
+          SizedBox(width: 12.ts(context)),
+          Text(_fmtTime(total), style: style),
+        ],
+      ),
+    );
+  }
+
+  static String _fmtTime(Duration value) {
+    final int hours = value.inHours;
+    final String minutes = value.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final String seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return hours > 0 ? '$hours:$minutes:$seconds' : '$minutes:$seconds';
+  }
+
+  Widget _buildOptionsPanel(    List<({String label, VoidCallback apply, bool active})> options,
     TvThemeData tvTheme, {
     required bool switching,
   }) {

@@ -74,9 +74,18 @@ class LivePlayController extends _$LivePlayController {
   /// reach the UI is never produced. The watchdogs do not cover it either - they
   /// only watch a playback that already started. Without this deadline the
   /// spinner is the last word on screen and the remote has nothing left to press.
-  static const Duration _stallReportTimeout = Duration(seconds: 30);
+  ///
+  /// 直连地址（IPTV 频道 / TVBox 点播）的源失效极常见：一个已经下线的 CDN
+  /// 只会一直「连接中」，30 秒后才报错对看电视的人太长。这类会话收紧到
+  /// 12 秒，尽快把「换台 / 重试」交回遥控器。
+  Duration get _stallReportTimeout => (args.vod || args.platform == Sites.iptvSite)
+      ? const Duration(seconds: 12)
+      : const Duration(seconds: 30);
 
   Timer? _stallReportTimer;
+
+  /// 点播进度采样：media_core 的状态流里没有 position，时间轴只能轮询适配器。
+  Timer? _progressTimer;
 
   @override
   LivePlayState build(LivePlayArgs args) {
@@ -400,8 +409,18 @@ class LivePlayController extends _$LivePlayController {
 
     // Naming the step that stalled matters: the retry button re-runs the room
     // bootstrap for a room-info stall and the player's own retry otherwise.
+    //
+    // 直连地址（IPTV 频道）卡住几乎都是源地址已经失效——免费源换 CDN 很常见，
+    // 库里存的还是几天前的地址。这时说「播放失败」会让人以为播放器坏了，
+    // 必须点名「线路无响应」并把换台 / 重试的选择权交回去。
+    final bool directUrlRoom = args.platform == Sites.iptvSite || args.vod;
+
     state = state.copyWith(
-      errorMessage: state.fetchingDetail ? i18n('get_room_info_failed_retry') : i18n('multiview_play_failed'),
+      errorMessage: state.fetchingDetail
+          ? i18n('get_room_info_failed_retry')
+          : (directUrlRoom && !args.vod
+              ? i18nOr('ui_stream_unreachable', '线路无响应，源地址可能已失效')
+              : i18n('multiview_play_failed')),
     );
 
     // A stream can also die without saying so (a CDN that stops sending while the
@@ -447,6 +466,14 @@ class LivePlayController extends _$LivePlayController {
     final bool started = state.hasStartedPlayback || playerState.playing || playerState.ready;
 
     state = state.copyWith(playerState: playerState, hasStartedPlayback: started);
+
+    // 点播进度只在真正播起来之后采样；出错或播完就停，避免定时器把
+    // 已经失效的适配器读成 0 秒。
+    if (args.vod && (playerState.playing || playerState.ready)) {
+      _armProgress();
+    } else if (playerState.hasError || playerState.completed) {
+      _cancelProgress();
+    }
 
     if (playerState.playing || playerState.ready) {
       _cancelStallReport();
@@ -598,6 +625,7 @@ class LivePlayController extends _$LivePlayController {
     _generation++;
 
     _cancelStallReport();
+    _cancelProgress();
     _cancelSubscriptions();
 
     _channelBannerTimer?.cancel();
@@ -636,6 +664,39 @@ class LivePlayController extends _$LivePlayController {
     for (final sub in list) {
       unawaited(sub.cancel().catchError((Object e, StackTrace s) {}));
     }
+  }
+
+  /// 点播进度采样。直播不启（没有时长，进度条也不画）。
+  ///
+  /// 为什么轮询而不是等事件：media_core 只把「状态」推给 UI（播放/缓冲/结束），
+  /// 播放位置从来不是事件，适配器上只有一个同步 getter。一秒一次对解码线程
+  /// 无感，却足够让进度条和「12:34 / 45:00」跟着走。
+  void _armProgress() {
+    if (!args.vod || _progressTimer != null) return;
+
+    _syncProgress();
+
+    _progressTimer = Timer.periodic(const Duration(seconds: 1), (_) => _syncProgress());
+  }
+
+  void _syncProgress() {
+    if (!ref.mounted) return;
+
+    final manager = _playerManager;
+
+    if (manager == null) return;
+
+    final Duration position = manager.position;
+    final Duration? duration = manager.duration;
+
+    if (position == state.position && duration == state.duration) return;
+
+    state = state.copyWith(position: position, duration: duration);
+  }
+
+  void _cancelProgress() {
+    _progressTimer?.cancel();
+    _progressTimer = null;
   }
 
   // =========================
@@ -881,6 +942,37 @@ class LivePlayController extends _$LivePlayController {
     if (manager == null) return;
 
     await manager.togglePlayPause();
+  }
+
+  /// 点播快进 / 后退 [forward] 秒（负数即后退）。
+  ///
+  /// 目标位置被裁到 `[0, duration]`：遥控器连按时不会把时间轴推成负数，
+  /// 也不会越过片尾（越过就等于「播完」，用户还得再按一次）。
+  /// 时长未知（直播式源、元数据未到）时直接忽略，返回实际落点。
+  Future<Duration?> seekBy(int seconds) async {
+    final manager = _playerManager;
+
+    if (manager == null) return null;
+
+    final Duration? duration = manager.duration;
+
+    if (duration == null || duration <= Duration.zero) return null;
+
+    final Duration target = manager.position + Duration(seconds: seconds);
+    final Duration clamped = target < Duration.zero
+        ? Duration.zero
+        : (target > duration ? duration - const Duration(seconds: 1) : target);
+
+    if (clamped < Duration.zero) return null;
+
+    await manager.seek(clamped);
+
+    if (!ref.mounted) return clamped;
+
+    // 立即回写一次，进度条不用等下一个采样点才动。
+    state = state.copyWith(position: clamped, duration: duration);
+
+    return clamped;
   }
 
   Future<void> retry() async {

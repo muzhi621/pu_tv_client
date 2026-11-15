@@ -23,24 +23,34 @@ class LivePlayArgs {
   /// channel name toast.
   final bool showChannelBanner;
 
+  /// 点播（TVBox 影音）会话。直播没有时长也没有进度，键位含义完全不同：
+  /// 直播的左右键是「关注 / 播放列表」，点播必须变成「后退 / 前进」，
+  /// 否则用户按遍遥控器也唤不出快进。控制条里的频道类动作（换台、关注、
+  /// 弹幕）在点播下也不该出现，这里用一个显式标记让页面分支，
+  /// 而不是靠 roomId 前缀猜。
+  final bool vod;
+
   const LivePlayArgs({
     required this.platform,
     required this.roomId,
     this.room,
     this.playlist = const <LiveRoom>[],
     this.showChannelBanner = false,
+    this.vod = false,
   });
 
   factory LivePlayArgs.fromRoom(
     LiveRoom room, {
     List<LiveRoom> playlist = const <LiveRoom>[],
     bool showChannelBanner = false,
+    bool vod = false,
   }) => LivePlayArgs(
     platform: room.normalizedPlatformId,
     roomId: room.normalizedRoomId,
     room: room,
     playlist: playlist,
     showChannelBanner: showChannelBanner,
+    vod: vod,
   );
 
   @override

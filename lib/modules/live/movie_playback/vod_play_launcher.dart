@@ -38,5 +38,7 @@ void openVodPlayback(
     data: url,
     httpHeaders: headers,
   );
-  LivePlayRoute(room).push(context);
+  // 点播标记：播放器用它在遥控器左右键上做「快进 / 后退」，
+  // 并隐藏只在直播里成立的换台、关注与弹幕动作。
+  LivePlayRoute(LivePlayArgs.fromRoom(room, vod: true)).push(context);
 }
