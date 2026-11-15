@@ -1,27 +1,24 @@
 import 'dart:async';
 
 import 'package:dpad/dpad.dart';
-import 'package:pure_live/modules/vod/index.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:pure_live/exports/package_export.dart';
 import 'package:pure_live/app/router/app/app_router.dart';
-import 'package:pure_live/modules/live/hot/hot_page.dart';
 import 'package:pure_live/features/home/home_provider.dart';
-import 'package:pure_live/modules/video/video_section.dart';
 import 'package:pure_live/modules/live/areas/areas_page.dart';
-import 'package:pure_live/modules/video/video_section_view.dart';
 import 'package:pure_live/features/home/home_update_dialog.dart';
 import 'package:pure_live/features/home/remote_notice_dialog.dart';
-import 'package:pure_live/modules/live/history/history_page.dart';
 import 'package:pure_live/features/home/exit_confirm_dialog.dart';
-import 'package:pure_live/modules/live/search/tv_search_page.dart';
 import 'package:pure_live/features/settings/tv_settings_page.dart';
-import 'package:pure_live/modules/live/favorite/favorite_page.dart';
 import 'package:pure_live/modules/live/movie_playback/movie_playback_page.dart';
 import 'package:pure_live/modules/live/movie_playback/vod_browse_page.dart';
-import 'package:pure_live/modules/live/favorite_areas/favorite_areas_page.dart';
 import 'package:pure_live/services/refresh_config/refresh_config_controller.dart';
 
+/// 首页外壳：左侧一级栏（IPTV / 影音 / 设置）+ 右侧二级菜单与内容区。
+///
+/// 2026-11-15 起直播与 bilibili UGC 影音整体下线：这里不再有 live ↔ video
+/// 模式切换，也不再渲染关注 / 热门 / 分区 / 搜索 / 历史等直播页面。
+/// 内容区只保留 IPTV 频道页与 TVBox 点播页，二者共用 LivePlayRoute 播放器。
 class HomePage extends ConsumerStatefulWidget {
   final bool keepAlive;
 
@@ -32,121 +29,18 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage> {
-  /// One stable node for the mode switch button, so the opening highlight can
-  /// claim it when a non-live mode is active.
-  final FocusNode _modeFocusNode = FocusNode();
-
   /// One stable node per side-menu entry, so the opening highlight can be aimed
   /// at the *selected* entry instead of whichever widget sits top-left.
   final Map<int, FocusNode> _menuFocusNodes = {};
-
-  /// One stable node per music/video section entry.
-  final Map<String, FocusNode> _sectionFocusNodes = {};
-
-  FocusNode _sectionNode(String key) => _sectionFocusNodes.putIfAbsent(key, FocusNode.new);
 
   /// One stable focus node per primary navigation group.
   final Map<String, FocusNode> _groupFocusNodes = {};
 
   FocusNode _groupNode(String id) => _groupFocusNodes.putIfAbsent(id, FocusNode.new);
 
-  /// Currently selected primary group (iptv / vod / live). 'settings' never
-  /// lives here: its primary item opens the settings route directly.
+  /// Currently selected primary group (iptv / vod). 'settings' never lives
+  /// here: its primary item opens the settings route directly.
   late String _currentGroupId;
-
-  /// The mode switch button (in the old backup slot): shows the active mode,
-  Widget _buildModeButton(AppMode mode, bool isExpanded) {
-    final (String label, String short, IconData icon) = switch (mode) {
-      AppMode.live => (i18n('mode_live'), i18n('menu_short_mode_live'), Icons.live_tv_rounded),
-      AppMode.video => (i18n('mode_video'), i18n('menu_short_mode_video'), Icons.movie_outlined),
-      // #68 减法：music 已屏蔽，防御性显示 video 标签（不可达）
-      AppMode.music => (i18n('mode_video'), i18n('menu_short_mode_video'), Icons.movie_outlined),
-    };
-
-    // A control, not a state: the mode's name on the button already says
-    // what is active, so it renders like every other rail entry and lights
-    // up only under focus (it used to sit in the selected fill forever,
-    // competing with the genuinely selected section below it).
-    return _buildAdaptiveItem(
-      ref: ref,
-      item: AppMenuItem(index: -1, title: label, shortTitle: short, icon: icon),
-      isExpanded: isExpanded,
-      isSelected: false,
-      focusNode: _modeFocusNode,
-      onTap: _showModeDialog,
-    );
-  }
-
-  /// The mode picker (bmsc's login-placeholder spirit: an explicit choice,
-  /// TvDialog width, title, row recipe and cancel — only the icons and the
-  /// labels differ. Picking a different mode first closes whatever the
-  /// previous module was playing — the speakers pass cleanly.
-  Future<void> _showModeDialog() async {
-    final current = ref.read(appModeControllerProvider);
-    final AppMode? selected = await showDialog<AppMode>(
-      context: context,
-      builder: (context) {
-        final tvTheme = context.tvTheme;
-
-        Widget modeRow(AppMode mode, IconData icon) {
-          final bool isSelected = mode == current;
-          return TvFocusable(
-            autofocus: isSelected,
-            onTap: () => Navigator.pop(context, mode),
-            builder: (context, focused, child) => AnimatedContainer(
-              duration: const Duration(milliseconds: 120),
-              padding: EdgeInsets.symmetric(horizontal: 16.ts(context), vertical: 12.ts(context)),
-              decoration: BoxDecoration(
-                color: focused ? tvTheme.cardColor : Colors.transparent,
-                borderRadius: BorderRadius.circular(12.ts(context)),
-                border: Border.all(color: focused ? tvTheme.focusColor : Colors.transparent, width: 2.ts(context)),
-              ),
-              child: Row(
-                children: [
-                  Icon(icon, size: 26.ts(context), color: tvTheme.focusColor),
-                  SizedBox(width: 12.ts(context)),
-                  Expanded(
-                    child: Text(
-                      i18n(switch (mode) {
-                        AppMode.live => 'mode_live',
-                        AppMode.video => 'mode_video',
-                        // #68 减法：music 已屏蔽
-                        AppMode.music => 'mode_video',
-                      }),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.t18.copyWith(fontWeight: FontWeight.w500, color: tvTheme.primaryTextColor),
-                    ),
-                  ),
-                  if (isSelected) Icon(Icons.check_rounded, size: 26.ts(context), color: tvTheme.focusColor),
-                ],
-              ),
-            ),
-          );
-        }
-
-        return TvDialog(
-          title: i18n('mode_picker_title'),
-          cancelText: i18n('cancel'),
-          width: 640.ts(context),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              modeRow(AppMode.live, Icons.live_tv_rounded),
-              modeRow(AppMode.video, Icons.movie_outlined),
-              // #68 减法：music 模式已屏蔽
-            ],
-          ),
-        );
-      },
-    );
-    if (selected == null || selected == current) return;
-    // Switching modules closes the previous one's playback entirely: both VOD
-    // sessions stop (queues dropped), live rooms were never playing here.
-    await ref.read(musicPlayerControllerProvider.notifier).stop();
-    await ref.read(videoPlayerControllerProvider.notifier).stop();
-    ref.read(appModeControllerProvider.notifier).setMode(selected);
-  }
 
   /// Select a primary nav group and land on its first visible secondary item.
   /// The settings group keeps the existing "open the settings route" behaviour.
@@ -166,96 +60,47 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 
-  /// The active mode's own rail entries. Live reuses the configured side menu;
-  /// music and video carry their fixed section lists, selected through their
-  /// section-index providers.
-  List<Widget> _buildModeRailItems(AppMode mode, bool isExpanded, List<NavGroup> groups) {
-    switch (mode) {
-      case AppMode.live:
-        final menuList = ref.watch(sideMenuListProvider);
-        final currentIndex = ref.watch(sideMenuIndexProvider);
-        final childIndexes = navChildIndexes(groups, _currentGroupId);
-        // 二级菜单 = 当前一级块的 children，按 railMenuIds 白名单过滤（iptv 常驻）。
-        final secondary = <AppMenuItem>[
-          for (final item in menuList)
-            if (childIndexes.contains(item.index)) item,
-        ];
-        return <Widget>[
-          // 一级栏：4 个常驻块，不受二级白名单隐藏。
-          for (final group in groups)
-            Padding(
-              padding: EdgeInsets.only(bottom: 12.ts(context)),
-              child: _buildAdaptiveItem(
-                ref: ref,
-                item: AppMenuItem(
-                  index: -1 - groups.indexOf(group),
-                  title: i18n(group.labelKey),
-                  shortTitle: i18n(group.labelKey),
-                  icon: group.icon,
-                ),
-                isExpanded: isExpanded,
-                isSelected: _currentGroupId == group.id,
-                focusNode: _groupNode(group.id),
-                onTap: () => _selectNavGroup(group.id),
-              ),
+  /// 一级栏常驻块 + 当前块的二级菜单（按云端 railMenuIds 白名单过滤）。
+  List<Widget> _buildRailItems(bool isExpanded, List<NavGroup> groups) {
+    final menuList = ref.watch(sideMenuListProvider);
+    final currentIndex = ref.watch(sideMenuIndexProvider);
+    final childIndexes = navChildIndexes(groups, _currentGroupId);
+    final secondary = <AppMenuItem>[
+      for (final item in menuList)
+        if (childIndexes.contains(item.index)) item,
+    ];
+    return <Widget>[
+      for (final group in groups)
+        Padding(
+          padding: EdgeInsets.only(bottom: 12.ts(context)),
+          child: _buildAdaptiveItem(
+            ref: ref,
+            item: AppMenuItem(
+              index: -1 - groups.indexOf(group),
+              title: i18n(group.labelKey),
+              shortTitle: i18n(group.labelKey),
+              icon: group.icon,
             ),
-          SizedBox(height: 8.ts(context)),
-          for (final item in secondary)
-            Padding(
-              padding: EdgeInsets.only(bottom: 20.ts(context)),
-              child: _buildAdaptiveItem(
-                ref: ref,
-                item: item,
-                isExpanded: isExpanded,
-                isSelected: currentIndex == item.index,
-                focusNode: _nodeFor(item.index),
-                onTap: () => ref.read(sideMenuIndexProvider.notifier).changeIndex(item.index),
-              ),
-            ),
-        ];
-      case AppMode.music:
-        // #68 减法：music 模式已屏蔽，返回空侧栏（不会到达此处）
-        return const [];
-      case AppMode.video:
-        // each entry maps to its VideoSection index.
-        const entries = <(int, String, IconData)>[
-          (3, 'video_tab_search', Icons.search_rounded),
-          (4, 'video_personal', Icons.person_outline_rounded),
-          (0, 'video_tab_home', Icons.home_outlined),
-          (1, 'video_tab_region', Icons.category_outlined),
-          (2, 'video_tab_pgc', Icons.movie_outlined),
-        ];
-        final selected = ref.watch(videoSectionIndexProvider);
-        return [
-          for (final (railIndex, (sectionIndex, labelKey, icon)) in entries.indexed)
-            Padding(
-              padding: EdgeInsets.only(bottom: 20.ts(context)),
-              child: _buildAdaptiveItem(
-                ref: ref,
-                item: AppMenuItem(index: railIndex, title: i18n(labelKey), shortTitle: i18n(labelKey), icon: icon),
-                isExpanded: isExpanded,
-                isSelected: selected == sectionIndex,
-                focusNode: _sectionNode('video_$railIndex'),
-                onTap: () => ref.read(videoSectionIndexProvider.notifier).change(sectionIndex),
-              ),
-            ),
-        ];
-    }
-  }
-
-  /// The full content pane for the non-live modes: login gate first (the bmsc
-  /// pattern — a lock placeholder that opens the QR login page), then the
-  /// selected section. (#68 减法：music 模式已屏蔽，回退到 video 内容。)
-  Widget _buildModePane(AppMode mode) {
-    // #68 减法：music 模式入口已屏蔽。防御性回退到 video 内容，
-    // 避免残留状态触发 MusicSectionView 导致空引用。
-    // if (mode == AppMode.music) { ... }  ← 已移除
-    final sectionIndex = ref.watch(videoSectionIndexProvider);
-    return BilibiliLoginGate(
-      child: TvFocusRestorer(
-        child: VideoSectionView(section: VideoSection.values[sectionIndex.clamp(0, VideoSection.values.length - 1)]),
-      ),
-    );
+            isExpanded: isExpanded,
+            isSelected: _currentGroupId == group.id,
+            focusNode: _groupNode(group.id),
+            onTap: () => _selectNavGroup(group.id),
+          ),
+        ),
+      SizedBox(height: 8.ts(context)),
+      for (final item in secondary)
+        Padding(
+          padding: EdgeInsets.only(bottom: 20.ts(context)),
+          child: _buildAdaptiveItem(
+            ref: ref,
+            item: item,
+            isExpanded: isExpanded,
+            isSelected: currentIndex == item.index,
+            focusNode: _nodeFor(item.index),
+            onTap: () => ref.read(sideMenuIndexProvider.notifier).changeIndex(item.index),
+          ),
+        ),
+    ];
   }
 
   FocusNode _nodeFor(int index) => _menuFocusNodes.putIfAbsent(index, FocusNode.new);
@@ -265,7 +110,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     super.initState();
     // 一级栏启动默认块：云端 navigation.defaultGroupId，旧配置/非法值回退 iptv。
     _currentGroupId = resolveDefaultGroupId(resolveNavGroups());
-    // Shows the update dialog once per session, after the startup check.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(RemoteNoticeDialog.maybeShow(context));
@@ -278,13 +122,9 @@ class _HomePageState extends ConsumerState<HomePage> {
     for (final node in _menuFocusNodes.values) {
       node.dispose();
     }
-    for (final node in _sectionFocusNodes.values) {
-      node.dispose();
-    }
     for (final node in _groupFocusNodes.values) {
       node.dispose();
     }
-    _modeFocusNode.dispose();
     super.dispose();
   }
 
@@ -292,18 +132,14 @@ class _HomePageState extends ConsumerState<HomePage> {
   Widget build(BuildContext context) {
     final currentIndex = ref.watch(sideMenuIndexProvider);
     final menuList = ref.watch(sideMenuListProvider);
-    final mySettingsItem = ref.watch(mySettingsMenuItemProvider);
     final isExpanded = ref.watch(isMenuExpandedProvider);
     final groups = resolveNavGroups();
     final currentTvTheme = context.tvTheme;
-    // settings refresh -> home cache: on top of the widget default, the user can turn the
-    // page cache off so every switch rebuilds the content fresh (and clears
-    // cached tab state after nav/platform config changes).
     final bool effectiveKeepAlive =
         widget.keepAlive && ref.watch(refreshConfigControllerProvider.select((s) => s.homeKeepAlive));
 
     // 二级菜单只在当前一级块的 children 里选中；选中项被白名单隐藏或切换了一级块
-    // 时，自动落到该块首个可见二级项（IPTV 块固定落到 iptv(7)）。
+    // 时，自动落到该块首个可见二级项（IPTV 块固定落到 iptv）。
     final childIndexes = navChildIndexes(groups, _currentGroupId);
     final visibleIndexes = menuList
         .map((item) => item.index)
@@ -316,18 +152,6 @@ class _HomePageState extends ConsumerState<HomePage> {
       });
     }
 
-    // A destination can change while the remote is somewhere else entirely: the
-    // empty-state actions (follows -> search, history -> hot) and the
-    // auto-correction above both write the index from inside another page. The
-    // keyboard then belongs to a widget that is about to be removed — the empty
-    // state's button — or to an entry that just disappeared, and the d-pad layer is
-    // free to settle on any tile, which is how the sidebar ended up highlighting one
-    // entry while the *selected* one was another.
-    //
-    // Aiming the claim at the node that is now selected keeps the ring and the
-    // selection telling the same story. Pressing OK on an entry already has the
-    // keyboard there, so that path stays a no-op; moving the highlight around the
-    // sidebar without confirming never changes the index, so browsing is untouched.
     ref.listen(sideMenuIndexProvider, (_, next) {
       if (!visibleIndexes.contains(next)) return;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -339,23 +163,13 @@ class _HomePageState extends ConsumerState<HomePage> {
       });
     });
 
-    // The rail holds labels, and every control in it is drawn at the app font
-    // scale, so its width and its vertical rhythm follow the text: a fixed rail
-    // cut the menu names off, and left the icons the only thing that changed
-    // size when the user enlarged the font.
     final sidebarWidth = isExpanded ? 228.ts(context) : 160.ts(context);
 
-    // The top-left button switches the whole app between live / music / video.
-    // Music and video own their own UI stacks; the live rail's destinations
-    // below the button only render while live is active.
-    final AppMode appMode = ref.watch(appModeControllerProvider);
-    final bool isLiveMode = appMode == AppMode.live;
-
-    final cacheableTypes = [
-      TvMenuType.favorite,
-      TvMenuType.hot,
-      TvMenuType.areas,
-      TvMenuType.favoriteAreas,
+    // 只缓存 IPTV / TVBox 四个有效页面；已下线的直播/UGC 类型一律回退 IPTV 页。
+    const cacheableTypes = [
+      TvMenuType.iptv,
+      TvMenuType.vodBrowse,
+      TvMenuType.moviePlayback,
       TvMenuType.settings,
     ];
 
@@ -363,49 +177,29 @@ class _HomePageState extends ConsumerState<HomePage> {
     final isCurrentCacheable = cacheableTypes.contains(currentMenuType);
     final stackIndex = cacheableTypes.indexOf(currentMenuType);
 
-    // The home page sits at the route root, so a back press here means the
-    // user wants out — ask before leaving, with the donation note attached.
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         showExitConfirmDialog(context, ref);
       },
-      // The opening highlight claims the selected entry's own node, so the app
-      // opens with the remote on follows (or whatever the menu lands on) instead of
-      // on the header widgets above the list.
       child: TvScaffold(
-        openingFocus: isLiveMode ? _nodeFor(currentIndex) : null,
+        openingFocus: _nodeFor(currentIndex),
         child: Row(
           children: [
             DpadRegion(
               child: AnimatedContainer(
-                // Named for the tests that pin the rail's width to the font
-                // setting: the sidebar is not otherwise identifiable from outside.
                 key: const Key('home-sidebar'),
                 duration: const Duration(milliseconds: 150),
                 curve: Curves.easeOutCubic,
                 width: sidebarWidth,
-                // Semi-transparent on purpose: the app-wide wallpaper (TvAppBackground)
-                // lives below the navigator, and an opaque fill here is what hid it
-                // from the menu column. The scrim keeps icons readable; the
-                // background bleeds through instead of a flat card block.
                 color: currentTvTheme.backgroundColor.withValues(alpha: 0.62),
                 padding: EdgeInsets.symmetric(vertical: 24.ts(context)),
-                // The rail scrolls once its entries are taller than the panel: at
-                // 160% ten destinations no longer fit a 1080p screen (and on a
-                // 720p one they never did), and a clipped rail would hide both the
-                // destinations and the way back out. `IntrinsicHeight` keeps the
-                // spacers below working exactly as before while the content still
-                // fits, and collapses them when it does not.
                 child: LayoutBuilder(
                   builder: (context, constraints) => Column(
                     children: [
-                      // Header stays pinned: the clock is a wall clock, and the
-                      // mode switch must be reachable no matter how far the
-                      // section list has scrolled.
                       Padding(
-                        padding: EdgeInsets.only(bottom: 6.ts(context)),
+                        padding: const EdgeInsets.only(bottom: 6),
                         child: TvDigitalClock(
                           format: isExpanded ? 'HH:mm:ss' : 'HH:mm',
                           style: AppTextStyles.t20.copyWith(
@@ -426,34 +220,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                           ),
                         ),
                       SizedBox(height: 15.ts(context)),
-                      Padding(
-                        padding: EdgeInsets.only(bottom: 20.ts(context)),
-                        child: _buildModeButton(appMode, isExpanded),
-                      ),
-                      // The active mode's own navigation — live destinations,
-                      // music sections or video sections — is the only part
-                      // that scrolls: video carries eight entries and overflow
-                      // must not push the footer controls off screen.
                       Expanded(
-                        // Edge fades mark the clipped entries as scroll
-                        // content: at the largest font scale a half-shown
-                        // item otherwise reads as a broken rail.
-                        child: SingleChildScrollView(child: Column(children: _buildModeRailItems(appMode, isExpanded, groups))),
-                      ),
-                      // Live mode uses the 设置 primary block instead; the other
-                      // modes keep their persistent settings footer button.
-                      if (!isLiveMode)
-                        _buildAdaptiveItem(
-                          ref: ref,
-                          item: mySettingsItem,
-                          isExpanded: isExpanded,
-                          isSelected: currentIndex == mySettingsItem.index,
-                          focusNode: _nodeFor(mySettingsItem.index),
-                          // Settings opens as its own page (title bar, back button
-                          // and the configuration-preview action), like the desktop
-                          // app, instead of swapping the content pane.
-                          onTap: () => const SettingsMenuRoute().push(context),
+                        child: SingleChildScrollView(
+                          child: Column(children: _buildRailItems(isExpanded, groups)),
                         ),
+                      ),
                     ],
                   ),
                 ),
@@ -463,24 +234,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               child: DpadRegion(
                 child: Padding(
                   padding: EdgeInsets.all(8.ts(context)),
-                  // Music and video own the whole pane (their own rail above,
-                  // login-gated content below); live mode runs the keep-alive
-                  // home stack here, and the music/video sections run their
-                  // own keep-alive cache inside their section views.
-                  child: !isLiveMode
-                      ? Container(
-                          key: ValueKey('mode_${appMode.name}'),
-                          child: _buildModePane(appMode)
-                              .animate()
-                              .fadeIn(duration: 200.ms, curve: Curves.easeOutCubic)
-                              .scale(
-                                begin: const Offset(0.95, 0.95),
-                                end: const Offset(1.0, 1.0),
-                                duration: 250.ms,
-                                curve: Curves.easeOutCubic,
-                              ),
-                        )
-                      : effectiveKeepAlive
+                  child: effectiveKeepAlive
                       ? Stack(
                           children: [
                             Visibility(
@@ -510,13 +264,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 key: ValueKey(currentIndex),
                                 child: _buildPageContent(context, ref, currentMenuType)
                                     .animate()
-                                    .fadeIn(duration: 200.ms, curve: Curves.easeOutCubic)
-                                    .scale(
-                                      begin: const Offset(0.95, 0.95),
-                                      end: const Offset(1.0, 1.0),
-                                      duration: 250.ms,
-                                      curve: Curves.easeOutCubic,
-                                    ),
+                                    .fadeIn(duration: 200.ms, curve: Curves.easeOutCubic),
                               ),
                           ],
                         )
@@ -524,13 +272,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           key: ValueKey(currentIndex),
                           child: _buildPageContent(context, ref, currentMenuType)
                               .animate()
-                              .fadeIn(duration: 200.ms, curve: Curves.easeOutCubic)
-                              .scale(
-                                begin: const Offset(0.95, 0.95),
-                                end: const Offset(1.0, 1.0),
-                                duration: 250.ms,
-                                curve: Curves.easeOutCubic,
-                              ),
+                              .fadeIn(duration: 200.ms, curve: Curves.easeOutCubic),
                         ),
                 ),
               ),
@@ -541,8 +283,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
-  /// The top-left button: shows the active mode, one OK press cycles to the
-  /// next. Deliberately not an [AppMenuItem] — it carries no menu index.
   Widget _buildAdaptiveItem({
     required WidgetRef ref,
     required AppMenuItem item,
@@ -586,25 +326,17 @@ class _HomePageState extends ConsumerState<HomePage> {
     switch (type) {
       case TvMenuType.settings:
         return const SettingsCatalogView();
-      case TvMenuType.favorite:
-        return const FavoritePage();
-      case TvMenuType.hot:
-        return const HotPage();
-      case TvMenuType.areas:
-        return const AreasPage();
-      case TvMenuType.favoriteAreas:
-        return const FavoriteAreasPage();
       case TvMenuType.moviePlayback:
         return const MoviePlaybackPage();
       case TvMenuType.vodBrowse:
         // 点播浏览：源与站点全部来自云端下发的 vod 节，本地没有任何内置源。
         return const VodBrowsePage();
-      case TvMenuType.search:
-        return const TvSearchPage();
-      case TvMenuType.history:
-        return const HistoryPage();
       case TvMenuType.iptv:
         // IPTV 专用频道页：只保留 iptv 站点的频道目录（Sites.iptvSite == 'iptv'）。
+        return const AreasPage(onlySiteId: 'iptv');
+      // 直播 / UGC 菜单已下线。老缓存里若残留这些 TvMenuType 值，统一回退到
+      // IPTV 频道页，绝不渲染空白内容区。
+      default:
         return const AreasPage(onlySiteId: 'iptv');
     }
   }

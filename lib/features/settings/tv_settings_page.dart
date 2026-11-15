@@ -1,15 +1,13 @@
 import 'package:pure_live/exports/package_export.dart';
 import 'package:pure_live/app/router/app/app_routes.dart';
 import 'package:pure_live/app/router/app/app_router.dart';
-import 'package:pure_live/features/home/home_provider.dart';
 import 'package:pure_live/services/app_update/app_update_service.dart';
 
 /// One settings destination: its route, translation keys and icon.
 typedef SettingsEntry = ({String path, String titleKey, String? subtitleKey, IconData icon});
 
-/// Which mode a group belongs to. `'all'` = every mode; `'live'` / `'video'`
-/// / `'music'` = that mode only, so each mode's settings menu shows its own
-/// configuration instead of everything at once.
+/// 分组作用域：直播与 UGC 模式整体下线后只剩 `'all'`，IPTV / TVBox 的
+/// 设置项都常驻可见。保留该字段是为了不改动路由表与已提交的生成产物。
 typedef SettingsGroup = ({String titleKey, List<SettingsEntry> entries, String scope});
 
 /// The settings menu.
@@ -19,18 +17,6 @@ typedef SettingsGroup = ({String titleKey, List<SettingsEntry> entries, String s
 /// desktop app hosts inside one of these pages are not rows here; they are
 /// reached from their parent page, exactly as there.
 final List<SettingsGroup> settingsCatalog = <SettingsGroup>[
-  (
-    titleKey: 'mode_settings',
-    scope: 'all',
-    entries: <SettingsEntry>[
-      (
-        path: AppRoutes.kSettingsMode,
-        titleKey: 'mode_switch',
-        subtitleKey: 'mode_switch_desc',
-        icon: Remix.swap_box_line,
-      ),
-    ],
-  ),
   (
     titleKey: 'theme_settings',
     scope: 'all',
@@ -50,34 +36,15 @@ final List<SettingsGroup> settingsCatalog = <SettingsGroup>[
     ],
   ),
   (
-    titleKey: 'music_settings',
-    scope: 'music',
-    entries: <SettingsEntry>[
-      (
-        path: AppRoutes.kSettingsMusic,
-        titleKey: 'music_settings',
-        subtitleKey: 'music_settings_desc',
-        icon: Remix.music_2_line,
-      ),
-    ],
-  ),
-  (
-    titleKey: 'video_settings',
-    scope: 'video',
-    entries: <SettingsEntry>[
-      (path: AppRoutes.kSettingsVideo, titleKey: 'video', subtitleKey: 'video_desc', icon: Remix.film_line),
-    ],
-  ),
-  (
     titleKey: 'iptv_settings',
-    scope: 'live',
+    scope: 'all',
     entries: <SettingsEntry>[
       (path: AppRoutes.kIptv, titleKey: 'iptv_settings', subtitleKey: 'manage_iptv_sources', icon: Remix.tv_line),
     ],
   ),
   (
     titleKey: 'refresh_settings',
-    scope: 'live',
+    scope: 'all',
     entries: <SettingsEntry>[
       (
         path: AppRoutes.kSettingsRefresh,
@@ -116,18 +83,6 @@ final List<SettingsGroup> settingsCatalog = <SettingsGroup>[
     scope: 'all',
     entries: <SettingsEntry>[
       (path: AppRoutes.kSettingsGeneral, titleKey: 'general', subtitleKey: 'general_desc', icon: Remix.settings_4_line),
-    ],
-  ),
-  (
-    titleKey: 'platform_settings_group',
-    scope: 'live',
-    entries: <SettingsEntry>[
-      (
-        path: AppRoutes.kSettingsPlatform,
-        titleKey: 'platform_settings',
-        subtitleKey: 'platform_settings_desc',
-        icon: Remix.apps_2_line,
-      ),
     ],
   ),
   (
@@ -197,14 +152,8 @@ class SettingsCatalogView extends ConsumerWidget {
     final updateState = ref.watch(appUpdateControllerProvider);
     final bool hasUpdate = updateState.phase == AppUpdatePhase.available && updateState.latestVersion.isNotEmpty;
 
-    // The menu follows the mode it was opened from: live shows the live-side
-    // groups, music and video theirs, and the 'all' groups stay everywhere.
-    final AppMode mode = ref.watch(appModeControllerProvider);
-    final String modeScope = switch (mode) {
-      AppMode.live => 'live',
-      AppMode.video => 'video',
-      AppMode.music => 'music',
-    };
+    // 只有一种模式了：设置目录里保留的组全部是 'all'。
+    const String modeScope = 'all';
 
     return ListView(
       padding: EdgeInsets.symmetric(horizontal: 16.ts(context), vertical: 12.ts(context)),

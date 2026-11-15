@@ -1,47 +1,30 @@
 import 'package:pure_live/exports/exports.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:pure_live/services/remote_config/remote_config.dart';
-import 'package:pure_live/modules/video/video_section.dart';
 
 import 'package:pure_live/services/menu_icons/menu_icon_controller.dart';
 
 part 'home_provider.g.dart';
 
-/// Top-level app modes, switched by the button at the top of the sidebar
-/// (where the backup shortcut used to sit). Live keeps the classic room UI;
-/// music and video are the bilibili UGC modes over the same VOD playback
-/// engine — video shows the picture, music listens without it. Each mode owns
-/// the whole navigation rail and content pane; their playback is exclusive
-/// against live rooms.
-enum AppMode { live, video, music }
+/// 直播与 bilibili UGC 影音已整体下线，APP 只剩 IPTV / TVBox 一种模式。
+///
+/// 这个 enum 与下面三个 @riverpod 类保留为「生成文件兼容壳」：
+/// home_provider.g.dart 是已提交的生成产物，本机无法重跑 build_runner，
+/// 直接删除类会让生成代码引用到不存在的类型。它们不再被任何 UI 引用，
+/// Dart AOT tree-shaking 会裁掉，不影响包体与运行时行为。
+enum AppMode { iptv }
 
-/// The app-wide mode, persisted: the TV boots into whatever mode was last
-/// used instead of always live.
 @riverpod
 class AppModeController extends _$AppModeController {
   @override
-  AppMode build() {
-    final saved = HivePrefUtil.getString('appMode');
-    for (final mode in AppMode.values) {
-      // #68 减法：music 模式已屏蔽，老用户残留的 'music' 回退到 live
-      if (mode.name == saved && mode != AppMode.music) return mode;
-    }
-    return AppMode.live;
-  }
+  AppMode build() => AppMode.iptv;
 
   void setMode(AppMode mode) {
     state = mode;
     HivePrefUtil.setString('appMode', mode.name);
   }
 
-  /// on, no submenu needed on a remote.
-  ///
-  /// #68 减法：跳过 music 模式（入口已屏蔽），只在 live ↔ video 间循环。
-  void cycle() => setMode(switch (state) {
-    AppMode.live => AppMode.video,
-    AppMode.video => AppMode.live,
-    AppMode.music => AppMode.live, // 不可达，防御回退
-  });
+  void cycle() => setMode(AppMode.iptv);
 }
 
 /// Selected music-mode sidebar section (index into [MusicSection.values]).
@@ -53,15 +36,11 @@ class MusicSectionIndex extends _$MusicSectionIndex {
   void change(int index) => state = index;
 }
 
-/// Selected video-mode sidebar section (index into [VideoSection.values]).
+/// 兼容壳：video 模式已下线，不再读取任何 UGC 状态。
 @riverpod
 class VideoSectionIndex extends _$VideoSectionIndex {
   @override
-  int build() {
-    final service = SettingsService.to;
-    if (!service.isInitialized) return 0;
-    return service.videoState.startSection.clamp(0, VideoSection.values.length - 1);
-  }
+  int build() => 0;
 
   void change(int index) => state = index;
 }
@@ -119,8 +98,9 @@ class AppMenuItem {
     : shortTitle = shortTitle ?? '';
 }
 
-/// 一级导航块（内置四大类）。云端只决定启动默认块（defaultGroupId）与二级显隐
-/// （railMenuIds），块结构 / 本地化文案 / 图标固定在客户端，旧配置平滑升级。
+/// 一级导航块（IPTV / 影音 / 设置三大类）。云端只决定启动默认块
+/// （defaultGroupId）与二级显隐（railMenuIds），块结构 / 本地化文案 / 图标
+/// 固定在客户端，旧配置里的 live 块会被自动过滤。
 class NavGroup {
   final String id;
   final String labelKey;
@@ -129,35 +109,23 @@ class NavGroup {
   const NavGroup({required this.id, required this.labelKey, required this.icon, required this.children});
 }
 
-/// 四个一级块，顺序即左侧一级栏顺序。children 用菜单 id 或字面量 'settings'。
+/// 三个一级块，顺序即左侧一级栏顺序。children 用菜单 id 或字面量 'settings'。
 const List<NavGroup> kNavGroups = <NavGroup>[
   NavGroup(id: 'iptv', labelKey: 'nav_group_iptv', icon: Icons.live_tv_outlined, children: <String>['iptv']),
   NavGroup(id: 'vod', labelKey: 'nav_group_vod', icon: Icons.movie_outlined, children: <String>['vodBrowse', 'moviePlayback']),
-  NavGroup(
-    id: 'live',
-    labelKey: 'nav_group_live',
-    icon: Icons.tv_rounded,
-    children: <String>['favorite', 'hot', 'areas', 'favoriteAreas', 'search', 'history'],
-  ),
   NavGroup(id: 'settings', labelKey: 'nav_group_settings', icon: Icons.settings_outlined, children: <String>['settings']),
 ];
 
-/// 二级项 id → TvMenuType 值；未知 id 返回 null。
+/// 二级项 id → TvMenuType 值；直播/UGC id 一律视为未知（老配置平滑过滤）。
 int? navIndexForId(String id) => switch (id) {
-      'favorite' => TvMenuType.favorite.value,
-      'hot' => TvMenuType.hot.value,
-      'areas' => TvMenuType.areas.value,
-      'favoriteAreas' => TvMenuType.favoriteAreas.value,
       'moviePlayback' => TvMenuType.moviePlayback.value,
       'vodBrowse' => TvMenuType.vodBrowse.value,
-      'search' => TvMenuType.search.value,
-      'history' => TvMenuType.history.value,
       'iptv' => TvMenuType.iptv.value,
       'settings' => TvMenuType.settings.value,
       _ => null,
     };
 
-/// 云端 navigation.groups → NavGroup 列表；任何异常都回退内置四大类。
+/// 云端 navigation.groups → NavGroup 列表；任何异常都回退内置三大类。
 ///
 /// 一级块固定用内置本地化文案 / 图标（云端 label 是中文展示串、icon 是字符串
 /// 名，直接用会破坏 i18n 并引入无效 IconData），云端只覆盖块结构（children）。
@@ -194,7 +162,7 @@ List<NavGroup> resolveNavGroups() {
       children: children,
     ));
   }
-  // 必须恰好覆盖四个固定块，否则整份回退：左侧永远 4 项、IPTV 常驻可见。
+  // 必须恰好覆盖三个固定块，否则整份回退：左侧永远 3 项、IPTV 常驻可见。
   if (result.length != kNavGroups.length) return kNavGroups;
   return result;
 }
@@ -240,23 +208,17 @@ int defaultNavIndex(List<NavGroup> groups) {
   return navIndexForId(group.children.first) ?? TvMenuType.iptv.value;
 }
 
-/// Side menu entries in the order configured in settings, limited to the
-/// visible ones. An empty configuration shows every entry in default order.
+/// 侧栏二级项白名单：直播与 UGC 菜单已整体下线，只剩 IPTV / TVBox 三项。
+///
+/// 无论本地设置里是否残留 favorite/hot/areas/... 或云端 railMenuIds 是否仍
+/// 带旧值，这里都只下发这三项 —— 否则旧配置会把用户带回已删除的空白页面。
+/// 一级块的显隐与 children 仍由 resolveNavGroups() 按云端 groups 控制。
+const List<String> kIptvVodMenuIds = <String>['iptv', 'vodBrowse', 'moviePlayback'];
+
 @riverpod
 List<AppMenuItem> sideMenuList(Ref ref) {
-  final saved = ref.watch(appSettingsControllerProvider).savedMenuIds;
   final overrides = ref.watch(menuIconOverridesProvider);
-  // 云端托管时用显式白名单，绝不走 normalizeMenuIds（它会补回所有 known id）。
-  final List<String> ids;
-  if (RemoteConfigService.navigationManaged) {
-    ids = <String>[for (final id in saved) if (HomeMenu.fromId(id) != null) id];
-    // 线上旧配置的 7 项白名单不含 iptv，但 IPTV 入口必须常驻可见。
-    if (!ids.contains('iptv')) ids.add('iptv');
-  } else {
-    ids = saved.isEmpty ? HomeMenu.defaultOrder : AppSettingsController.normalizeMenuIds(saved);
-  }
-  final visible = ids.isEmpty ? HomeMenu.defaultOrder : ids;
-  return [for (final id in visible) ?_sideMenuItem(id, overrides)];
+  return [for (final id in kIptvVodMenuIds) ?_sideMenuItem(id, overrides)];
 }
 
 AppMenuItem? _sideMenuItem(String id, Map<String, IconData> overrides) {

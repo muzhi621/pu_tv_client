@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:pure_live/exports/exports.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:pure_live/domains/device/tv_remote_receiver.dart';
-import 'package:pure_live/modules/live/search/tv_search_provider.dart' show kSearchTypeRoom;
 
 /// Global landing spot for live-room pushes from the phone.
 ///
@@ -79,7 +78,8 @@ class _GlobalRoomPushOverlayState extends ConsumerState<GlobalRoomPushOverlay> {
     final site = Sites().availableSites(containsAll: false).first.name;
     router.push(
       AppRoutes.kSearchResult,
-      extra: SearchResultArgs(keyword: keyword, site: site, searchType: kSearchTypeRoom),
+      // 直播搜索模块已删除，保留老协议里的字面量 'room' 以免改动远端推送格式。
+      extra: SearchResultArgs(keyword: keyword, site: site, searchType: 'room'),
     );
   }
 

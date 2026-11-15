@@ -1,11 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pure_live/features/index.dart';
-import 'package:pure_live/modules/vod/index.dart';
 import 'package:pure_live/services/remote_config/remote_config.dart';
 import 'package:pure_live/modules/live/index.dart';
-import 'package:pure_live/modules/music/index.dart';
-import 'package:pure_live/modules/video/index.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pure_live/app/router/app/app_routes.dart';
 import 'package:pure_live/app/bootstrap/app_navigator.dart';
@@ -66,6 +63,8 @@ class AreaRoomsRoute extends GoRouteData with $AreaRoomsRoute {
       AreaRoomsPage(site: $extra.site, subCategory: $extra.subCategory);
 }
 
+/// 直播搜索已下线；路由壳保留是因为 app_router.g.dart 仍引用这个类，
+/// 本机无法重跑 build_runner。任何进入都渲染空页，不会再拉直播平台。
 @TypedGoRoute<SearchResultRoute>(path: AppRoutes.kSearchResult)
 class SearchResultRoute extends GoRouteData with $SearchResultRoute {
   SearchResultRoute(this.$extra);
@@ -73,8 +72,7 @@ class SearchResultRoute extends GoRouteData with $SearchResultRoute {
   final SearchResultArgs $extra;
 
   @override
-  Widget build(BuildContext context, GoRouterState state) =>
-      TvSearchResultPage(keyword: $extra.keyword, site: $extra.site, searchType: $extra.searchType);
+  Widget build(BuildContext context, GoRouterState state) => const SizedBox.shrink();
 }
 
 // ------------------------------------------------------------------ wallpaper
@@ -167,8 +165,15 @@ class LivePlayRoute extends GoRouteData with $LivePlayRoute {
   }
 }
 
-/// The music-mode track list of one archive. `$extra` carries the archive the
-/// grid card had; the page fetches the parts itself before anything plays.
+// ---------------------------------------------------------------------------
+// bilibili UGC 影音 / 音乐路由（已下线）
+//
+// 这些类只保留「路由壳」：app_router.g.dart 是已提交的生成产物，本机无法重跑
+// build_runner，直接删类会让生成代码引用到不存在的 mixin。构造参数与字段名
+// 必须与生成文件一致（$extra / keyword / mid / name），build 一律返回空页，
+// 因此不会加载任何已删除的 UGC 页面或控制器。
+// ---------------------------------------------------------------------------
+
 @TypedGoRoute<MusicArchiveRoute>(path: AppRoutes.kMusicArchive)
 class MusicArchiveRoute extends GoRouteData with $MusicArchiveRoute {
   MusicArchiveRoute(this.$extra);
@@ -176,24 +181,17 @@ class MusicArchiveRoute extends GoRouteData with $MusicArchiveRoute {
   final Object $extra;
 
   @override
-  Widget build(BuildContext context, GoRouterState state) {
-    final extra = $extra;
-    return extra is MusicArchive ? MusicArchivePage(archive: extra) : const SizedBox.shrink();
-  }
+  Widget build(BuildContext context, GoRouterState state) => const SizedBox.shrink();
 }
 
-/// The music-mode full-screen player. Playback state lives in the
-/// music-player controller, so the route carries nothing.
 @TypedGoRoute<MusicPlayerRoute>(path: AppRoutes.kMusicPlayer)
 class MusicPlayerRoute extends GoRouteData with $MusicPlayerRoute {
   const MusicPlayerRoute();
 
   @override
-  Widget build(BuildContext context, GoRouterState state) => const MusicPlayerPage();
+  Widget build(BuildContext context, GoRouterState state) => const SizedBox.shrink();
 }
 
-/// The video-mode detail page of one archive. `$extra` carries the archive the
-/// grid card had; parts and related videos are fetched by the page itself.
 @TypedGoRoute<VideoDetailRoute>(path: AppRoutes.kVideoDetail)
 class VideoDetailRoute extends GoRouteData with $VideoDetailRoute {
   VideoDetailRoute(this.$extra);
@@ -201,22 +199,17 @@ class VideoDetailRoute extends GoRouteData with $VideoDetailRoute {
   final Object $extra;
 
   @override
-  Widget build(BuildContext context, GoRouterState state) {
-    final extra = $extra;
-    return extra is MusicArchive ? VideoDetailPage(archive: extra) : const SizedBox.shrink();
-  }
+  Widget build(BuildContext context, GoRouterState state) => const SizedBox.shrink();
 }
 
-/// The video-mode full-screen player (newBV layer scheme).
 @TypedGoRoute<VideoPlayerRoute>(path: AppRoutes.kVideoPlayer)
 class VideoPlayerRoute extends GoRouteData with $VideoPlayerRoute {
   const VideoPlayerRoute();
 
   @override
-  Widget build(BuildContext context, GoRouterState state) => const VideoPlayerPage();
+  Widget build(BuildContext context, GoRouterState state) => const SizedBox.shrink();
 }
 
-/// One PGC season's episode page. `$extra` is the feed card the tile had.
 @TypedGoRoute<VideoSeasonRoute>(path: AppRoutes.kVideoSeason)
 class VideoSeasonRoute extends GoRouteData with $VideoSeasonRoute {
   VideoSeasonRoute(this.$extra);
@@ -224,13 +217,9 @@ class VideoSeasonRoute extends GoRouteData with $VideoSeasonRoute {
   final Object $extra;
 
   @override
-  Widget build(BuildContext context, GoRouterState state) {
-    final extra = $extra;
-    return extra is PgcItem ? VideoSeasonPage(item: extra) : const SizedBox.shrink();
-  }
+  Widget build(BuildContext context, GoRouterState state) => const SizedBox.shrink();
 }
 
-/// One archive tag's search results, reached from a detail-page tag chip.
 @TypedGoRoute<VideoTagSearchRoute>(path: AppRoutes.kVideoTagSearch)
 class VideoTagSearchRoute extends GoRouteData with $VideoTagSearchRoute {
   VideoTagSearchRoute(this.keyword);
@@ -238,10 +227,9 @@ class VideoTagSearchRoute extends GoRouteData with $VideoTagSearchRoute {
   final String keyword;
 
   @override
-  Widget build(BuildContext context, GoRouterState state) => VideoTagSearchPage(keyword: keyword);
+  Widget build(BuildContext context, GoRouterState state) => const SizedBox.shrink();
 }
 
-/// The shared comments page over one archive's oid.
 @TypedGoRoute<UgcCommentsRoute>(path: AppRoutes.kUgcComments)
 class UgcCommentsRoute extends GoRouteData with $UgcCommentsRoute {
   UgcCommentsRoute(this.$extra);
@@ -249,15 +237,9 @@ class UgcCommentsRoute extends GoRouteData with $UgcCommentsRoute {
   final Object $extra;
 
   @override
-  Widget build(BuildContext context, GoRouterState state) {
-    final extra = $extra;
-    return extra is UgcCommentsArgs
-        ? UgcCommentsPage(oid: extra.oid, type: extra.type, title: extra.title)
-        : const SizedBox.shrink();
-  }
+  Widget build(BuildContext context, GoRouterState state) => const SizedBox.shrink();
 }
 
-/// The shared user-space page over one UP's mid.
 @TypedGoRoute<UgcUserSpaceRoute>(path: AppRoutes.kUgcUserSpace)
 class UgcUserSpaceRoute extends GoRouteData with $UgcUserSpaceRoute {
   UgcUserSpaceRoute(this.mid, this.name);
@@ -266,10 +248,9 @@ class UgcUserSpaceRoute extends GoRouteData with $UgcUserSpaceRoute {
   final String name;
 
   @override
-  Widget build(BuildContext context, GoRouterState state) => UgcUserSpacePage(mid: mid, name: name);
+  Widget build(BuildContext context, GoRouterState state) => const SizedBox.shrink();
 }
 
-/// One synced playlist's track table. `$extra` is the folder card.
 @TypedGoRoute<MusicFavDetailRoute>(path: AppRoutes.kMusicFavDetail)
 class MusicFavDetailRoute extends GoRouteData with $MusicFavDetailRoute {
   MusicFavDetailRoute(this.$extra);
@@ -277,10 +258,7 @@ class MusicFavDetailRoute extends GoRouteData with $MusicFavDetailRoute {
   final Object $extra;
 
   @override
-  Widget build(BuildContext context, GoRouterState state) {
-    final extra = $extra;
-    return extra is FavFolder ? MusicFavDetailPage(folder: extra) : const SizedBox.shrink();
-  }
+  Widget build(BuildContext context, GoRouterState state) => const SizedBox.shrink();
 }
 
 /// The arguments [UgcCommentsRoute] carries through `$extra`.
