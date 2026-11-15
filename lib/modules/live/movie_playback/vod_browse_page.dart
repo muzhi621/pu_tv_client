@@ -42,6 +42,9 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
   bool _busy = false;
   String _error = '';
 
+  /// 空态里正在执行「重新获取配置」。
+  bool _syncing = false;
+
   @override
   void initState() {
     super.initState();
@@ -50,6 +53,51 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
     _site = _config.sites.isEmpty ? null : _config.sites.first;
     if (_site != null) {
       _loadHome();
+    }
+    // 后台同步（心跳 / 回前台）拿到新配置时自动重建：否则页面停在启动瞬间
+    // 读到的空配置上，用户只能靠杀进程重进——那正是「下发成功但没内容」的体感。
+    RemoteConfigService.appliedRevision.addListener(_onRemoteConfigApplied);
+  }
+
+  @override
+  void dispose() {
+    RemoteConfigService.appliedRevision.removeListener(_onRemoteConfigApplied);
+    super.dispose();
+  }
+
+  void _onRemoteConfigApplied() {
+    if (!mounted) return;
+    final next = RemoteConfigService.vod;
+    if (next.sites.isEmpty) return;
+    setState(() {
+      _config = next;
+      _engine = VodSiteEngine(config: next);
+      _site = next.sites.first;
+      _home = null;
+      _page = null;
+      _error = '';
+    });
+    _loadHome();
+  }
+
+  /// 空态按钮：先向云端强制全量拉一次（忽略 since），再重建引擎。
+  Future<void> _resync() async {
+    if (_syncing) return;
+    setState(() => _syncing = true);
+    await RemoteConfigService.forceSync();
+    if (!mounted) return;
+    final next = RemoteConfigService.vod;
+    setState(() {
+      _config = next;
+      _engine = VodSiteEngine(config: next);
+      _site = next.sites.isEmpty ? null : next.sites.first;
+      _syncing = false;
+      _error = '';
+    });
+    if (_site != null) {
+      await _loadHome();
+    } else {
+      setState(() => _error = '');
     }
   }
 
@@ -209,6 +257,13 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
   }
 
   Widget _buildNoConfig(TvThemeData tvTheme) {
+    final endpoint = RemoteConfigStore.endpoint;
+    final doc = RemoteConfigStore.readDocument();
+    final revision = doc?.revision ?? 0;
+    final vod = doc?.section('vod') ?? const <String, dynamic>{};
+    final sourceIds = (vod['sourceIds'] is List) ? (vod['sourceIds'] as List).length : 0;
+    final sources = (vod['sources'] is List) ? (vod['sources'] as List).length : 0;
+
     return Padding(
       padding: EdgeInsets.all(_pagePadding.ts(context)),
       child: Column(
@@ -226,20 +281,20 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
             i18n('vod_no_config_hint'),
             style: AppTextStyles.t16.copyWith(color: tvTheme.secondaryTextColor, height: 1.6),
           ),
+          SizedBox(height: 12.ts(context)),
+          // 现场诊断：把「云端地址 / 本地文档版本 / 引用与源的数量」直接摊开，
+          // 用户拍一张截图就能定位是没拿到配置还是拿到了空配置。
+          Text(
+            '配置源 $endpoint · 本地版本 v$revision · 引用源 $sourceIds 个 · 已展开源 $sources 个',
+            style: AppTextStyles.t14.copyWith(color: tvTheme.secondaryTextColor, height: 1.6),
+          ),
           SizedBox(height: 24.ts(context)),
           TvButton(
             title: i18n('vod_reload'),
             size: TvButtonSize.small,
             isSecondary: true,
             autofocus: true,
-            onTap: () {
-              setState(() {
-                _config = RemoteConfigService.vod;
-                _engine = VodSiteEngine(config: _config);
-                _site = _config.sites.isEmpty ? null : _config.sites.first;
-              });
-              if (_site != null) _loadHome();
-            },
+            onTap: _syncing ? null : _resync,
           ),
         ],
       ),

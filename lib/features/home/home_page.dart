@@ -29,10 +29,6 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage> {
-  /// One stable node per side-menu entry, so the opening highlight can be aimed
-  /// at the *selected* entry instead of whichever widget sits top-left.
-  final Map<int, FocusNode> _menuFocusNodes = {};
-
   /// One stable focus node per primary navigation group.
   final Map<String, FocusNode> _groupFocusNodes = {};
 
@@ -57,18 +53,18 @@ class _HomePageState extends ConsumerState<HomePage> {
         .toList();
     if (items.isNotEmpty) {
       ref.read(sideMenuIndexProvider.notifier).changeIndex(items.first.index);
+    } else if (childIndexes.isNotEmpty) {
+      // 云端白名单漏了这一块也要能进去：直接落到块内的主页面。
+      ref.read(sideMenuIndexProvider.notifier).changeIndex(childIndexes.first);
     }
   }
 
-  /// 一级栏常驻块 + 当前块的二级菜单（按云端 railMenuIds 白名单过滤）。
+  /// 一级栏常驻块（IPTV / 影音 / 设置）。
+  ///
+  /// 2026-11-15 二改：不再在左侧追加当前块的二级菜单。影音块曾带
+  /// 「影音 / 放映」两项，选中后左侧会重复出现一排图标，用户明确要求去掉。
+  /// 现在一个一级块直接对应一个内容页：IPTV → 频道页，影音 → 点播浏览页。
   List<Widget> _buildRailItems(bool isExpanded, List<NavGroup> groups) {
-    final menuList = ref.watch(sideMenuListProvider);
-    final currentIndex = ref.watch(sideMenuIndexProvider);
-    final childIndexes = navChildIndexes(groups, _currentGroupId);
-    final secondary = <AppMenuItem>[
-      for (final item in menuList)
-        if (childIndexes.contains(item.index)) item,
-    ];
     return <Widget>[
       for (final group in groups)
         Padding(
@@ -87,23 +83,8 @@ class _HomePageState extends ConsumerState<HomePage> {
             onTap: () => _selectNavGroup(group.id),
           ),
         ),
-      SizedBox(height: 8.ts(context)),
-      for (final item in secondary)
-        Padding(
-          padding: EdgeInsets.only(bottom: 20.ts(context)),
-          child: _buildAdaptiveItem(
-            ref: ref,
-            item: item,
-            isExpanded: isExpanded,
-            isSelected: currentIndex == item.index,
-            focusNode: _nodeFor(item.index),
-            onTap: () => ref.read(sideMenuIndexProvider.notifier).changeIndex(item.index),
-          ),
-        ),
     ];
   }
-
-  FocusNode _nodeFor(int index) => _menuFocusNodes.putIfAbsent(index, FocusNode.new);
 
   @override
   void initState() {
@@ -119,9 +100,6 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   void dispose() {
-    for (final node in _menuFocusNodes.values) {
-      node.dispose();
-    }
     for (final node in _groupFocusNodes.values) {
       node.dispose();
     }
@@ -138,15 +116,17 @@ class _HomePageState extends ConsumerState<HomePage> {
     final bool effectiveKeepAlive =
         widget.keepAlive && ref.watch(refreshConfigControllerProvider.select((s) => s.homeKeepAlive));
 
-    // 二级菜单只在当前一级块的 children 里选中；选中项被白名单隐藏或切换了一级块
-    // 时，自动落到该块首个可见二级项（IPTV 块固定落到 iptv）。
+    // 内容页始终取自当前一级块的 children；选中项被白名单隐藏或刚切换了一级块时，
+    // 自动落到该块首个页面（IPTV 块固定落到 iptv，影音块固定落到 vodBrowse）。
     final childIndexes = navChildIndexes(groups, _currentGroupId);
     final visibleIndexes = menuList
         .map((item) => item.index)
         .where((index) => childIndexes.contains(index))
         .toSet();
-    if (!visibleIndexes.contains(currentIndex) && visibleIndexes.isNotEmpty) {
-      final landing = visibleIndexes.first;
+    final int? landing = visibleIndexes.isNotEmpty
+        ? visibleIndexes.first
+        : (childIndexes.isNotEmpty ? childIndexes.first : null);
+    if (!childIndexes.contains(currentIndex) && landing != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ref.read(sideMenuIndexProvider.notifier).changeIndex(landing);
       });
@@ -156,8 +136,9 @@ class _HomePageState extends ConsumerState<HomePage> {
       if (!visibleIndexes.contains(next)) return;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        final node = _menuFocusNodes[next];
-        if (node == null || node.hasFocus) return;
+        // 二级项已不在左侧渲染，焦点统一落在当前一级块上，避免指向未挂载节点。
+        final node = _groupNode(_currentGroupId);
+        if (node.hasFocus) return;
         DpadRegion.ofNode(node)?.noteFocus(node);
         node.requestFocus();
       });
@@ -165,11 +146,11 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     final sidebarWidth = isExpanded ? 228.ts(context) : 160.ts(context);
 
-    // 只缓存 IPTV / TVBox 四个有效页面；已下线的直播/UGC 类型一律回退 IPTV 页。
+    // 只缓存三个可达页面；「放映」（moviePlayback）已从左侧入口移除，
+    // 其余已下线的直播/UGC 类型同样回退 IPTV 页。
     const cacheableTypes = [
       TvMenuType.iptv,
       TvMenuType.vodBrowse,
-      TvMenuType.moviePlayback,
       TvMenuType.settings,
     ];
 
@@ -184,7 +165,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         showExitConfirmDialog(context, ref);
       },
       child: TvScaffold(
-        openingFocus: _nodeFor(currentIndex),
+        openingFocus: _groupNode(_currentGroupId),
         child: Row(
           children: [
             DpadRegion(

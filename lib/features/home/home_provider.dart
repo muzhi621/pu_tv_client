@@ -110,15 +110,19 @@ class NavGroup {
 }
 
 /// 三个一级块，顺序即左侧一级栏顺序。children 用菜单 id 或字面量 'settings'。
+///
+/// 2026-11-15：左侧不再展开二级菜单，一个一级块直接落地一个内容页，因此
+/// 影音块只保留点播浏览（vodBrowse）。「放映」（moviePlayback，手机推链接到
+/// 电视播放）入口已按用户要求移除；云端即使仍下发该 id 也不会渲染。
 const List<NavGroup> kNavGroups = <NavGroup>[
   NavGroup(id: 'iptv', labelKey: 'nav_group_iptv', icon: Icons.live_tv_outlined, children: <String>['iptv']),
-  NavGroup(id: 'vod', labelKey: 'nav_group_vod', icon: Icons.movie_outlined, children: <String>['vodBrowse', 'moviePlayback']),
+  NavGroup(id: 'vod', labelKey: 'nav_group_vod', icon: Icons.movie_outlined, children: <String>['vodBrowse']),
   NavGroup(id: 'settings', labelKey: 'nav_group_settings', icon: Icons.settings_outlined, children: <String>['settings']),
 ];
 
-/// 二级项 id → TvMenuType 值；直播/UGC id 一律视为未知（老配置平滑过滤）。
+/// 二级项 id → TvMenuType 值；直播/UGC 与已下线的「放映」一律视为未知
+/// （老配置 / 老云端文档里残留的 id 会被静默过滤）。
 int? navIndexForId(String id) => switch (id) {
-      'moviePlayback' => TvMenuType.moviePlayback.value,
       'vodBrowse' => TvMenuType.vodBrowse.value,
       'iptv' => TvMenuType.iptv.value,
       'settings' => TvMenuType.settings.value,

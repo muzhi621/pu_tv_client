@@ -29,7 +29,17 @@ class RemoteConfigService {
   static RemoteConfigDocument? _current;
   static bool _bootstrapped = false;
 
-  static const Duration _networkTimeout = Duration(milliseconds: 1500);
+  /// 首次同步 / 心跳的网络上限。
+  ///
+  /// 曾设为 1500ms：电视盒子冷启动 + EdgeOne 函数冷启动叠加时经常超时，
+  /// 而超时是静默降级的——终端会一直用（可能为空的）本地缓存，表现就是
+  /// 「云端显示下发成功，电视上什么都没有」。这里放宽到 8 秒，宁可慢一拍
+  /// 也不能拿不到配置。
+  static const Duration _networkTimeout = Duration(seconds: 8);
+
+  /// 配置文档每次成功 apply 后自增。页面可监听它，在后台同步到新配置时
+  /// 重建（否则页面只在 initState 读一次，会永远停在启动瞬间的空状态）。
+  static final ValueNotifier<int> appliedRevision = ValueNotifier<int>(0);
 
   /// 云端下发的 IPTV 源在终端固定写成一个播放列表，便于重复导入时覆盖。
   static const String _cloudIptvProvider = 'cloud_iptv';
@@ -66,20 +76,50 @@ class RemoteConfigService {
   }
 
   /// 拉取一次云端配置。304 / 超时 / 解析失败均静默返回，不抛异常。
-  static Future<void> syncNow() async {
+  ///
+  /// [force] 为 true 时不带 `since`，强制云端回全量文档。用于「重新获取配置」
+  /// 按钮与本地缓存明显不完整时的自愈，避免被 304 永久锁死。
+  static Future<void> syncNow({bool force = false}) async {
     final endpoint = RemoteConfigStore.endpoint;
     if (endpoint.isEmpty) return; // 未配置 = 纯本地运行
     try {
-      final document = await _fetch(endpoint, RemoteConfigStore.token, RemoteConfigStore.revision);
+      final cached = RemoteConfigStore.readDocument();
+      // 本地文档「引用了库却没有任何展开内容」时同样强制全量：这种情况几乎
+      // 只会在早期一次失败的下发里出现，而它的 revision 已经追平云端，
+      // 不强制的话 `since` 会一直命中 304，页面永远是空态。
+      final revision = (force || _isIncomplete(cached)) ? 0 : RemoteConfigStore.revision;
+      final document = await _fetch(endpoint, RemoteConfigStore.token, revision);
       if (document == null) return;
       if (document.revision < RemoteConfigStore.revision) return; // 防倒退
-      await RemoteConfigStore.saveDocument(document);
       _current = document;
+      // 先落地到内存再持久化：apply 抛异常时不推进本地 revision，下次还能重试。
       await _apply(document);
+      await RemoteConfigStore.saveDocument(document);
+      appliedRevision.value = document.revision;
     } catch (error) {
       debugPrint('[RemoteConfig] 同步失败，沿用本地配置: $error');
     }
   }
+
+  /// 本地缓存文档是否「有引用、无内容」。
+  ///
+  /// `vod.sourceIds` / `iptv.packageIds` 是云端按资源库实时展开的输入，
+  /// 有引用却没有展开结果，说明上次拿到的是一份没有库里数据的文档。
+  static bool _isIncomplete(RemoteConfigDocument? document) {
+    if (document == null) return true;
+    if (document.sections.isEmpty) return true;
+    final vod = document.section('vod');
+    final iptv = document.section('iptv');
+    final hasVodRefs = vod['sourceIds'] is List && (vod['sourceIds'] as List).isNotEmpty;
+    final hasVodContent = vod['sites'] is List && (vod['sites'] as List).isNotEmpty;
+    final hasIptvRefs = iptv['packageIds'] is List && (iptv['packageIds'] as List).isNotEmpty;
+    final hasIptvContent = iptv['channels'] is List && (iptv['channels'] as List).isNotEmpty;
+    return (hasVodRefs && !hasVodContent) || (hasIptvRefs && !hasIptvContent);
+  }
+
+  /// 强制全量同步：忽略 `since`，并把结果立刻应用到内存。
+  /// 供「重新获取配置」按钮与诊断页使用。
+  static Future<void> forceSync() => syncNow(force: true);
 
   // ------------------------------------------------------------------
   // 轻量心跳（App 首帧之后启动）
@@ -87,7 +127,11 @@ class RemoteConfigService {
 
   static Timer? _heartbeatTimer;
 
-  /// 启动 15 分钟定时同步 + 「回到前台立即同步」监听。
+  /// 启动 3 分钟定时同步 + 「回到前台立即同步」监听。
+  ///
+  /// 15 分钟在「编辑器点完下发、马上走到电视前看」的场景里等于没同步：用户
+  /// 看到的就是「显示下发成功但终端还是空的」。无变更时云端直接 304，流量
+  /// 可以忽略，所以把间隔压到 3 分钟。
   ///
   /// 复用现有 [syncNow]：`GET /api/config?since=...`，云端无变更即 304，流量极小，
   /// 不新增任何 API 路径。幂等：以 [_heartbeatTimer] 为标记，重复调用不会重复建
@@ -100,7 +144,7 @@ class RemoteConfigService {
     WidgetsFlutterBinding.ensureInitialized();
 
     // syncNow 内部已全程 try/catch 静默降级；定时回调再包一层，杜绝未捕获异常。
-    _heartbeatTimer = Timer.periodic(const Duration(minutes: 15), (_) {
+    _heartbeatTimer = Timer.periodic(const Duration(minutes: 3), (_) {
       try {
         unawaited(syncNow());
       } catch (error) {
@@ -471,6 +515,26 @@ class RemoteConfigService {
 
   static String get exitDialogBody =>
       rcLocalized(_sub('startup', 'exitDialog')['bodyI18n'], _locale);
+
+  /// 二维码图片地址（http(s)）。留空表示继续用 APK 内置的
+  /// `assets/images/wechat.png`，换图不必再发版。
+  static String get exitDialogQrImageUrl =>
+      rcString(_sub('startup', 'exitDialog')['qrImageUrl'], '');
+
+  /// 二维码下方标题，缺省回退本地 i18n 的「捐赠支持」。
+  static String get exitDialogQrCaption =>
+      rcLocalized(_sub('startup', 'exitDialog')['qrCaptionI18n'], _locale);
+
+  /// 二维码下方的捐赠说明正文。
+  static String get exitDialogDonateBody =>
+      rcLocalized(_sub('startup', 'exitDialog')['donateBodyI18n'], _locale);
+
+  /// 确定 / 取消按钮文案；留空回退本地 i18n。
+  static String get exitDialogConfirmText =>
+      rcLocalized(_sub('startup', 'exitDialog')['confirmTextI18n'], _locale);
+
+  static String get exitDialogCancelText =>
+      rcLocalized(_sub('startup', 'exitDialog')['cancelTextI18n'], _locale);
 
   static bool get shouldShowExitDialog {
     if (!exitDialogEnabled || exitDialogMode == 'never') return false;

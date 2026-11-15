@@ -5,6 +5,7 @@ import 'package:pure_live/modules/live/areas/area_grid_view.dart';
 import 'package:pure_live/modules/live/areas/category_provider.dart';
 import 'package:pure_live/modules/live/areas/platform_provider.dart';
 import 'package:pure_live/modules/live/areas/area_display_config.dart';
+import 'package:pure_live/services/remote_config/remote_config.dart';
 
 class AreasPage extends ConsumerStatefulWidget {
   /// 非空时只显示该站点的频道目录（IPTV 专用页），不显示其它平台 tab。
@@ -16,6 +17,27 @@ class AreasPage extends ConsumerStatefulWidget {
 }
 
 class _AreasPageState extends ConsumerState<AreasPage> {
+  @override
+  void initState() {
+    super.initState();
+    // 云端 IPTV 频道列表是后台同步的：心跳拿到新文档后要重建分类，
+    // 否则页面会停在首帧读到的旧目录上。
+    RemoteConfigService.appliedRevision.addListener(_onConfigApplied);
+  }
+
+  @override
+  void dispose() {
+    RemoteConfigService.appliedRevision.removeListener(_onConfigApplied);
+    super.dispose();
+  }
+
+  void _onConfigApplied() {
+    if (!mounted) return;
+    final siteId = widget.onlySiteId;
+    if (siteId == null) return;
+    ref.invalidate(getSiteCategoriesProvider(siteId));
+  }
+
   @override
   Widget build(BuildContext context) {
     final platformState = ref.watch(platformTabProvider);
