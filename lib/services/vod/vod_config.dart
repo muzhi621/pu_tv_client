@@ -128,6 +128,17 @@ class VodSource {
   bool get hasJar => jar.isNotEmpty;
 
   bool get isFongmi => spiderFlavor != 'tvboxos';
+
+  /// url 模式下云端通常没有 jar，用终端解析配置时读到的 `spider` 字段补齐。
+  VodSource copyWith({String? jar, String? spiderMd5}) => VodSource(
+        id: id,
+        name: name,
+        jar: jar ?? this.jar,
+        url: url,
+        spiderMd5: spiderMd5 ?? this.spiderMd5,
+        spiderFlavor: spiderFlavor,
+        mode: mode,
+      );
 }
 
 class VodSite {

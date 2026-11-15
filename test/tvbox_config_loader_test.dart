@@ -203,5 +203,60 @@ void main() {
       expect(failed.sites.map((s) => s.id),
           <String>['vs_a:old', 'vs_b:keep']);
     });
+
+    test('只下发 URL 的零站点源：配置里的 spider jar 写回源', () {
+      // 云端没解析过，sources[].jar 为空；csp_ 站点全靠配置里的 spider 字段。
+      final config = VodConfig(
+        managed: true,
+        sources: const <VodSource>[
+          VodSource(id: 'vs_a', name: 'A', url: _base, mode: 'url'),
+        ],
+        sites: const <VodSite>[],
+        sourceIds: const <String>['vs_a'],
+      );
+      final parsed = TvboxConfigParser.parse(
+        jsonEncode(<String, dynamic>{
+          'spider': './spider.jar;md5;a1b2c3d4e5f60718',
+          'sites': <dynamic>[_rawSite('csp', 'csp_X')],
+        }),
+        sourceId: 'vs_a',
+        baseUrl: _base,
+      );
+      expect(parsed.jar, isNotEmpty);
+      expect(parsed.spiderMd5, 'a1b2c3d4e5f60718');
+      final out = TvboxConfigLoader.apply(
+          config, <String, TvboxConfigResult>{'vs_a': parsed});
+      expect(out.sites.length, 1);
+      expect(out.sources.single.jar, parsed.jar);
+      expect(out.sources.single.spiderMd5, parsed.spiderMd5);
+      expect(out.sources.single.hasJar, isTrue);
+    });
+
+    test('解析结果没有 jar 时保留云端已有的 jar', () {
+      final config = VodConfig(
+        managed: true,
+        sources: const <VodSource>[
+          VodSource(
+            id: 'vs_a',
+            name: 'A',
+            url: _base,
+            mode: 'url',
+            jar: 'https://cloud.example.com/spider.jar',
+            spiderMd5: 'cloud',
+          ),
+        ],
+      );
+      final parsed = TvboxConfigParser.parse(
+        jsonEncode(<String, dynamic>{
+          'sites': <dynamic>[_rawSite('a1', 'https://a/api.php')],
+        }),
+        sourceId: 'vs_a',
+        baseUrl: _base,
+      );
+      final out = TvboxConfigLoader.apply(
+          config, <String, TvboxConfigResult>{'vs_a': parsed});
+      expect(out.sources.single.jar, 'https://cloud.example.com/spider.jar');
+      expect(out.sources.single.spiderMd5, 'cloud');
+    });
   });
 }

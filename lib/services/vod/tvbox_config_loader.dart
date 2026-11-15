@@ -303,13 +303,21 @@ class TvboxConfigLoader {
     if (results.isEmpty) return config;
     final known = config.sources.map((source) => source.id).toSet();
     final sites = <VodSite>[];
+    final sources = <VodSource>[];
     for (final source in config.sources) {
       final result = results[source.id];
       if (result != null && result.hasSites) {
         sites.addAll(result.sites);
+        // 只下发 URL 的源云端没有 jar，而 TVBox 配置里的 spider 字段刚解析出来：
+        // 写回源，否则配置中的 csp_ 站点会因为没有爬虫包而播不了。
+        sources.add(result.jar.isEmpty
+            ? source
+            : source.copyWith(
+                jar: result.jar, spiderMd5: result.spiderMd5));
       } else {
         sites.addAll(
             config.sites.where((site) => site.sourceId == source.id));
+        sources.add(source);
       }
     }
     // 理论上不会出现不属于任何源的站点，保留它们避免数据意外丢失。
@@ -317,7 +325,7 @@ class TvboxConfigLoader {
         config.sites.where((site) => !known.contains(site.sourceId)));
     return VodConfig(
       managed: config.managed,
-      sources: config.sources,
+      sources: sources,
       sites: sites,
       sourceIds: config.sourceIds,
       siteIds: config.siteIds,
