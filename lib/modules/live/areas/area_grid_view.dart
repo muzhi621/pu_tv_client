@@ -2,6 +2,7 @@ import 'package:dpad/dpad.dart';
 import 'package:pure_live/app/router/router.dart';
 import 'package:pure_live/exports/package_export.dart';
 import 'package:pure_live/modules/live/areas/category_provider.dart';
+import 'package:pure_live/platforms/sites.dart';
 import 'package:pure_live/services/theme_settings/theme_settings_controller.dart';
 
 class AreaGridView extends ConsumerStatefulWidget {
