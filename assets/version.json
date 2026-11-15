@@ -1,7 +1,7 @@
 {
-  "version": "3.0.16",
-  "version_num": 130017,
-  "version_desc": "-New: 内置 QuickJS 运行时，Js 类站点可直接运行（含 cheerio / crypto-js / gbk 三套前端库）\\n-New: 诊断页新增 QuickJS 真求值自检，跑一次 6×7 而不是只看类是否存在\\n-New: 补入 TVBox 爬虫宿主的 14 个运行时实现类（OkHttp / OkDns / Auth / 拦截器等），复杂 spider 不再因缺类失败\\n-Fix: spider 的 init 改为两参优先、仅缺失时退回一参，避免重复初始化重置状态\\n-New: TVBox 诊断页细分「契约类 / 运行时实现类 / 可选能力」三级自检，缺什么直接点名\\n-Fix: 云端解析 spider 的 md5 校验和与相对路径，导入 FongMi 系配置不再丢 jar\\n-Note: Python 站点本版未支持（运行时与当前构建工具链冲突，已排期）\\n-Note: 本版仍是爬虫链路验证版，站点浏览界面在下一版开放",
+  "version": "3.0.17",
+  "version_num": 130018,
+  "version_desc": "-New: 首页收敛为 IPTV / 影音 / 设置三大类，启动默认 IPTV；云端下发后直接可见频道与站点\\n-New: 影音板块对接云端 TVBox 资源库（单源上限 200 站点），支持云端解析与 url 直连双轨下发\\n-Change: 整体下线直播平台房间、关注 / 热门 / 分区 / 搜索 / 历史与弹幕，删除 203 个相关源码文件\\n-Change: 同步下线 bilibili UGC 影音与音乐模块（登录、播放器、歌单、评论）\\n-Fix: 侧栏二级菜单只保留 iptv / vodBrowse / moviePlayback，旧本地设置与旧云端白名单里的直播项自动过滤\\n-Fix: 云端 groups 只下发三大类，老配置里的 live 一级块不再显示\\n-Note: IPTV 与 TVBox 共用原有播放器，遥控器焦点、换台与进度条行为不变\\n-Note: 旧版本 APK 上可能仍有一个空的直播一级块，升级本版后消失",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",
