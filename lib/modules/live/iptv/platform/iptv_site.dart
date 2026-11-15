@@ -134,24 +134,34 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
     final db = DbService.to.db;
     final channel = await db.getChannelById(roomId);
     if (channel == null) {
-      if (channel == null) {
-        return LiveRoom(
-          cover: '',
-          watching: '',
-          roomId: roomId,
-          area: '',
-          title: '',
-          nick: '',
-          avatar: defaultAvatar,
-          introduction: '',
-          notice: '',
-          status: true,
-          liveStatus: LiveStatus.live,
-          platform: Sites.iptvSite,
-          link: roomId,
-          data: roomId,
-        );
-      }
+      // 频道表里查不到：点播伪房间（openVodPlayback 的 `vod-标题-地址` 种子）
+      // 和已删除频道都走这里。调用方带来的房间就是现有最准确的信息——种子
+      // 房间的 data 就是已解析好的点播地址，绝不能造一个 `data: roomId` 的
+      // 壳去覆盖它：withHintFallbackFrom 的「payload 以应答为准」会把伪 id
+      // 当播放地址喂给播放器（报错表现为 "Last attempt: vod-… on mpv"）。
+      final dynamic payload = room.data;
+      final bool hasPayload = payload != null &&
+          payload is! Exception &&
+          payload.toString().trim().isNotEmpty;
+      if (hasPayload) return room;
+      // 调用方本身没有播放载荷：如实报告「查不到」，壳不携带伪地址，
+      // data 留空让上层走「无可播清晰度」而不是把 id 当 URL 播。
+      return LiveRoom(
+        cover: '',
+        watching: '',
+        roomId: roomId,
+        area: '',
+        title: '',
+        nick: '',
+        avatar: defaultAvatar,
+        introduction: '',
+        notice: '',
+        status: true,
+        liveStatus: LiveStatus.live,
+        platform: Sites.iptvSite,
+        link: '',
+        data: null,
+      );
     }
     return _buildLiveRoom(channel);
   }

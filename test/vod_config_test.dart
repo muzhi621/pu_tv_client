@@ -13,6 +13,8 @@ Map<String, dynamic> _site({
   String api = 'https://example.com/api.php/provide/vod',
   String key = 'ali',
   String ext = '',
+  String jar = '',
+  String jarMd5 = '',
   int type = 1,
   Object? searchable = 1,
   Object? quickSearch = 0,
@@ -24,6 +26,8 @@ Map<String, dynamic> _site({
       'api': api,
       'key': key,
       'ext': ext,
+      'jar': jar,
+      'jarMd5': jarMd5,
       'type': type,
       'searchable': searchable,
       'quickSearch': quickSearch,
@@ -125,6 +129,30 @@ void main() {
       expect(config.jarFor(config.sites[2]), isNull);
       expect(config.sources[0].hasJar, isTrue);
       expect(config.sources[1].hasJar, isFalse);
+    });
+
+    test('站点级 jar 优先于源级 jar，md5 同步切换', () {
+      // 聚合配置里各族站点靠站点级 jar 指向自己的爬虫包，用源级 jar 会
+      // 「在 jar 里找不到类」。
+      final config = VodConfig.fromSection(<String, dynamic>{
+        'sources': <Map<String, dynamic>>[
+          _source(id: 'src1', jar: 'https://example.com/main.jar'),
+        ],
+        'sites': <Map<String, dynamic>>[
+          _site(
+            id: 'src1:wex',
+            api: 'csp_WexmuouggGuard',
+            jar: 'https://family.example.com/wex.jar',
+            jarMd5: 'fam0123456789abcdef',
+          ),
+          _site(id: 'src1:plain', api: 'csp_Ali'),
+        ],
+      });
+      expect(config.jarFor(config.sites[0]), 'https://family.example.com/wex.jar');
+      expect(config.spiderMd5For(config.sites[0]), 'fam0123456789abcdef');
+      expect(config.jarFor(config.sites[1]), 'https://example.com/main.jar');
+      // 站点没带 md5 时不要张冠李戴拿源级 jar 的 md5 去校验别的包。
+      expect(config.spiderMd5For(config.sites[1]), isNull);
     });
 
     test('spiderFlavor 空值回退 fongmi，tvboxos 单独可辨', () {

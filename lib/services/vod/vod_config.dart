@@ -55,11 +55,23 @@ class VodConfig {
   List<VodSite> get httpSites =>
       sites.where((site) => !site.requiresSpiderJar).toList(growable: false);
 
-  /// 站点所属源的 jar 地址；源没配 jar 时返回 null。
+  /// 站点所属源的 jar 地址；站点自带 jar 时优先用站点的，源没配 jar 时返回 null。
   String? jarFor(VodSite site) {
+    if (site.jar.isNotEmpty) return site.jar;
     for (final source in sources) {
       if (source.id == site.sourceId) {
         return source.jar.isEmpty ? null : source.jar;
+      }
+    }
+    return null;
+  }
+
+  /// 与 [jarFor] 同一条 jar 的 md5 校验和（配置里 `url;md5;<hash>` 的 hash）。
+  String? spiderMd5For(VodSite site) {
+    if (site.jar.isNotEmpty) return site.jarMd5.isEmpty ? null : site.jarMd5;
+    for (final source in sources) {
+      if (source.id == site.sourceId) {
+        return source.spiderMd5.isEmpty ? null : source.spiderMd5;
       }
     }
     return null;
@@ -149,6 +161,8 @@ class VodSite {
     required this.api,
     this.key = '',
     this.ext = '',
+    this.jar = '',
+    this.jarMd5 = '',
     this.type = 0,
     this.searchable = false,
     this.quickSearch = false,
@@ -161,6 +175,8 @@ class VodSite {
         api: _str(json['api']),
         key: _str(json['key']),
         ext: _str(json['ext']),
+        jar: _str(json['jar']),
+        jarMd5: _str(json['jarMd5']),
         type: json['type'] is int ? json['type'] as int : 0,
         searchable: json['searchable'] == 1 || json['searchable'] == true,
         quickSearch: json['quickSearch'] == 1 || json['quickSearch'] == true,
@@ -180,6 +196,15 @@ class VodSite {
   /// spider 初始化时原样透传的扩展参数。
   final String ext;
 
+  /// 站点级 spider jar 地址。TVBox 里站点可自带 `jar` 覆盖顶层 spider，
+  /// 多仓聚合里「族 jar」也冲压到这里——聚合配置只保留第一个源的 spider，
+  /// 其它族的站点（如 Wex*Guard 系）离了自己的 jar 就找不到类。
+  /// 为空表示用所属源的 jar（见 [VodConfig.jarFor]）。
+  final String jar;
+
+  /// [jar] 的 md5 校验和（`url;md5;<hash>` 的 hash）。
+  final String jarMd5;
+
   /// TVBox 站点类型：0=XML、1=JSON、3=jar 反射、4=采集站。
   final int type;
 
@@ -190,6 +215,20 @@ class VodSite {
 
   /// 反射调用时用的类名（`csp_Ali` → `Ali`）。
   String get spiderKey => requiresSpiderJar ? api.substring(4) : api;
+
+  VodSite copyWith({String? jar, String? jarMd5}) => VodSite(
+        id: id,
+        sourceId: sourceId,
+        name: name,
+        api: api,
+        key: key,
+        ext: ext,
+        jar: jar ?? this.jar,
+        jarMd5: jarMd5 ?? this.jarMd5,
+        type: type,
+        searchable: searchable,
+        quickSearch: quickSearch,
+      );
 }
 
 Map<String, dynamic> _map(dynamic value) {

@@ -82,11 +82,15 @@ class VodSpiderChannel {
 
   /// 为一个站点建实例并完成 init。同一 `siteKey` 重复调用会复用已有实例，
   /// `force: true` 则销毁重建（换 ext 或 jar 更新后用）。
+  ///
+  /// [jarMd5] 是配置里 `url;md5;<hash>` 声明的校验和：宿主据此验证缓存
+  /// jar 没被替换/过期，对不上会强制重下（见 #61）。
   static Future<VodSitePreparation> prepareSite({
     required String siteKey,
     required String jarUrl,
     required String api,
     String ext = '',
+    String jarMd5 = '',
     bool force = false,
   }) async {
     final raw = await _invokeMap('prepareSite', <String, dynamic>{
@@ -94,6 +98,7 @@ class VodSpiderChannel {
       'jarUrl': jarUrl,
       'api': api,
       'ext': ext,
+      'jarMd5': jarMd5,
       'force': force,
     });
     if (raw == null || raw['ok'] != true) {

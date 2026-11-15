@@ -208,8 +208,9 @@ class VodSiteEngine {
   /// spider 侧用裸 key 索引实例；旧配置可能没有 key，回退到 id（`源id:key`）。
   String _keyOf(VodSite site) => site.key.isEmpty ? site.id : site.key;
 
-  /// 确保 spider 站点已建实例。`jar` 从云端下发的源信息里取 —— 站点本身
-  /// 不存 jar，因为它属于源，多个站点共用一个 jar。
+  /// 确保 spider 站点已建实例。jar 优先取站点级 jar（TVBox 站点自带的
+  /// `jar` 字段、多仓聚合里的族 jar），没有才回退到源级 jar —— 聚合配置
+  /// 只保留第一个源的 spider，族 jar 站点离了自己的 jar 会找不到类。
   Future<void> _ensurePrepared(VodSite site) async {
     final key = _keyOf(site);
     if (_prepared.contains(key)) return;
@@ -226,6 +227,7 @@ class VodSiteEngine {
       jarUrl: jar,
       api: site.api,
       ext: site.ext,
+      jarMd5: _config?.spiderMd5For(site) ?? '',
     );
     if (prep.failure != null) {
       throw VodEngineException(

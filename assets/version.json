@@ -1,7 +1,7 @@
 {
-  "version": "3.0.19",
-  "version_num": 130020,
-  "version_desc": "-Fix: TVBox 站点 prepare 报 Failed resolution of: Lokhttp3/Dns; —— spider.jar 是运行时 DexClassLoader 加载的预编译字节码，按字面类名引用宿主库，R8 却把 okhttp3 / okio / gson / jsoup 全部重命名了。这四个库改为整包保留原名，爬虫才能真正跑起来\n-Fix: 启动黑屏 10 秒——冷启动不再等云端网络（原来最长 8 秒超时）才出首帧，改为先应用本地缓存立即渲染，网络同步移到首帧之后立刻执行\n-Note: 云端配置切换到「套餐管理」：导航栏、启动/退出弹窗、IPTV 源分组、TVBox 源站点收敛成一份具名套餐，终端只需选择套餐下发；改配置回云端改套餐即可，所有绑定该套餐的终端下次同步自动生效",
+  "version": "3.0.20",
+  "version_num": 130021,
+  "version_desc": "-Fix: IPTV 频道页点频道误报「需要登录账号」——页面从全局平台 tab 取站点，IPTV 专用页拿到了别的平台（如 bilibili）去请求分类，风控报错被映射成登录问题；现在按本页实际站点请求，「登录」映射只保留 bilibili/抖音两个真有会话门槛的平台\n-Fix: TVBox 站点报「在 jar 里找不到类 csp_XxxGuard」——站点级/族 jar 从解析到加载全链路保留（聚合配置多族共存时各族用自己的爬虫包），jar 按 md5 校验缓存、类缺失强刷重下，类名带 Guard 后缀与大小写兜底，加载后按 TVBox 契约调 Init.init(Context)\n-Fix: 点播报「Live playback failed … vod-… on mpv」——频道查询失败的壳房间不再把伪 id 当播放地址，覆盖种子房间里的真实点播直链",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",

@@ -1,7 +1,6 @@
 import 'package:dpad/dpad.dart';
 import 'package:pure_live/app/router/router.dart';
 import 'package:pure_live/exports/package_export.dart';
-import 'package:pure_live/modules/live/areas/platform_provider.dart';
 import 'package:pure_live/modules/live/areas/category_provider.dart';
 import 'package:pure_live/services/theme_settings/theme_settings_controller.dart';
 
@@ -9,11 +8,23 @@ class AreaGridView extends ConsumerStatefulWidget {
   final List<String> labels;
   final List<List<LiveArea>> areas;
 
+  /// 站点由上层（[AreasPlatformGridBridge]）传入，不能在这里再从全局平台
+  /// tab 取：IPTV 专用页（`onlySiteId`）过滤后的站点与全局 tab 不同步，
+  /// 从全局取会把别的平台（如 bilibili）当成本页站点，点频道就拿错平台的
+  /// 分类接口去请求，风控报错被误分类成「需要登录」。
+  final Site site;
+
   /// Flat mode: the whole site renders one list ([labels]/[areas] each carry a
   /// single entry with an empty label) and no sub-category tab bar.
   final bool flat;
 
-  const AreaGridView({super.key, required this.labels, required this.areas, this.flat = false});
+  const AreaGridView({
+    super.key,
+    required this.labels,
+    required this.areas,
+    required this.site,
+    this.flat = false,
+  });
 
   @override
   ConsumerState<AreaGridView> createState() => _AreaGridViewState();
@@ -54,8 +65,6 @@ class _AreaGridViewState extends ConsumerState<AreaGridView> {
   @override
   Widget build(BuildContext context) {
     final currentCategoryIndex = ref.watch(categoryTabProvider);
-    final platformState = ref.watch(platformTabProvider);
-    final currentSite = platformState.siteList[platformState.currentPlatformIndex];
     if (widget.labels.isEmpty || currentCategoryIndex >= widget.labels.length) {
       return const SizedBox.shrink();
     }
@@ -101,7 +110,7 @@ class _AreaGridViewState extends ConsumerState<AreaGridView> {
                 onTap: () {
                   context.pushPage(
                     AppRoutes.kAreaRooms,
-                    extra: AreaRoomsArgs(site: currentSite, subCategory: area),
+                    extra: AreaRoomsArgs(site: widget.site, subCategory: area),
                   );
                 },
                 onLongPress: () {

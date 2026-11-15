@@ -172,12 +172,17 @@ class AreasPlatformGridBridgeState extends ConsumerState<AreasPlatformGridBridge
         // top tab + sub grid structure.
         if (shouldFlattenCategories(widget.site.id, categories)) {
           final flat = flattenCategories(categories);
-          return AreaGridView(labels: const [''], areas: <List<LiveArea>>[flat], flat: true);
+          return AreaGridView(
+            labels: const [''],
+            areas: <List<LiveArea>>[flat],
+            site: widget.site,
+            flat: true,
+          );
         }
 
         final List<String> labels = categories.map((e) => e.name).toList();
         final List<List<LiveArea>> areaList = categories.map((e) => e.children).toList();
-        return AreaGridView(labels: labels, areas: areaList);
+        return AreaGridView(labels: labels, areas: areaList, site: widget.site);
       },
     );
   }

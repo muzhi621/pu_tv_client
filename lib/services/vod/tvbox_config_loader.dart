@@ -18,7 +18,10 @@ import 'package:pure_live/core/utils/hive_pref_util.dart';
 import 'vod_config.dart';
 
 const int _maxSitesPerSource = 200;
-const int _maxSubConfigs = 5;
+
+/// 多仓最多跟随的子配置数。多仓订阅常有 10+ 个族（每族一个 spider jar），
+/// 截到 5 会让后半部分族的站点全部落到错误的 jar 上，找不到类。
+const int _maxSubConfigs = 12;
 
 /// 一次解析的产物。
 class TvboxConfigResult {
@@ -35,6 +38,25 @@ class TvboxConfigResult {
   final List<String> subUrls;
 
   bool get hasSites => sites.isNotEmpty;
+
+  /// 站点级 jar 与源级 jar 相同时清空（不重复下发，省流量；语义不变——
+  /// [VodConfig.jarFor] 对空 jar 会回退到源 jar）。
+  ///
+  /// 只在「这是最终结果」时调用：多仓子配置合并的中途产物不能提前清，
+  /// 各族站点的 jar 正是要靠它区分的。
+  TvboxConfigResult dedupeJarAgainstSource() {
+    if (jar.isEmpty) return this;
+    final cleaned = sites
+        .map((site) =>
+            site.jar == jar ? site.copyWith(jar: '', jarMd5: '') : site)
+        .toList(growable: false);
+    return TvboxConfigResult(
+      sites: cleaned,
+      jar: jar,
+      spiderMd5: spiderMd5,
+      subUrls: subUrls,
+    );
+  }
 }
 
 class SpiderRef {
@@ -160,6 +182,10 @@ class TvboxConfigParser {
       if (jar.isEmpty && spider.jar.isNotEmpty) jar = spider.jar;
       if (md5.isEmpty && spider.md5.isNotEmpty) md5 = spider.md5;
 
+      // 族 jar：这套配置自己的 spider。多仓聚合只会把第一个源的 spider 记成
+      // 源级 jar，其它族的站点（如 Wex*Guard 系）离了自己的 jar 会在
+      // prepare 阶段报「找不到类」，所以 csp_ 站点要记住本族 spider。
+      final family = spider;
       final rawSites = config['sites'];
       if (rawSites is List) {
         for (final item in rawSites) {
@@ -174,6 +200,16 @@ class TvboxConfigParser {
               !api.startsWith('csp_')) continue;
           final id = _siteId(sourceId, key);
           if (!seen.add(id)) continue;
+          // 站点自带 jar（TVBox 的站点级 jar 字段，`url;md5;hash` 写法）优先；
+          // 没有才继承本族 spider。http/采集站点不需要 jar，不冲压省流量。
+          final own = parseSpider(entry['jar'], baseUrl);
+          final bool needsJar = api.startsWith('csp_');
+          final String siteJar = own.jar.isNotEmpty
+              ? own.jar
+              : (needsJar ? family.jar : '');
+          final String siteMd5 = own.jar.isNotEmpty
+              ? own.md5
+              : (needsJar ? family.md5 : '');
           sites.add(VodSite(
             id: id,
             sourceId: sourceId,
@@ -181,6 +217,8 @@ class TvboxConfigParser {
             api: api,
             key: key,
             ext: resolveRef(_text(entry['ext']), baseUrl),
+            jar: siteJar,
+            jarMd5: siteMd5,
             type: _int(entry['type']),
             searchable: _bool(entry['searchable']),
             quickSearch: _bool(entry['quickSearch']),
@@ -241,7 +279,8 @@ class TvboxConfigLoader {
       final text = HivePrefUtil.getString(_cacheKey(url));
       if (text == null || text.isEmpty) return null;
       final result =
-          TvboxConfigParser.parse(text, sourceId: sourceId, baseUrl: url);
+          TvboxConfigParser.parse(text, sourceId: sourceId, baseUrl: url)
+              .dedupeJarAgainstSource();
       if (!result.hasSites) return null;
       _memory[url] = result;
       return result;
@@ -284,7 +323,7 @@ class TvboxConfigLoader {
         sites: merged,
         jar: jar,
         spiderMd5: md5,
-      );
+      ).dedupeJarAgainstSource();
       _memory[url] = result;
       try {
         await HivePrefUtil.setString(_cacheKey(url), text);

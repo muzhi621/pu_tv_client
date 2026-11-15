@@ -174,6 +174,117 @@ void main() {
     });
   });
 
+  group('站点级 jar 与族 jar（聚合配置找得到类的前提）', () {
+    test('站点自带 jar 字段（url;md5;hash、相对路径）保留在站点上', () {
+      final json = jsonEncode(<String, dynamic>{
+        'spider': 'https://jar.example.com/main.jar',
+        'sites': <dynamic>[
+          <String, dynamic>{
+            ..._rawSite('wex', 'csp_WexmuouggGuard', type: 3),
+            'jar': './libs/other.jar;md5;00112233445566778899aabbccddeeff',
+          },
+        ],
+      });
+      final result =
+          TvboxConfigParser.parse(json, sourceId: 'vs_a', baseUrl: _base);
+      expect(result.sites.single.jar, 'https://example.com/tv/libs/other.jar');
+      expect(result.sites.single.jarMd5, '00112233445566778899aabbccddeeff');
+    });
+
+    test('csp_ 站点无站点级 jar 时继承本配置 spider（族 jar）；http 站点不冲压', () {
+      final json = jsonEncode(<String, dynamic>{
+        'spider': 'https://family.example.com/wex.jar;md5;11223344556677889900aabbccddeeff',
+        'sites': <dynamic>[
+          _rawSite('guard', 'csp_WexmuouggGuard', type: 3),
+          _rawSite('http', 'https://a/api.php'),
+        ],
+      });
+      final result =
+          TvboxConfigParser.parse(json, sourceId: 'vs_a', baseUrl: _base);
+      expect(result.sites[0].jar, 'https://family.example.com/wex.jar');
+      expect(result.sites[0].jarMd5, '11223344556677889900aabbccddeeff');
+      // http/采集站点不用 jar，不冲压省流量。
+      expect(result.sites[1].jar, isEmpty);
+    });
+
+    test('多配置文本里各族站点拿各自 spider，不串包', () {
+      // 聚合配置把多个源的 sites 并进一份文本：每个配置对象的 spider 就是
+      // 该族的 jar。源级 jar 只记第一个，族 jar 必须落在站点上。
+      final json = jsonEncode(<dynamic>[
+        <String, dynamic>{
+          'spider': 'https://jar.example.com/main.jar',
+          'sites': <dynamic>[_rawSite('a1', 'csp_Ali', type: 3)],
+        },
+        <String, dynamic>{
+          'spider': 'https://family.example.com/wex.jar',
+          'sites': <dynamic>[_rawSite('w1', 'csp_WexmuouggGuard', type: 3)],
+        },
+      ]);
+      final result =
+          TvboxConfigParser.parse(json, sourceId: 'vs_a', baseUrl: _base);
+      expect(result.jar, 'https://jar.example.com/main.jar');
+      expect(result.sites[0].jar, 'https://jar.example.com/main.jar');
+      expect(result.sites[1].jar, 'https://family.example.com/wex.jar');
+    });
+
+    test('dedupeJarAgainstSource：与源级 jar 相同清空，族 jar 保留', () {
+      final json = jsonEncode(<dynamic>[
+        <String, dynamic>{
+          'spider': 'https://jar.example.com/main.jar',
+          'sites': <dynamic>[
+            _rawSite('a1', 'csp_Ali', type: 3),
+            <String, dynamic>{
+              ..._rawSite('own', 'csp_Own', type: 3),
+              'jar': 'https://other.example.com/own.jar',
+            },
+          ],
+        },
+        <String, dynamic>{
+          'spider': 'https://family.example.com/wex.jar',
+          'sites': <dynamic>[_rawSite('w1', 'csp_WexmuouggGuard', type: 3)],
+        },
+      ]);
+      final result = TvboxConfigParser.parse(
+        json,
+        sourceId: 'vs_a',
+        baseUrl: _base,
+      ).dedupeJarAgainstSource();
+      // 与源级 jar 相同 → 清空（终端 jarFor 回退到源 jar，语义不变）。
+      expect(result.sites[0].jar, isEmpty);
+      expect(result.sites[0].jarMd5, isEmpty);
+      // 站点级 jar 与族 jar 与源级 jar 不同 → 必须保留。
+      expect(result.sites[1].jar, 'https://other.example.com/own.jar');
+      expect(result.sites[2].jar, 'https://family.example.com/wex.jar');
+    });
+
+    test('VodConfig.jarFor 优先站点级 jar，源级 jar 兜底', () {
+      final parsed = TvboxConfigParser.parse(
+        jsonEncode(<dynamic>[
+          <String, dynamic>{
+            'spider': 'https://jar.example.com/main.jar',
+            'sites': <dynamic>[
+              _rawSite('a1', 'csp_Ali', type: 3),
+              <String, dynamic>{
+                ..._rawSite('own', 'csp_Own', type: 3),
+                'jar': 'https://other.example.com/own.jar',
+              },
+            ],
+          },
+        ]),
+        sourceId: 'vs_a',
+        baseUrl: _base,
+      );
+      final config = TvboxConfigLoader.apply(VodConfig(
+        managed: true,
+        sources: <VodSource>[
+          VodSource(id: 'vs_a', name: 'A', jar: parsed.jar, url: _base),
+        ],
+      ), <String, TvboxConfigResult>{'vs_a': parsed});
+      expect(config.jarFor(parsed.sites[0]), parsed.jar);
+      expect(config.jarFor(parsed.sites[1]), 'https://other.example.com/own.jar');
+    });
+  });
+
   group('TvboxConfigLoader.apply 兜底', () {
     test('解析成功只替换该源的站点，其它源保持云端数据', () {
       final parsed = TvboxConfigParser.parse(

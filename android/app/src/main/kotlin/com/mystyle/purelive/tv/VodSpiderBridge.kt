@@ -73,6 +73,12 @@ internal class VodSpiderBridge(
         private const val JAR_DIR = "vod_spider"
         private const val DEX_DIR = "vod_spider_dex"
 
+        /** dex 字符串池里的 spider 类描述符：`Lcom/github/catvod/spider/Xxx;`。 */
+        private val DEX_CLASS_RE = Regex("Lcom/github/catvod/spider/([A-Za-z0-9_$]{1,80});")
+
+        /** dex 字符串池里的可打印串（ASCII），用于加固/保护模式探测。 */
+        private val DEX_STRING_RE = Regex("[\\x20-\\x7e]{4,120}")
+
         /**
          * 基础链路必须提供的契约类（全部来自 catvod-api.jar 与宿主三方库）。
          * 只查 `Spider` 一个是不够的：jar 里的 Spider/Net/Json 会互相引用，
@@ -167,6 +173,9 @@ internal class VodSpiderBridge(
 
     /** jar 绝对路径 -> 已加载的 ClassLoader，同一 jar 下多个站点共用一个。 */
     private val classLoaders = ConcurrentHashMap<String, DexClassLoader>()
+
+    /** 本次进程内已强刷重下过的 jar URL：类找不到时的重试每 URL 只做一次。 */
+    private val refreshedJars = ConcurrentHashMap.newKeySet<String>()
 
     private class SpiderHandle(
         val siteKey: String,
@@ -263,7 +272,10 @@ internal class VodSpiderBridge(
         val force = call.argument<Boolean>("force") == true
         val jar = ensureJar(url, force)
 
-        val classNames = ArrayList<String>()
+        // 类名要同时认 .class 条目与 classes*.dex：伪装成 png/jpg 的 jar
+        // 里只有 dex，只扫 .class 会一个类都列不出来，看不出「jar 到底
+        // 有没有本站点的类」。
+        val classNames = spiderClassNames(jar)
         var hasBaseClass = false
         var dexCount = 0
         ZipFile(jar).use { zip ->
@@ -275,13 +287,12 @@ internal class VodSpiderBridge(
                     name.endsWith(".class") -> {
                         val className = name.removeSuffix(".class").replace('/', '.')
                         if (className == "com.github.catvod.crawler.Spider") hasBaseClass = true
-                        if (className.startsWith("com.github.catvod.spider.") &&
-                            !className.contains('$')
-                        ) {
-                            classNames.add(className.removePrefix("com.github.catvod.spider."))
-                        }
                     }
-                    name.matches(Regex("classes\\d*\\.dex")) -> dexCount++
+                    name.matches(Regex("classes\\d*\\.dex")) -> {
+                        dexCount++
+                        val bytes = zip.getInputStream(entry).use { it.readBytes() }
+                        if (dexContains(bytes, "Lcom/github/catvod/crawler/Spider;")) hasBaseClass = true
+                    }
                 }
             }
         }
@@ -314,6 +325,7 @@ internal class VodSpiderBridge(
             ?: throw IllegalArgumentException("缺少 api")
         val jarUrl = requireUrl(call.argument<String>("jarUrl"))
         val ext = call.argument<String>("ext").orEmpty()
+        val jarMd5 = call.argument<String>("jarMd5").orEmpty().trim()
         val force = call.argument<Boolean>("force") == true
 
         if (!force) {
@@ -324,18 +336,29 @@ internal class VodSpiderBridge(
             spiders.remove(siteKey)?.let { runCatching { callQuietly(it.instance, "destroy") } }
         }
 
-        val jar = ensureJar(jarUrl, false)
-        val loader = classLoaderFor(jar)
-        val className = resolveClassName(api)
+        var jar = ensureJar(jarUrl, false, jarMd5)
+        var clazz: Class<*>? = resolveClassOrNull(classLoaderFor(jar), jar, api)
 
-        val clazz = try {
-            Class.forName(className, true, loader)
-        } catch (error: Throwable) {
+        if (clazz == null) {
+            // 找不到类时先怀疑缓存过期：jar URL 常被原地换内容（同 URL 不同
+            // 包），缓存永不过期就会拿旧包配新站点名。同一 URL 每次进程只
+            // 强刷一次，避免「类确实不在」时反复下载。
+            if (refreshedJars.add(jarUrl)) {
+                jar = ensureJar(jarUrl, true, jarMd5)
+                clazz = resolveClassOrNull(classLoaderFor(jar), jar, api)
+            }
+        }
+
+        if (clazz == null) {
+            val wanted = resolveClassName(api)
+            val available = spiderClassNames(jar).sorted()
             throw BridgeException(
                 "class_not_found",
-                "在 jar 里找不到类 $className（$api）。请确认该 jar 与本站点匹配；" +
-                    "可用 inspectJar 查看 jar 内实际类名。",
-                error,
+                "在 jar 里找不到类 $wanted（$api）。jar 内实际类名：" +
+                    (if (available.isEmpty()) "(无 com.github.catvod.spider 类)"
+                     else available.take(40).joinToString(", ")) +
+                    "。请确认该 jar 与本站点匹配；站点级 jar 丢失时可用 inspect.jar 查看。",
+                null,
             )
         }
 
@@ -344,14 +367,14 @@ internal class VodSpiderBridge(
         } catch (error: Throwable) {
             throw BridgeException(
                 "instantiate_failed",
-                "类 $className 实例化失败：${rootMessage(error)}",
+                "类 ${clazz.name} 实例化失败：${rootMessage(error)}",
                 error,
             )
         }
 
         val initModes = initSpider(instance, clazz, ext)
 
-        val handle = SpiderHandle(siteKey, api, className, jar.absolutePath, instance, initModes)
+        val handle = SpiderHandle(siteKey, api, clazz.name, jar.absolutePath, instance, initModes)
         spiders[siteKey] = handle
         return success("created", handle)
     }
@@ -519,6 +542,8 @@ internal class VodSpiderBridge(
         spiders.values.forEach { handle -> runCatching { callQuietly(handle.instance, "destroy") } }
         spiders.clear()
         classLoaders.clear()
+        // 清缓存后要重新允许「类找不到就强刷重试」，否则本次进程不再重下。
+        refreshedJars.clear()
         var removed = 0
         listOf(jarDir(), dexDir()).forEach { dir ->
             dir.listFiles()?.forEach { file ->
@@ -540,12 +565,20 @@ internal class VodSpiderBridge(
      * 只读不是洁癖：targetSdk 34 起，Android 会拒绝 DexClassLoader 加载
      * 可写文件（否则任意应用都能在 dex 加载后改写字节码）。所以下载先写
      * 临时文件，chmod 只读后再原子改名，避免半截文件被当成有效 jar。
+     *
+     * [expectedMd5] 是配置 `url;md5;<hash>` 声明的校验和（#61）：缓存文件
+     * 对不上就当过期重下，下载结果对不上直接失败——第三方 jar URL 被原地
+     * 换包是常态，缓存又永不过期，没有校验就只能靠清缓存自救。
      */
-    private fun ensureJar(url: String, force: Boolean): File {
+    private fun ensureJar(url: String, force: Boolean, expectedMd5: String = ""): File {
+        val want = expectedMd5.trim().lowercase()
         val target = File(jarDir(), "${sha1(url)}.jar")
         if (!force && target.isFile && target.length() > 0L) {
-            ensureReadOnly(target)
-            return target
+            if (want.isEmpty() || md5Of(target) == want) {
+                ensureReadOnly(target)
+                return target
+            }
+            // 声明的 md5 与缓存不符：配置换了包，缓存作废，走下面重新下载。
         }
 
         val tmp = File(jarDir(), "${sha1(url)}.jar.part")
@@ -597,8 +630,19 @@ internal class VodSpiderBridge(
             tmp.delete()
             throw BridgeException("jar_empty", "spider jar 下载结果为空（$url）", null)
         }
+        if (want.isNotEmpty() && md5Of(tmp) != want) {
+            tmp.delete()
+            throw BridgeException(
+                "jar_md5_mismatch",
+                "spider jar 与配置声明的 md5 不符（$url），可能是镜像未同步或被替换，已拒绝加载。",
+                null,
+            )
+        }
 
         ensureReadOnly(tmp)
+        // 同路径换包：旧 ClassLoader 持有的是旧 dex，必须失效，否则重试
+        // 还是拿旧类。
+        classLoaders.remove(target.absolutePath)
         if (target.exists()) target.delete()
         if (!tmp.renameTo(target)) {
             // 某些 ROM 在只读状态下拒绝 rename，退化为「直接用 .part」也可以，
@@ -610,6 +654,18 @@ internal class VodSpiderBridge(
         }
         return target
     }
+
+    private fun md5Of(file: File): String =
+        file.inputStream().use { input ->
+            val digest = MessageDigest.getInstance("MD5")
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                digest.update(buffer, 0, read)
+            }
+            digest.digest().joinToString("") { "%02x".format(it) }
+        }
 
     private fun ensureReadOnly(file: File) {
         if (file.canWrite()) {
@@ -623,11 +679,44 @@ internal class VodSpiderBridge(
 
     private fun classLoaderFor(jar: File): DexClassLoader =
         classLoaders.getOrPut(jar.absolutePath) {
-            val outDir = File(dexDir(), sha1(jar.absolutePath).take(16)).apply { mkdirs() }
+            // 优化目录带上文件身份：同一路径换包后要让 dexopt 重新跑，
+            // 否则旧 odex 配新 jar。
+            val outDir = File(
+                dexDir(),
+                sha1("${jar.absolutePath}:${jar.length()}:${jar.lastModified()}").take(16),
+            ).apply { mkdirs() }
             // parent 传 app 的 ClassLoader，spider.jar 里对 Spider / net / utils
             // 的引用才能解析到本 APK 的 classes.dex。
-            DexClassLoader(jar.absolutePath, outDir.absolutePath, null, javaClass.classLoader)
+            val loader = DexClassLoader(jar.absolutePath, outDir.absolutePath, null, javaClass.classLoader)
+            // FongMi/tvbox 的 JarLoader 在加载 jar 后会调
+            // com.github.catvod.spider.Init.init(Context)（JarLoader.load 的既定
+            // 步骤）。Guard 系 jar（wexguard/ftyguard 加固）靠它解密内层
+            // DexClassLoader，不调则 Guard 类实例化后不可用。
+            maybeInvokeJarInit(jar, loader)
+            loader
         }
+
+    /**
+     * 按 TVBox 契约调 jar 的 `Init.init(Context)`。
+     *
+     * 但防白嫖 jar 的 Init 会校验宿主包名并 `Process.killProcess`——进程被杀
+     * 比站点不可用严重得多。dex 里同时出现 killProcess 与 getPackageName
+     * 就视为带这种保护，跳过原 Init（宁可这个 jar 的 Guard 类不可用）。
+     */
+    private fun maybeInvokeJarInit(jar: File, loader: ClassLoader) {
+        val initClass = runCatching {
+            Class.forName("com.github.catvod.spider.Init", true, loader)
+        }.getOrNull() ?: return
+        if (dexStringsOf(jar).containsAll(listOf("killProcess", "getPackageName"))) {
+            Log.w(TAG, "jar Init 含 killProcess 包名校验，跳过 Init 调用：${jar.name}")
+            return
+        }
+        val method = runCatching { initClass.getMethod("init", android.content.Context::class.java) }.getOrNull()
+            ?: runCatching { initClass.getMethod("init") }.getOrNull()
+            ?: return
+        runCatching { method.invoke(null, context) }
+            .onFailure { Log.w(TAG, "Init.init 失败：${jar.name}", it) }
+    }
 
     // ------------------------------------------------------------- 反射工具
 
@@ -636,6 +725,89 @@ internal class VodSpiderBridge(
         api.contains('.') -> api
         else -> "com.github.catvod.spider.$api"
     }
+
+    /**
+     * 类名解析带兜底，按顺序试：
+     *   1. 契约标准名（`csp_X` → `com.github.catvod.spider.X`）
+     *   2. Guard 后缀互换——聚合配置常把 Guard 站点的族 jar 弄丢，同 jar 里的
+     *      无 Guard 版本往往就是同一实现（`DoubanGuard` → `Douban`）
+     *   3. jar 内 spider 类名大小写不敏感匹配（配置类名大小写与 jar 不一致）
+     * 都失败返回 null，由调用方决定重下重试还是报错。
+     */
+    private fun resolveClassOrNull(loader: ClassLoader, jar: File, api: String): Class<*>? {
+        val candidates = LinkedHashSet<String>()
+        candidates.add(resolveClassName(api))
+        val simple = api.removePrefix("csp_").substringAfterLast('.')
+        if (simple.endsWith("Guard")) {
+            candidates.add("com.github.catvod.spider.${simple.removeSuffix("Guard")}")
+        } else {
+            candidates.add("com.github.catvod.spider.${simple}Guard")
+        }
+        val wanted = simple.removeSuffix("Guard").lowercase()
+        for (name in spiderClassNames(jar)) {
+            val lower = name.lowercase()
+            if (lower == simple.lowercase() || lower == wanted) {
+                candidates.add("com.github.catvod.spider.$name")
+            }
+        }
+        for (candidate in candidates) {
+            runCatching { Class.forName(candidate, true, loader) }.getOrNull()?.let { return it }
+        }
+        return null
+    }
+
+    /**
+     * jar 内 `com.github.catvod.spider.*` 的简单类名。`.class` 条目与
+     * classes*.dex 都认——伪装成 png/jpg 的 spider 包通常只有 dex。
+     */
+    private fun spiderClassNames(jar: File): List<String> {
+        val out = LinkedHashSet<String>()
+        runCatching {
+            ZipFile(jar).use { zip ->
+                val entries = zip.entries()
+                while (entries.hasMoreElements()) {
+                    val entry = entries.nextElement()
+                    val name = entry.name
+                    if (name.endsWith(".class")) {
+                        val className = name.removeSuffix(".class").replace('/', '.')
+                        if (className.startsWith("com.github.catvod.spider.") &&
+                            !className.contains('$')
+                        ) {
+                            out.add(className.removePrefix("com.github.catvod.spider."))
+                        }
+                    } else if (name.matches(Regex("classes\\d*\\.dex"))) {
+                        val bytes = zip.getInputStream(entry).use { it.readBytes() }
+                        // dex 字符串池里的类描述符形如 Lcom/github/catvod/spider/Xxx;
+                        for (match in DEX_CLASS_RE.findAll(String(bytes, Charsets.ISO_8859_1))) {
+                            val simple = match.groupValues[1]
+                            if (!simple.contains('$')) out.add(simple)
+                        }
+                    }
+                }
+            }
+        }
+        return out.toList()
+    }
+
+    /** jar 内所有 dex 的字符串（ASCII 可见串），用于加固模式探测等。 */
+    private fun dexStringsOf(jar: File): Set<String> {
+        val out = HashSet<String>()
+        runCatching {
+            ZipFile(jar).use { zip ->
+                val entries = zip.entries()
+                while (entries.hasMoreElements()) {
+                    val entry = entries.nextElement()
+                    if (!entry.name.matches(Regex("classes\\d*\\.dex"))) continue
+                    val bytes = zip.getInputStream(entry).use { it.readBytes() }
+                    out.addAll(DEX_STRING_RE.findAll(String(bytes, Charsets.ISO_8859_1)).map { it.value })
+                }
+            }
+        }
+        return out
+    }
+
+    private fun dexContains(dexBytes: ByteArray, needle: String): Boolean =
+        String(dexBytes, Charsets.ISO_8859_1).contains(needle)
 
     private fun baseSpiderClass(): Class<*>? =
         runCatching { Class.forName("com.github.catvod.crawler.Spider") }.getOrNull()
@@ -751,6 +923,7 @@ internal class VodSpiderBridge(
                     "或该 spider 用到了尚未引入的第三方库（quickjs / smbj / slf4j 等）。"
             }
             "jar_not_readonly" -> "jar 未能置为只读，Android 14+ 会拒绝 DexClassLoader 加载。"
+            "jar_md5_mismatch" -> "jar 与配置声明的 md5 不一致。等源站镜像同步，或在资源库里更新该源的 jar 地址。"
             else -> null
         }
         return mapOf(

@@ -33,12 +33,20 @@ class _AreaRoomsPageState extends ConsumerState<AreaRoomsPage> {
     // category list behind a session. Both are reported as the login-required
     // state — the shared classifier maps the "loginRequired" marker — never as
     // an ordinary network error.
+    //
+    // 只对这两个平台做映射：其它平台（尤其 IPTV）的异常文本里出现相同字样
+    // 只是巧合，误映射成「需要登录」会把真正的故障（拿错平台、频道表为空）
+    // 盖成登录问题。IPTV 专用页就踩过这个坑。
+    final bool loginGatedPlatform =
+        siteId == Sites.bilibiliSite || siteId == Sites.douyinSite;
     Future<List<LiveRoom>> fetchCategoryRooms({required int page}) async {
       try {
         return await liveSite.getCategoryRooms(widget.subCategory, page: page);
       } catch (e) {
         final String text = e.toString();
-        if (text.contains("-352") || (text.contains("NoSuchMethodError") && text.contains("'[]'"))) {
+        if (loginGatedPlatform &&
+            (text.contains("-352") ||
+                (text.contains("NoSuchMethodError") && text.contains("'[]'")))) {
           throw Exception("loginRequired");
         }
         rethrow;
