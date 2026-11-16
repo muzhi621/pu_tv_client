@@ -1,7 +1,7 @@
 {
-  "version": "3.0.25",
-  "version_num": 130025,
-  "version_desc": "-Fix: IPTV 换台真正可用——IPTV 目录把每个频道当成一个分区，进播放时只带上当前这一个台，换台和左侧频道列表因此一直是空的（提示「没有可切换的频道」）；现在按「同一节目源的全部频道」补齐，左右上下切换与左侧列表都能用了\n-Feat: 左侧频道列表打开即高亮当前频道，频道按节目源内的顺序排列，隐藏频道不进列表\n-Fix: 触摸单击唤出控制条时会等频道表就绪再开列表，不再出现「只弹控制条、列表不出现」",
+  "version": "3.0.26",
+  "version_num": 130026,
+  "version_desc": "-Fix: IPTV 播放页控制条精简——去掉关注、弹幕开关、弹幕设置、切换直播间、内核切换；清晰度与线路改为「有得选才出现」（IPTV 直链只有一个默认码率/一条地址，点开只有一行，等于无效点击），现在点屏幕只剩暂停、重试、画面比例、音频模式\n-Fix: targetSdk 保持 36（compileSdk 仍 37），避开 Android 17 的只读 so 限制——TVBox 加固 jar 把 native 库释放到 cacheDir 后 System.load，在 targetSdk 37 会被系统拒绝，这些站点在 Android 17 设备上会直接报错",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",
