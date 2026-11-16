@@ -2,8 +2,8 @@ import 'package:pure_live/core/utils/hive_pref_util.dart';
 
 /// 「上次播放的 IPTV 频道」记忆。
 ///
-/// IPTV 块不再以频道目录作为落地页：选中 IPTV 直接续播这台（和酷9 一致），
-/// 频道目录只在没有记录、或记录已失效时兜底显示。
+/// 首页「选中 IPTV 就进播放页」的**首选**取台来源（见 `HomePage._resolveIptvResumeArgs`），
+/// 取不到时依次回退到观看历史、库里第一个可见频道。
 ///
 /// 只存 drifts 表 `Channel.id`（也就是 IPTV 房间的 `roomId`）。播放地址不缓存：
 /// 重进时由 `IptvSite.getRoomDetail` 按 id 重新查库解析，云端同步改过地址、

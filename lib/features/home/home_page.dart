@@ -17,6 +17,7 @@ import 'package:pure_live/modules/live/movie_playback/vod_browse_page.dart';
 import 'package:pure_live/modules/live/playback/models/live_play_args.dart';
 import 'package:pure_live/platforms/sites.dart';
 import 'package:pure_live/services/refresh_config/refresh_config_controller.dart';
+import 'package:pure_live/services/settings/settings.dart';
 
 /// 首页外壳：左侧一级栏（IPTV / 影音 / 设置）+ 右侧二级菜单与内容区。
 ///
@@ -46,38 +47,76 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// 时不再叠第二个播放页。
   bool _resumingIptv = false;
 
-  /// 一次「进 IPTV 就续播」还没结算完。为 true 时 IPTV 内容区留空，
-  /// 免得频道目录先渲染一帧、再被播放页盖住（用户看到的就是「这个页面还在」）。
+  /// 一次「进 IPTV 就续播」还没结算完。为 true 时 IPTV 内容区被挂起（见
+  /// [_buildPageContent]），免得频道目录先渲染一帧、再被播放页盖住
+  /// （用户看到的就是「这个页面还在」）。
   bool _iptvResumePending = false;
 
-  /// 选中 IPTV 就续播上次那台（与酷9 的行为一致），频道目录只作兜底：
+  /// 观看历史里最近一条 IPTV 频道。
   ///
-  /// * 没有播放记录（首次安装 / 刚清过数据）→ 照旧显示频道目录；
-  /// * 记录里的频道已被删除（换源、重新导入）→ 作废记录，回落到目录。
+  /// 老版本（≤3.0.27）播放时只写观看历史，没有 [IptvResumeChannel] 这类记录，
+  /// 所以升级后的**第一次**启动要靠它来接上——否则用户会以为「续播没做」。
+  /// 历史是倒序的（最新在前，见 `upsertHistoryRoom`），取第一条即可。
+  LiveRoom? _lastIptvHistoryRoom() {
+    for (final room in SettingsService.to.historyState.historyRooms) {
+      // 用归一化 id 比较：历史里的 platform 大小写不一定和常量一致。
+      if (room.normalizedPlatformId == Sites.iptvSite && room.normalizedRoomId.isNotEmpty) return room;
+    }
+    return null;
+  }
+
+  /// 解析续播目标，按可靠度依次尝试：
+  ///
+  /// 1. [IptvResumeChannel] —— 上次真的起播成功的台（最准）；
+  /// 2. 观看历史里最近一条 IPTV 频道 —— 覆盖「升级上来第一次启动」；
+  /// 3. 库里第一个可见频道 —— 覆盖「装好就打开」的新设备，符合电视开机即看的习惯。
+  ///
+  /// 返回 null 表示库里一个可见频道都没有（云端 IPTV 源还没下发/同步），
+  /// 这时只能落在频道目录上。
+  Future<LivePlayArgs?> _resolveIptvResumeArgs() async {
+    final db = DbService.to.db;
+
+    final String? savedId = IptvResumeChannel.channelId;
+    if (savedId != null) {
+      final channel = await db.getChannelById(savedId);
+      if (channel != null) return LivePlayArgs(platform: Sites.iptvSite, roomId: channel.id);
+      // 频道被删了（换源 / 重新导入）：记录作废，继续往下找。
+      IptvResumeChannel.clear();
+    }
+
+    final LiveRoom? fromHistory = _lastIptvHistoryRoom();
+    if (fromHistory != null) {
+      final channel = await db.getChannelById(fromHistory.normalizedRoomId);
+      // 带上房间快照，播放页第一帧就有台名/台标；地址仍以回库解析的结果为准。
+      if (channel != null) return LivePlayArgs.fromRoom(fromHistory);
+    }
+
+    final first = await db.getFirstVisibleChannel();
+    if (first == null) return null;
+    return LivePlayArgs(platform: Sites.iptvSite, roomId: first.id);
+  }
+
+  /// 选中 IPTV 就进播放页（与酷9 的行为一致），频道目录不再作为落地页，
+  /// 只在库里一个可见频道都没有时兜底显示。
   ///
   /// 从播放页返回时不会再自动跳一次：那条路径不经过 [_selectNavGroup]，
-  /// 于是返回后停在频道目录，想换别的台也有地方去。
+  /// 于是返回后停在频道目录，想换别的台/换源也有地方去。
   Future<void> _resumeIptvChannel() async {
     if (_resumingIptv) return;
 
-    final String? id = IptvResumeChannel.channelId;
-    if (id == null) {
-      if (_iptvResumePending) setState(() => _iptvResumePending = false);
-      return;
-    }
-
     _resumingIptv = true;
     try {
-      final channel = await DbService.to.db.getChannelById(id);
+      final LivePlayArgs? args = await _resolveIptvResumeArgs();
       if (!mounted) return;
-      if (channel == null) {
-        IptvResumeChannel.clear();
+      if (args != null) {
+        // 只带 id / 房间快照：播放页会回库重新解析线路与地址，
+        // 续播拿到的永远是最新的一条。
+        LivePlayRoute(args).push(context);
         return;
       }
-      // 只带 roomId：播放页会回库重新解析线路与地址，续播拿到的永远是最新的一条。
-      LivePlayRoute(LivePlayArgs(platform: Sites.iptvSite, roomId: channel.id)).push(context);
+      log('iptv resume skipped: no visible channel in db', name: 'HomePage');
     } catch (e, s) {
-      // 续播是增强项：查库失败不该把用户挡在空白页上，回落到频道目录即可。
+      // 续播是增强项：解析失败不该把用户挡在空白页上，回落到频道目录即可。
       log('resume iptv channel failed: $e', name: 'HomePage', error: e, stackTrace: s);
     } finally {
       _resumingIptv = false;
@@ -94,8 +133,8 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
     setState(() {
       _currentGroupId = groupId;
-      // 选中 IPTV 即续播：频道目录不再作为落地页，只在没有记录时兜底。
-      if (groupId == 'iptv') _iptvResumePending = IptvResumeChannel.channelId != null;
+      // 选中 IPTV 即进播放页：频道目录不再作为落地页（见 [_resumeIptvChannel]）。
+      if (groupId == 'iptv') _iptvResumePending = true;
     });
     final childIndexes = navChildIndexes(resolveNavGroups(), groupId);
     final items = ref
@@ -144,8 +183,10 @@ class _HomePageState extends ConsumerState<HomePage> {
     super.initState();
     // 一级栏启动默认块：云端 navigation.defaultGroupId，旧配置/非法值回退 iptv。
     _currentGroupId = resolveDefaultGroupId(resolveNavGroups());
-    // 启动就落在 IPTV 时同样直接续播，别让用户先看到频道目录再跳。
-    _iptvResumePending = _currentGroupId == 'iptv' && IptvResumeChannel.channelId != null;
+    // 启动就落在 IPTV 时直接进播放页，别让用户先看到频道目录再跳。
+    // 这里不判断「有没有历史/记录」——目标由 [_resolveIptvResumeArgs] 现场解析，
+    // 库里只要有可见频道就一定进得去。
+    _iptvResumePending = _currentGroupId == 'iptv';
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (_iptvResumePending) unawaited(_resumeIptvChannel());

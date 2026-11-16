@@ -158,6 +158,20 @@ class AppDatabase extends _$AppDatabase {
         ]))
       .get();
 
+  /// 目录里排在最前面的可见频道（provider → sortOrder 同 [getAllVisibleChannels]）。
+  ///
+  /// 首页「进 IPTV 就播」的最后一档兜底：新设备、清过历史的设备没有播放记录，
+  /// 用它开播，等价于电视开机默认一个台，而不是先停在频道目录上。
+  /// 只取一行，不为一个 id 把整张表读进内存。
+  Future<Channel?> getFirstVisibleChannel() => (select(channels)
+        ..where((t) => t.hidden.equals(false))
+        ..orderBy([
+          (t) => OrderingTerm(expression: t.providerId),
+          (t) => OrderingTerm(expression: t.sortOrder),
+        ])
+        ..limit(1))
+      .getSingleOrNull();
+
   Future<void> upsertChannels(List<ChannelsCompanion> entries) async {
     await batch((b) {
       b.insertAllOnConflictUpdate(channels, entries);
