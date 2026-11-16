@@ -52,22 +52,22 @@ class _InfoPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color color = accent ?? Colors.white;
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 10.ts(context), vertical: 3.ts(context)),
+      padding: EdgeInsets.symmetric(horizontal: 12.ts(context), vertical: 4.ts(context)),
       decoration: BoxDecoration(
         color: filled ? color.withValues(alpha: 0.22) : Colors.white.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(8.ts(context)),
+        borderRadius: BorderRadius.circular(9.ts(context)),
         border: Border.all(color: filled ? color.withValues(alpha: 0.75) : Colors.white.withValues(alpha: 0.16)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 16.ts(context), color: Colors.white70),
-            SizedBox(width: 4.ts(context)),
+            Icon(icon, size: 18.ts(context), color: Colors.white70),
+            SizedBox(width: 5.ts(context)),
           ],
           Text(
             label,
-            style: AppTextStyles.t16.copyWith(
+            style: AppTextStyles.t18.copyWith(
               fontWeight: FontWeight.w600,
               color: filled ? Colors.white : Colors.white70,
             ),
@@ -341,7 +341,8 @@ class _RoomInfoBar extends StatelessWidget {
 
     return IgnorePointer(
       child: Container(
-        padding: EdgeInsets.fromLTRB(20.ts(context), 12.ts(context), 20.ts(context), 18.ts(context)),
+        // 两端留白加大：这张卡片向屏幕中间收，头像与时钟不再贴着边缘。
+        padding: EdgeInsets.fromLTRB(40.ts(context), 14.ts(context), 40.ts(context), 20.ts(context)),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -350,7 +351,7 @@ class _RoomInfoBar extends StatelessWidget {
           ),
         ),
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 16.ts(context), vertical: 12.ts(context)),
+          padding: EdgeInsets.symmetric(horizontal: 20.ts(context), vertical: 14.ts(context)),
           decoration: BoxDecoration(
             color: Colors.black.withValues(alpha: 0.42),
             borderRadius: BorderRadius.circular(18.ts(context)),
@@ -358,8 +359,8 @@ class _RoomInfoBar extends StatelessWidget {
           ),
           child: Row(
             children: [
-              TvCommonAvatar(avatarUrl: room.avatar, fallbackName: room.nick, radius: 30.ts(context)),
-              SizedBox(width: 14.ts(context)),
+              TvCommonAvatar(avatarUrl: room.avatar, fallbackName: room.nick, radius: 34.ts(context)),
+              SizedBox(width: 16.ts(context)),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -374,7 +375,7 @@ class _RoomInfoBar extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.t28.copyWith(fontWeight: FontWeight.w600, color: Colors.white),
                     ),
-                    SizedBox(height: 8.ts(context)),
+                    SizedBox(height: 9.ts(context)),
                     Row(
                       children: [
                         if (room.platform.isNotEmpty) ...[
@@ -407,8 +408,8 @@ class _RoomInfoBar extends StatelessWidget {
               // Wall clock: a live stream has no duration, so the time a viewer
               // glances up for is the time of day. The glyph rides the same
               // factor as the digits beside it.
-              Icon(RemixIcons.time_line, size: 24.ts(context), color: Colors.white70),
-              SizedBox(width: 8.ts(context)),
+              Icon(RemixIcons.time_line, size: 26.ts(context), color: Colors.white70),
+              SizedBox(width: 9.ts(context)),
               TvDigitalClock(
                 format: 'HH:mm',
                 style: AppTextStyles.t28.copyWith(fontWeight: FontWeight.w600, color: Colors.white),
@@ -473,6 +474,7 @@ class _TouchCaptureLayer extends StatelessWidget {
       // opaque：即使子节点没有内容，也要占满并接收事件。
       behavior: HitTestBehavior.opaque,
       onTap: gestures.onTap,
+      onDoubleTap: gestures.onDoubleTap,
       onPanStart: gestures.onPanStart,
       onPanUpdate: gestures.onPanUpdate,
       onPanEnd: gestures.onPanEnd,

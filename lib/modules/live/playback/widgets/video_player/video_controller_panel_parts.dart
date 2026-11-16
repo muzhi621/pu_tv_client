@@ -32,7 +32,7 @@ enum _Zone { bar, options }
 enum _OptionsPanel { none, quality, line, fit, kernel }
 
 class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
-  static const double _barHeight = 52;
+  static const double _barHeight = 62;
   static const double _optionsWidth = 380;
 
   final FocusNode _focusNode = FocusNode(debugLabel: 'live_play/controls');
@@ -638,12 +638,13 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
       // The band under the pills: live content above it stays clean, the
       // buttons always sit on black.
       color: Colors.black.withValues(alpha: 0.55),
-      padding: EdgeInsets.symmetric(horizontal: 20.ts(context), vertical: 16.ts(context)),
+      // 两端留白加大：按钮整体向屏幕中间收，避免贴着左右边缘。
+      padding: EdgeInsets.symmetric(horizontal: 40.ts(context), vertical: 16.ts(context)),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.zero,
         itemCount: actions.length,
-        separatorBuilder: (_, _) => SizedBox(width: 12.ts(context)),
+        separatorBuilder: (_, _) => SizedBox(width: 16.ts(context)),
         itemBuilder: (context, index) {
           final action = actions[index];
           return KeyedSubtree(
@@ -705,11 +706,12 @@ class _Pill extends StatelessWidget {
   });
 
   // Pill geometry lives here so the bar can be retuned in one place.
-  static const double _height = 52;
-  static const double _hPadding = 18;
-  static const double _gap = 8;
-  static const double _iconSize = 24;
-  static const double _trailingSize = 22;
+  // 整体放大一档：手机上点得准、电视上从沙发也看得清。
+  static const double _height = 62;
+  static const double _hPadding = 22;
+  static const double _gap = 10;
+  static const double _iconSize = 28;
+  static const double _trailingSize = 26;
 
   final IconData? icon;
   final String? asset;

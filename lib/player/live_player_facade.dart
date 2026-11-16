@@ -348,6 +348,19 @@ final class LivePlayerFacade {
 
   final _playingSubject = BehaviorSubject<bool>.seeded(false);
 
+  /// 用户明确的「暂停 / 播放」意图，是 [togglePlayPause] 判断方向的唯一依据。
+  ///
+  /// 不能用内核状态（state.playing / _playingSubject）来判方向：
+  /// - media_core 的 `pause()` 里 handle 有 `if (!_backendReady) return;`，
+  ///   open/verification 阶段会静默跳过底层 mpv 的暂停，但内核照样把镜像
+  ///   写成 paused；
+  /// - mpv 的 Playing/Paused 事件是 one-shot，绑定晚一点就收不到。
+  /// 两种情况下镜像都和「Users actually see」不符，用它判方向就会点反：
+  /// 画面在播却去 resume、画面已停却去 pause——表现都是「暂停无效」。
+  ///
+  /// 用显式意图就绕开了整条会失真的镜像链：翻转标志，明确调用 pause/resume。
+  bool _userPaused = false;
+
   final _errorSubject = PublishSubject<PlayerFailure>();
 
   final _widthSubject = BehaviorSubject<int?>.seeded(null);
@@ -645,6 +658,9 @@ final class LivePlayerFacade {
     // over while the first frame of this one is still pending.
     _currentPlatform = room?.platform;
     if (_dummyVideoSubject.value) _dummyVideoSubject.add(false);
+    // A fresh play (new room / line switch / retry) is always an explicit
+    // intent to watch, so the previous session's pause must not leak in.
+    _userPaused = false;
 
     // With no explicit headers, resolve them per platform (UA /
     // referer the live site requires).
@@ -709,51 +725,62 @@ final class LivePlayerFacade {
   Future<void> retry() async {
     if (_disposed) return;
 
+    // 重试是「重新播」，和 play 一样属于明确的观看意图。
+    _userPaused = false;
+
     await _controller.retry();
     _bindCurrentHandle();
   }
 
   /// Toggles play/pause.
   ///
-  /// 不能让内核自己判断：media_core 的 `togglePlayPause()` 读的是它内部的
-  /// 镜像状态，而 `open()` 返回后那个状态可能一直停在 `buffering`（本文件
-  /// 的 `_onLiveStateChanged` 专门把这种合成 buffering 修正为 playing 给 UI
-  /// 看）。于是界面显示「播放中」、用户点暂停，内核却以为还在 buffering，
-  /// 转去调 `resume()`——表现就是暂停按钮点了没反应。
-  ///
-  /// 这里用本 facade 已经维护的两份事实判断：UI 状态流和 adapter 的
-  /// Playing 事件。只要二者任一认为在播，就明确走 `pause()`。
+  /// 方向只看 [_userPaused] 这个显式意图，不看任何内核/adapter 状态镜像：
+  /// 那些镜像在 mpv 上会失真（内核 pause 被 backendReady 短路、Playing/Paused
+  /// 事件是 one-shot），拿它们判断就会出现「画面在播却去 resume、画面停了却
+  /// 去 pause」的错乱，用户看到的就是暂停按钮毫无反应。
   Future<void> togglePlayPause() async {
+    if (_userPaused) {
+      await resume();
+    } else {
+      await pause();
+    }
+  }
+
+  /// Pauses playback, honouring the user's explicit intent.
+  Future<void> pause() async {
     if (_disposed) return;
 
-    final PlayerCoreState state = _stateSubject.value;
-    // 注意不能用 `state.ready`：内核里 ready 只表示生命周期就绪，paused /
-    // buffering 都算 ready，拿它判断会让第二次点击仍然走 pause（暂停后永远
-    // 恢复不了）。只用「UI 状态流认为在播」或「adapter 报过 Playing」。
-    final bool playing = state.playing || _playingSubject.value;
+    _userPaused = true;
 
-    if (playing) {
-      await _controller.pause();
-    } else {
-      await _controller.resume();
+    await _controller.pause();
+
+    // 内核的 pause() 在 handle 尚未 backendReady 时会静默跳过底层 adapter 的
+    // pause，随后又把镜像写成 paused——画面还在播，状态却是暂停。这里直接对
+    // adapter 再补一刀 pause：adapter.pause() 是幂等的（media_kit 最终落到
+    // player.pause()），重复调用无副作用，却能把这种短路补上。
+    final handle = _controller.handle;
+    if (handle != null && !handle.disposed) {
+      try {
+        await handle.adapter.pause();
+      } catch (_) {
+        // 内核可能正在换核/关闭 handle：这次补刀失败不影响主路径。
+      }
     }
     _bindCurrentHandle();
   }
 
-  /// Pauses playback.
-  Future<void> pause() async {
-    if (_disposed) return;
-
-    await _controller.pause();
-  }
-
-  /// Resumes playback.
+  /// Resumes playback, honouring the user's explicit intent.
   Future<void> resume() async {
     if (_disposed) return;
+
+    _userPaused = false;
 
     await _controller.resume();
     _bindCurrentHandle();
   }
+
+  /// 用户当前是否处于主动暂停状态（供 UI 显示正确图标）。
+  bool get isUserPaused => _userPaused;
 
   /// 当前播放位置（点播进度与快进用）。
   ///

@@ -22,6 +22,7 @@ class PlayerGestureScope extends InheritedWidget {
   const PlayerGestureScope({
     super.key,
     required this.onTap,
+    required this.onDoubleTap,
     required this.onPanStart,
     required this.onPanUpdate,
     required this.onPanEnd,
@@ -30,6 +31,7 @@ class PlayerGestureScope extends InheritedWidget {
   });
 
   final VoidCallback onTap;
+  final VoidCallback onDoubleTap;
   final GestureDragStartCallback onPanStart;
   final GestureDragUpdateCallback onPanUpdate;
   final GestureDragEndCallback onPanEnd;
@@ -42,6 +44,7 @@ class PlayerGestureScope extends InheritedWidget {
   @override
   bool updateShouldNotify(PlayerGestureScope oldWidget) =>
       onTap != oldWidget.onTap ||
+      onDoubleTap != oldWidget.onDoubleTap ||
       onPanStart != oldWidget.onPanStart ||
       onPanUpdate != oldWidget.onPanUpdate ||
       onPanEnd != oldWidget.onPanEnd ||
@@ -482,6 +485,7 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
         // 因为按键那条链要先过焦点判定，而触摸场景下没有可依靠的焦点。
         child: PlayerGestureScope(
           onTap: _onTap,
+          onDoubleTap: _onDoubleTap,
           onPanStart: _onPanStart,
           onPanUpdate: _onPanUpdate,
           onPanEnd: _onPanEnd,
@@ -489,6 +493,7 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _onTap,
+            onDoubleTap: _onDoubleTap,
             onPanStart: _onPanStart,
             onPanUpdate: _onPanUpdate,
             onPanEnd: _onPanEnd,
@@ -508,6 +513,18 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
   /// 只弹一条控制条等于让用户再找一次入口。列表里高亮停在当前频道上，点一行
   /// 或按 OK 就切过去，这就是酷9 的那套交互。
   void _onTap() => unawaited(_handleTap());
+
+  /// 双击画面 = 暂停 / 播放（手机上的主要暂停入口）。
+  ///
+  /// GestureDetector 会先等一次双击窗口：单击落到 [_onTap]（唤控制条），
+  /// 双击只落到这里，不会两者都触发。失败浮层不接管，免得和它的按钮冲突。
+  void _onDoubleTap() {
+    if (!mounted) return;
+    final state = ref.read(livePlayControllerProvider(widget.args));
+    if (state.hasBlockingOverlay) return;
+    final controller = ref.read(livePlayControllerProvider(widget.args).notifier);
+    unawaited(controller.togglePlayPause());
+  }
 
   Future<void> _handleTap() async {
     if (!mounted) return;
