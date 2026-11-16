@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:pure_live/exports/exports.dart';
 import 'package:pure_live/modules/live/movie_playback/vod_play_launcher.dart';
+import 'package:pure_live/services/vod/vod_sniffer.dart';
 
 /// 单个影视条目的详情与选集。
 ///
@@ -82,17 +83,33 @@ class _VodDetailPageState extends State<VodDetailPage> {
         ToastUtil.show(i18n('vod_play_url_empty'));
         return;
       }
-      if (resolved.parse == 1) {
-        // 需要解析器的地址（网页嗅探类）当前没有内置解析器。仍然交给播放器
-        // 试一次：不少站点标 1 但地址本身是能直连的，直接拦下反而更差。
-        ToastUtil.show(i18n('vod_play_needs_parser'));
+
+      var url = resolved.url;
+      var headers = resolved.header;
+
+      if (resolved.parse != 0) {
+        // `parse != 0` 表示返回的不是直链，而是**网页**（1=嗅探类、
+        // 2=解析器接口），真正的流地址要从页面里嗅探出来。
+        // 之前这里只弹一句提示就把网页地址丢给播放器——播放器拿到 HTML 必然
+        // 失败，这类站点等于 100% 播不了。现在先嗅探，拿到真地址再播。
+        final sniffed = await VodSniffer.sniff(resolved.url, headers: resolved.header);
+        if (!mounted) return;
+        if (sniffed != null && sniffed.url.isNotEmpty) {
+          url = sniffed.url;
+          headers = sniffed.headers;
+        } else {
+          // 嗅探不到（页面靠 JS 运行时才拼地址，或网络不通）。仍然交给播放器
+          // 试一次：不少站点标 1 但地址本身是能直连的，直接拦下反而更差。
+          ToastUtil.show(i18n('vod_play_needs_parser'));
+        }
       }
+
       openVodPlayback(
         context,
         title: '${detail.name} ${episode.name}'.trim(),
-        url: resolved.url,
+        url: url,
         cover: detail.pic,
-        headers: resolved.header,
+        headers: headers,
       );
     } catch (error) {
       if (!mounted) return;
