@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/widgets.dart';
 import 'package:pure_live/core/theme/index.dart';
 import 'package:pure_live/core/utils/hive_pref_util.dart';
@@ -18,9 +20,23 @@ class PlayerPanelLayout {
   /// Bumped on every change so listeners can rebuild.
   static final ValueNotifier<int> revision = ValueNotifier<int>(0);
 
-  /// `'right'` (default) or `'left'`.
-  static String get side => _read<String>(_sideKey, HivePrefUtil.getString) ?? 'right';
+  /// `'left'` (default) or `'right'`.
+  ///
+  /// The channel list lives on the left, the way 酷9 and every IPTV box puts it;
+  /// the other panels follow the same edge so the menu does not jump sides when
+  /// the user switches from the playlist to the danmaku settings.
+  static String get side => _read<String>(_sideKey, HivePrefUtil.getString) ?? 'left';
   static bool get isLeft => side == 'left';
+
+  /// Width of the side panel, in logical pixels.
+  ///
+  /// 400 design pixels at 100% text is a TV-side panel; a phone held upright is
+  /// narrower than that, so the frame is capped against the viewport. Both the
+  /// page's frame and the panel inside it read this, which is what keeps the two
+  /// from disagreeing (a wider panel inside a narrower frame painted its rows
+  /// outside the rounded border).
+  static double widthOf(BuildContext context, {double requested = 400}) =>
+      math.min(requested.ts(context), MediaQuery.sizeOf(context).width * 0.78);
 
   /// Distance from that edge, in design pixels.
   static int get offset => _read<int>(_offsetKey, HivePrefUtil.getInt) ?? 24;

@@ -160,6 +160,7 @@
   "ui_export_success": "Exported successfully",
   "ui_no_switchable_channel": "No channel available to switch to",
   "ui_playlist": "Playlist",
+  "ui_channel_list": "Channels",
   "ui_playlist_hint": "Up/Down to pick a channel, OK to switch",
   "ui_remote_starting": "Starting the phone remote service...",
   "ui_room_info": "Room info",

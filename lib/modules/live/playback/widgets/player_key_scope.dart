@@ -15,8 +15,8 @@ import 'package:pure_live/modules/live/playback/controllers/live_play_controller
 /// d-pad layer. Keys reach it through one [Focus], so nothing can steal focus or
 /// leave the player with a dead remote.
 ///
-/// * nothing open: OK shows the controls, Up/Down switch channel, Left
-///   double-presses to follow, Right opens the playlist
+/// * nothing open: OK shows the controls, Up/Down open the channel list on the
+///   left, Left double-presses to follow, Right opens the channel list
 /// * a side panel open: keys belong to that panel (they are focus based)
 /// * controls visible: the control layer's own [Focus] handles them first —
 ///   events bubble from the primary focus outwards, so this handler stays out of
@@ -53,6 +53,20 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
 
   /// The window rapid presses have to accumulate within.
   static const Duration _channelDebounceWindow = Duration(milliseconds: 300);
+
+  // ------------------------------------------------------------ 触摸手势
+
+  /// 横向/纵向拖动超过这个像素数才算一次有效滑动（低于它当作误触）。
+  static const double _panSeekThreshold = 60;
+
+  /// 本次拖动的起点与累计位移。
+  double _panStartX = 0;
+  double _panStartY = 0;
+  double _panDeltaX = 0;
+  double _panDeltaY = 0;
+
+  /// 本次拖动是否已经触发过快进（防止一路拖动连续跳）。
+  bool _panActionApplied = false;
 
   @override
   void initState() {
@@ -265,12 +279,16 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
       return KeyEventResult.handled;
     }
 
-    if (key == LogicalKeyboardKey.arrowUp) {
-      _switchChannel(-1);
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowDown) {
-      _switchChannel(1);
+    // ↑↓ 唤出左侧频道列表（酷9 的交互）：列表打开时高亮停在当前频道上，
+    // 之后的 ↑↓ 在列表里移动、OK 切台、← 收起。比"按一下就立刻换台"更适合
+    // 动辄上百个台的 IPTV 包——用户能先看见自己在哪一个台、前后还有哪些台，
+    // 而不是盲按到画面黑一下才知道换成了什么。
+    if (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.arrowDown) {
+      if (controller.channelRooms.length > 1) {
+        controller.openPanel(LivePlayPanel.playlist);
+      } else {
+        ToastUtil.show(i18nOr('ui_no_switchable_channel', 'No channel available to switch to'));
+      }
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowLeft) {
@@ -393,7 +411,119 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
         }
         if (mounted) Navigator.of(context).pop();
       },
-      child: Focus(focusNode: _focusNode, autofocus: true, onKeyEvent: _onKeyEvent, child: widget.child),
+      child: Focus(
+        focusNode: _focusNode,
+        autofocus: true,
+        onKeyEvent: _onKeyEvent,
+        // 触摸手势（见 [_onTap] / [_onPanUpdate]）。这一层是**必需**的：
+        // 整个播放器原本只为遥控器设计，没有任何手势识别，手机上点屏幕
+        // 完全没有反应。按键事件在手机上根本不会产生（没有物理方向键），
+        // 所以触摸必须自己把语义做出来。
+        //
+        // 手势的语义与按键对齐：单击 = OK（唤出控制条 + 左侧频道列表），
+        // 直播上下滑 = ↑↓（换台），点播左右滑 = 快进 / 后退。不复用按键派发，
+        // 因为按键那条链要先过焦点判定，而触摸场景下没有可依靠的焦点。
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _onTap,
+          onPanStart: _onPanStart,
+          onPanUpdate: _onPanUpdate,
+          onPanEnd: _onPanEnd,
+          onPanCancel: _onPanCancel,
+          child: widget.child,
+        ),
+      ),
     );
+  }
+
+  // ---------------------------------------------------------------- 触摸
+
+  /// 单击：控制条/频道列表开着就收起，没开就唤出——与遥控器 OK 键一致。
+  ///
+  /// 直播时把**左侧频道列表**一起带出来：点屏幕的意图基本都是"我要换台"，
+  /// 只弹一条控制条等于让用户再找一次入口。列表里高亮停在当前频道上，点一行
+  /// 或按 OK 就切过去，这就是酷9 的那套交互。
+  void _onTap() {
+    if (!mounted) return;
+    final state = ref.read(livePlayControllerProvider(widget.args));
+    final controller = ref.read(livePlayControllerProvider(widget.args).notifier);
+
+    // 失败浮层自带按钮，空白处的点击不该在它身上再叠一层菜单。
+    if (state.hasBlockingOverlay) return;
+
+    if (state.showSidePanel) {
+      controller.toggleSidePanel();
+      return;
+    }
+    if (state.showControls) {
+      controller.dismissOverlays();
+      return;
+    }
+
+    controller.showControls();
+    // 只有一个台时开列表没有意义，还会让人以为"点出了一张空面板"。
+    if (controller.channelRooms.length > 1) controller.openPanel(LivePlayPanel.playlist);
+  }
+
+  /// 拖动起点：记住起点，滑动位移按它算。
+  void _onPanStart(DragStartDetails details) {
+    _panStartX = details.globalPosition.dx;
+    _panStartY = details.globalPosition.dy;
+    _panDeltaX = 0;
+    _panDeltaY = 0;
+  }
+
+  /// 拖动中：点播横向超过阈值就快进/后退，直播纵向超过阈值就切台。
+  ///
+  /// 一次拖动只触发一次动作（[_panActionApplied]），否则手指一路划过去会连着
+  /// 跳好几下。
+  void _onPanUpdate(DragUpdateDetails details) {
+    if (!mounted) return;
+
+    final state = ref.read(livePlayControllerProvider(widget.args));
+    // 面板里可能有自己的滚动，失败浮层在等用户做选择：两者都不该被抢手势。
+    if (state.showSidePanel || state.hasBlockingOverlay) return;
+
+    _panDeltaX = details.globalPosition.dx - _panStartX;
+    _panDeltaY = details.globalPosition.dy - _panStartY;
+
+    if (_panActionApplied) return;
+
+    if (widget.args.vod) {
+      if (_panDeltaX.abs() >= _panSeekThreshold) {
+        _panActionApplied = true;
+        final controller = ref.read(livePlayControllerProvider(widget.args).notifier);
+        unawaited(_seek(controller, _panDeltaX > 0 ? 10 : -10));
+      }
+      return;
+    }
+
+    // 直播：上滑 → 上一个频道，下滑 → 下一个，与遥控器 ↑↓ 同向。
+    // 横向位移更大时不认，避免斜着划一下就把台换掉。
+    if (_panDeltaY.abs() >= _panSeekThreshold && _panDeltaY.abs() > _panDeltaX.abs()) {
+      _panActionApplied = true;
+      _switchChannel(_panDeltaY < 0 ? -1 : 1);
+    }
+  }
+
+  /// 抬手：纵向滑动唤出控制条。
+  void _onPanEnd(DragEndDetails details) {
+    if (!mounted) return;
+    final state = ref.read(livePlayControllerProvider(widget.args));
+    final controller = ref.read(livePlayControllerProvider(widget.args).notifier);
+    if (widget.args.vod && !state.showSidePanel) {
+      if (_panDeltaY.abs() >= _panSeekThreshold && _panDeltaX.abs() < _panSeekThreshold) {
+        controller.showControls();
+      }
+    }
+    _panDeltaX = 0;
+    _panDeltaY = 0;
+    _panActionApplied = false;
+  }
+
+  void _onPanCancel() {
+    _panDeltaX = 0;
+    _panDeltaY = 0;
+    _panActionApplied = false;
   }
 }

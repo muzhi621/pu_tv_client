@@ -156,6 +156,7 @@
   "ui_export_success": "导出成功",
   "ui_no_switchable_channel": "没有可切换的频道",
   "ui_playlist": "播放列表",
+  "ui_channel_list": "频道列表",
   "ui_playlist_hint": "上下键选择频道，确认键切台",
   "ui_remote_starting": "正在启动手机远程服务...",
   "ui_room_info": "房间信息",

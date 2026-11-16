@@ -246,6 +246,25 @@ class _PlayerIndexPanelState extends State<PlayerIndexPanel> {
 
   bool _isCloseRow(int index) => index == widget.rows.length;
 
+  /// A tap on a row: move the highlight there, then run what OK would run.
+  ///
+  /// Same order as the remote, so a panel behaves identically whether it is
+  /// driven by a d-pad or a finger — and the highlight is left where the user
+  /// touched even when the action itself does not dismiss the panel.
+  void _activate(int index) {
+    final int count = _renderedRows.length;
+    if (count == 0) return;
+
+    final int target = index.clamp(0, count - 1);
+    if (widget.selectedIndex != target) widget.onSelectionChanged(target);
+
+    if (_isCloseRow(target)) {
+      widget.onClose();
+    } else {
+      widget.onSelect(target);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final tvTheme = context.tvTheme;
@@ -267,8 +286,10 @@ class _PlayerIndexPanelState extends State<PlayerIndexPanel> {
         child: SizedBox(
           // The width tracks the text factor with the content: a fixed 400.ts(context)
           // panel kept its width while every label inside grew, and the labels
-          // answered by wrapping into ellipsis chains.
-          width: widget.width.ts(context),
+          // answered by wrapping into ellipsis chains. [PlayerPanelLayout.widthOf]
+          // also caps it against the viewport, so a phone does not get a panel
+          // wider than its own screen.
+          width: PlayerPanelLayout.widthOf(context, requested: widget.width),
           // No decoration of its own: the host container (live_play page's
           // side-panel frame) paints the surface and the single border. A
           // border here too drew two frames one inside the other.
@@ -310,7 +331,8 @@ class _PlayerIndexPanelState extends State<PlayerIndexPanel> {
                           final Widget? custom = index < widget.rows.length
                               ? widget.rowBuilder?.call(context, index, isSelected)
                               : null;
-                          return custom ??
+                          final Widget content =
+                              custom ??
                               _PanelRow(
                                 row: rows[index],
                                 selected: isSelected,
@@ -318,6 +340,13 @@ class _PlayerIndexPanelState extends State<PlayerIndexPanel> {
                                 theme: tvTheme,
                                 scale: scale,
                               );
+                          // 触摸设备：整行可点。遥控器有 ↑↓ + OK，鼠标和手指
+                          // 没有 —— 面板原来只能看不能点，手机上等于没有列表。
+                          return GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => _activate(index),
+                            child: content,
+                          );
                         },
                       ),
               ),

@@ -1,4 +1,5 @@
 import 'package:pure_live/exports/package_export.dart';
+import 'package:pure_live/platforms/sites.dart';
 import 'package:pure_live/app/router/app/app_router.dart';
 import 'package:pure_live/modules/live/playback/models/live_play_args.dart';
 import 'package:pure_live/services/favorites/favorite_room_controller.dart';
@@ -35,7 +36,10 @@ class _PlaylistPanelState extends ConsumerState<PlaylistPanel> {
   /// cannot disagree.
   static const bool _largeRows = true;
 
-  int _index = 0;
+  /// Highlighted row. Opens on the **current** channel (as the 酷9 channel list
+  /// does) instead of the first row: in a long IPTV package the viewer would
+  /// otherwise have to hunt for the channel that is already playing.
+  late int _index = ref.read(livePlayControllerProvider(widget.args).notifier).channelIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +51,11 @@ class _PlaylistPanelState extends ConsumerState<PlaylistPanel> {
     final int index = rooms.isEmpty ? 0 : _index.clamp(0, rooms.length - 1);
 
     return PlayerIndexPanel(
-      title: i18nOr('ui_playlist', 'Playlist'),
+      // IPTV 的列表就是频道表，叫"频道列表"才对得上用户看到的东西；其他站点
+      // 仍然是"播放列表"（那里还有主播房间的概念）。
+      title: widget.args.platform == Sites.iptvSite || current?.platform == Sites.iptvSite
+          ? i18nOr('ui_channel_list', '频道列表')
+          : i18nOr('ui_playlist', 'Playlist'),
       rows: <PlayerPanelRow>[for (final LiveRoom room in rooms) PlayerPanelRow(label: room.title, subtitle: room.nick)],
       selectedIndex: index,
       onSelectionChanged: (i) => setState(() => _index = i),

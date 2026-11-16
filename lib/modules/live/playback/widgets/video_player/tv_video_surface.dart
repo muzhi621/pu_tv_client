@@ -13,11 +13,14 @@ import 'package:pure_live/modules/live/playback/widgets/video_player/playback_fa
 /// overlay, loading/error overlays and an auto-hiding D-pad control panel.
 ///
 /// Remote key layout, ported from handleKeyNoPanel in the legacy app:
-/// - Up / Down: previous / next channel, wrapping through the playlist or
-///   watch history
+/// - Up / Down: open the channel list on the left (酷9's layout) with the
+///   current channel highlighted; ↑↓ inside it walk the list and OK switches
 /// - Left: double press to follow or unfollow
-/// - Right: open the playlist panel
+/// - Right: open the channel list as well
 /// - OK: show the bottom control bar
+///
+/// Touch devices get the same entry points through [PlaybackTouchLayer]: a tap
+/// on the picture is the OK key, a vertical swipe is Up/Down.
 ///
 /// Every direction key is consumed here so focus cannot escape the player and
 /// leave the remote apparently dead.
