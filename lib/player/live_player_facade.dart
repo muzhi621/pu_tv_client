@@ -361,6 +361,9 @@ final class LivePlayerFacade {
   /// 用显式意图就绕开了整条会失真的镜像链：翻转标志，明确调用 pause/resume。
   bool _userPaused = false;
 
+  /// [isUserPaused] 的可观察版本，供播放面板绑定播放/暂停图标。
+  final _userPausedSubject = BehaviorSubject<bool>.seeded(false);
+
   final _errorSubject = PublishSubject<PlayerFailure>();
 
   final _widthSubject = BehaviorSubject<int?>.seeded(null);
@@ -436,6 +439,12 @@ final class LivePlayerFacade {
   /// Keeping the request as one object prevents the URL, fallback lines,
   /// headers and room metadata from drifting apart during an engine switch.
   LiveSourceRequest? _lastRequest;
+
+  /// play() 内有多处 await（解析请求头、拦截源）。快速连点切房间时，旧一轮
+  /// 可能在新一轮之后才走到写回 _lastHeaders/_lastRequest，导致重放信息倒退。
+  /// 每次 play 递增，写回前校验只让最新一轮落盘；controller.play 仍照常执行
+  /// （顺序由 controller 队列保证），不影响实际播放。
+  int _playGeneration = 0;
 
   // ---------------------------------------------------------------------------
   // Handle / adapter binding
@@ -648,6 +657,7 @@ final class LivePlayerFacade {
       throw StateError('LivePlayerFacade has already been disposed');
     }
 
+    final playGeneration = ++_playGeneration;
     final sourceUrl = url.trim();
 
     if (sourceUrl.isEmpty) {
@@ -661,6 +671,7 @@ final class LivePlayerFacade {
     // A fresh play (new room / line switch / retry) is always an explicit
     // intent to watch, so the previous session's pause must not leak in.
     _userPaused = false;
+    _userPausedSubject.add(false);
 
     // With no explicit headers, resolve them per platform (UA /
     // referer the live site requires).
@@ -678,7 +689,8 @@ final class LivePlayerFacade {
       if (playUrls.isEmpty) sourceUrl else ...[sourceUrl, ...playUrls.where((value) => value != sourceUrl)],
     ];
 
-    _lastHeaders = effectiveHeaders;
+    // 只让最新一轮写重放头；旧轮即使晚到也不覆盖新请求的元数据。
+    if (playGeneration == _playGeneration) _lastHeaders = effectiveHeaders;
 
     // A new request replaces the old lines, so the relays that served them are
     // retired first; the sources of this request get their own.
@@ -700,7 +712,7 @@ final class LivePlayerFacade {
     //
     // An engine switch can happen immediately after play() returns, so the
     // replay path must have the exact same source information available.
-    _lastRequest = request;
+    if (playGeneration == _playGeneration) _lastRequest = request;
 
     await _controller.play(request, preferredBackend: startBackend);
 
@@ -727,6 +739,7 @@ final class LivePlayerFacade {
 
     // 重试是「重新播」，和 play 一样属于明确的观看意图。
     _userPaused = false;
+    _userPausedSubject.add(false);
 
     await _controller.retry();
     _bindCurrentHandle();
@@ -751,6 +764,7 @@ final class LivePlayerFacade {
     if (_disposed) return;
 
     _userPaused = true;
+    _userPausedSubject.add(true);
 
     await _controller.pause();
 
@@ -774,6 +788,7 @@ final class LivePlayerFacade {
     if (_disposed) return;
 
     _userPaused = false;
+    _userPausedSubject.add(false);
 
     await _controller.resume();
     _bindCurrentHandle();
@@ -781,6 +796,13 @@ final class LivePlayerFacade {
 
   /// 用户当前是否处于主动暂停状态（供 UI 显示正确图标）。
   bool get isUserPaused => _userPaused;
+
+  /// 用户暂停意图流：图标应绑定它，而不是内核的 state.playing / _playingSubject。
+  ///
+  /// 内核镜像在 mpv 上会失真（backendReady 短路跳过 adapter.pause、Playing/Paused
+  /// 事件 one-shot 绑定晚收不到），拿它显示图标就会出现「画面在播却显示播放键、
+  /// 画面停了却显示暂停键」的错乱。这是唯一可信的暂停意图来源。
+  Stream<bool> get onUserPausedChanged => _userPausedSubject.stream;
 
   /// 当前播放位置（点播进度与快进用）。
   ///
@@ -819,7 +841,6 @@ final class LivePlayerFacade {
     _backendChangeSub = null;
   }
 
-  /// Sets the volume (0.0–1.0).
   /// Sets the volume (0.0–1.0).
   Future<void> setVolume(double volume) async {
     if (_disposed) {
@@ -1063,6 +1084,7 @@ final class LivePlayerFacade {
 
     await _stateSubject.close();
     await _playingSubject.close();
+    await _userPausedSubject.close();
     await _errorSubject.close();
     await _widthSubject.close();
     await _heightSubject.close();

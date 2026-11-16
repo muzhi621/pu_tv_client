@@ -70,16 +70,15 @@ internal class TvKeyBridge(binaryMessenger: BinaryMessenger) : MethodChannel.Met
     fun handle(event: KeyEvent): Boolean {
         if (!enabled) return false
         if (event.keyCode !in FORWARDED) return false
-        if (event.action != KeyEvent.ACTION_DOWN && event.action != KeyEvent.ACTION_UP) return false
-
-        // 只转发首次按下：长按重复由 Dart 侧按需处理，避免一次长按刷爆通道。
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-            try {
-                channel.invokeMethod("keyDown", event.keyCode)
-            } catch (_: Throwable) {
-                // 引擎已销毁：交回平台，不能把按键吞掉。
-                return false
-            }
+        // 只消费并转发首次 DOWN：此前 ACTION_UP 与长按 repeatCount>0 的 DOWN 也
+        // 返回 true 却从不 invokeMethod，被无声吞掉。Dart 侧只监听 keyDown，
+        // 把 UP 交回平台焦点链才不会破坏依赖 keyUp / 长按的交互（审核 #7）。
+        if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount != 0) return false
+        try {
+            channel.invokeMethod("keyDown", event.keyCode)
+        } catch (_: Throwable) {
+            // 引擎已销毁：交回平台，不能把按键吞掉。
+            return false
         }
         return true
     }

@@ -249,6 +249,11 @@ class GlobalPlayerService {
 
   bool _initialized = false;
 
+  /// 并发初始化锁。initialize 内有 `await loadPlatformProvider()`，此前两个
+  /// 调用方同时进入会各建一套 PlayerKernel + Facade，前者泄漏（含 native
+  /// player 与 channel 注册）。后续调用改为等待同一个 Future。
+  Future<void>? _initializing;
+
   bool get initialized => _initialized;
 
   PlatformProvider? _platformProvider;
@@ -295,8 +300,22 @@ class GlobalPlayerService {
   PlayerKernel? get kernel => _kernel;
 
   /// Ensures the service is up on [defaultEngine].
-  Future<void> initialize({PlayerEngine defaultEngine = PlayerEngine.mediaKit}) async {
-    if (_initialized) return;
+  ///
+  /// 并发安全：首次调用创建初始化 Future，后续调用 await 同一个 Future；
+  /// 初始化失败时清空锁，允许下次重试而不是永久卡住。
+  Future<void> initialize({PlayerEngine defaultEngine = PlayerEngine.mediaKit}) {
+    if (_initialized) return Future.value();
+    final running = _initializing;
+    if (running != null) return running;
+    final future = _doInitialize(defaultEngine);
+    _initializing = future;
+    return future.whenComplete(() {
+      // 只清自己这一轮：若期间已被 dispose 又开启新一轮，不能误清新锁。
+      if (identical(_initializing, future)) _initializing = null;
+    });
+  }
+
+  Future<void> _doInitialize(PlayerEngine defaultEngine) async {
     MediaKitPlayerAdapter.ensureInitialized();
 
     // Output settings ride two rails: a live-appliable mpv property change

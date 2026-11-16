@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:pure_live/core/platform/race_http.dart';
@@ -292,7 +293,14 @@ class AppUpdateController extends _$AppUpdateController {
       final url = '${asset['browser_download_url'] ?? ''}'.trim();
       if (name.isEmpty || !url.startsWith('http')) continue;
       if (!name.toLowerCase().endsWith('.apk')) continue; // TV installs APKs only.
-      result.add(ReleaseAssetInfo(name: name, url: url, sizeBytes: (asset['size'] as num?)?.toInt() ?? 0));
+      // GitHub Releases API 的 asset.digest 形如 "sha256:<hex>"；有则用于下载后
+      // 端到端校验，旧 release 无此字段时为空并退化为大小 + 魔数校验。
+      final digest = parseAssetDigest(asset['digest']);
+      result.add(ReleaseAssetInfo(
+        name: name, url: url,
+        sizeBytes: (asset['size'] as num?)?.toInt() ?? 0,
+        sha256: digest,
+      ));
     }
     return result;
   }
@@ -505,6 +513,24 @@ class AppUpdateController extends _$AppUpdateController {
     return untagged != 0 ? untagged : anyPackage;
   }
 
+  /// SHA-256 of the asset that would be downloaded for [abi], or '' when the
+  /// release metadata does not publish one. Mirrors [expectedBytesFor]'s asset
+  /// selection (abi, then renderer variant) so the digest belongs to the same
+  /// file that gets installed.
+  String expectedSha256For(String abi) {
+    final String wanted = abi.trim().toLowerCase();
+    final String renderer = state.rendererVariant;
+    String untagged = '';
+    String anyPackage = '';
+    for (final ReleaseAssetInfo asset in state.latestAssets) {
+      if (!asset.isApk || asset.abi != wanted || asset.sha256.isEmpty) continue;
+      if (asset.renderer == renderer) return asset.sha256;
+      if (asset.renderer.isEmpty) untagged = untagged.isEmpty ? asset.sha256 : untagged;
+      anyPackage = anyPackage.isEmpty ? asset.sha256 : anyPackage;
+    }
+    return untagged.isNotEmpty ? untagged : anyPackage;
+  }
+
   /// Converts a releases.json size string such as `12.3 MB` into bytes; null when
   /// unparsable.
   ///
@@ -587,12 +613,16 @@ class AppUpdateController extends _$AppUpdateController {
     // Expected size from release metadata. The finished download must be checked
     // against it, or a mirror's HTML error page commits as an installer.
     final int expectedBytes = expectedBytesFor(state.selectedAbi);
+    final String expectedSha256 = expectedSha256For(state.selectedAbi);
 
     Object? lastError;
     for (final candidate in candidates.toSet()) {
       final destination = '${target.path}${Platform.pathSeparator}$fileName';
       try {
-        await _downloadCandidate(candidate, destination, expectedBytes: expectedBytes);
+        await _downloadCandidate(
+          candidate, destination,
+          expectedBytes: expectedBytes, expectedSha256: expectedSha256,
+        );
         if (_cancelToken?.isCancelled == true) return false;
         _cancelDownload();
         _patchState(phase: AppUpdatePhase.readyToInstall, receivedBytes: state.totalBytes, downloadedPath: destination);
@@ -623,7 +653,10 @@ class AppUpdateController extends _$AppUpdateController {
   /// The package is never written where the installer can see a half-file: the
   /// bytes land in a staging file, and only a completed transfer is renamed
   /// onto [destination].
-  Future<void> _downloadCandidate(String url, String destination, {int expectedBytes = 0}) async {
+  Future<void> _downloadCandidate(
+    String url, String destination, {
+    int expectedBytes = 0, String expectedSha256 = '',
+  }) async {
     final completed = File(destination);
     final partial = File('$destination.part');
 
@@ -657,7 +690,9 @@ class AppUpdateController extends _$AppUpdateController {
 
     // Validate before the commit: a rejected package is deleted here, so the
   // installer never sees a partial file.
-    final String? invalid = await _validateStagedPackage(partial, expectedBytes: expectedBytes);
+    final String? invalid = await _validateStagedPackage(
+      partial, expectedBytes: expectedBytes, expectedSha256: expectedSha256,
+    );
     if (invalid != null) {
       await _deleteIfPresent(partial);
       throw FileSystemException(invalid);
@@ -677,7 +712,11 @@ class AppUpdateController extends _$AppUpdateController {
   /// 3. **size** - when release metadata provides one. GitHub's `size` is exact;
   ///    the releases.json string (`12.3 MB`) is rounded, so the comparison keeps
   ///    a 2% tolerance. Truncated transfers (tens of MB short) still fail.
-  Future<String?> _validateStagedPackage(File partial, {required int expectedBytes}) async {
+  Future<String?> _validateStagedPackage(
+    File partial, {
+    required int expectedBytes,
+    String expectedSha256 = '',
+  }) async {
     final int actual = await partial.length();
     if (actual <= 0) return i18n('update_error_package_empty');
 
@@ -701,6 +740,14 @@ class AppUpdateController extends _$AppUpdateController {
           'update_error_package_size',
           args: {'expected': _readableBytes(expectedBytes), 'actual': _readableBytes(actual)},
         );
+      }
+    }
+    // 端到端完整性：大小一致也可能被同尺寸镜像替换， digest 是唯一能证明
+    // "字节完全等于发布产物"的手段。清单未提供 digest 时跳过（向后兼容旧 release）。
+    if (expectedSha256.isNotEmpty) {
+      final digest = await crypto.sha256.bind(partial.openRead()).first;
+      if (digest.toString().toLowerCase() != expectedSha256.toLowerCase()) {
+        return i18n('update_error_package_checksum');
       }
     }
     return null;

@@ -3,7 +3,7 @@
 // riverpod state machinery; these are the plain data types.
 
 import 'dart:convert';
-import 'package:crypto/crypto.dart';
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:path/path.dart' as path;
 import 'package:pure_live/core/models/release_model/release_model.dart';
 
@@ -112,12 +112,35 @@ bool isApkAsset(String name, String url) {
 
 /// One release asset from GitHub's releases API — the source of truth for
 /// downloads (version.json is only a hint).
+/// 从 GitHub Releases API 的 `asset.digest`（`sha256:<hex>`）取出十六进制摘要；
+/// 空串/非 sha256 前缀一律返回 ''（旧 release 没有该字段，退化为大小校验）。
+String parseAssetDigest(Object? raw) {
+  final value = raw.toString().trim().toLowerCase();
+  if (!value.startsWith('sha256:')) return '';
+  final hex = value.substring(7).trim();
+  if (hex.length != 64 || hex.any((c) => !_isHex(c))) return '';
+  return hex;
+}
+
+bool _isHex(String c) =>
+    (c.codeUnitAt(0) >= 0x30 && c.codeUnitAt(0) <= 0x39)
+    || (c.codeUnitAt(0) >= 0x61 && c.codeUnitAt(0) <= 0x66);
+
 class ReleaseAssetInfo {
-  const ReleaseAssetInfo({required this.name, required this.url, required this.sizeBytes});
+  const ReleaseAssetInfo({
+    required this.name,
+    required this.url,
+    required this.sizeBytes,
+    this.sha256 = '',
+  });
 
   final String name;
   final String url;
   final int sizeBytes;
+
+  /// GitHub Releases API 的 asset.digest（`sha256:<hex>`），用于下载后端到端
+  /// 校验。旧 release / 镜像清单没有该字段时为空，退化为大小 + ZIP 魔数校验。
+  final String sha256;
 
   /// `arm64-v8a`, `armeabi-v7a` or `x86_64` when the file name carries one,
   /// null for anything else.
@@ -294,7 +317,7 @@ String _fitDownloadBaseName(String candidate) {
 
   final stem = rawExtension.isEmpty ? candidate : candidate.substring(0, candidate.length - rawExtension.length);
 
-  final digest = sha256.convert(utf8.encode(candidate)).toString().substring(0, 12);
+  final digest = crypto.sha256.convert(utf8.encode(candidate)).toString().substring(0, 12);
 
   final suffix = '-$digest$extension';
 

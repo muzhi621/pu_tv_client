@@ -19,6 +19,8 @@ class RemoteConfigKeys {
   static const String lastUpdateCheckAt = 'remoteConfigLastUpdateCheckAt';
   static const String deviceId = 'remoteConfigDeviceId';
   static const String lastIptvStamp = 'remoteConfigLastIptvStamp';
+  /// 云端 sections.iptv.epgUrl（XMLTV 源地址），由 EPG 模块消费。
+  static const String epgUrl = 'remoteConfigEpgUrl';
 
   const RemoteConfigKeys._();
 }
@@ -70,6 +72,13 @@ class RemoteConfigStore {
 
   static Future<void> setIptvStamp(String value) async {
     await HivePrefUtil.setString(RemoteConfigKeys.lastIptvStamp, value);
+  }
+
+  /// 云端下发的 EPG 源地址（XMLTV）。空串表示云端未配置。
+  static String get epgUrl => HivePrefUtil.getString(RemoteConfigKeys.epgUrl)?.trim() ?? '';
+
+  static Future<void> setEpgUrl(String value) async {
+    await HivePrefUtil.setString(RemoteConfigKeys.epgUrl, value.trim());
   }
 
   static RemoteConfigDocument? readDocument() {

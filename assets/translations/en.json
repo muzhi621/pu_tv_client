@@ -1599,6 +1599,7 @@
   "update_error_package_empty": "The downloaded package is empty — try again",
   "update_error_package_invalid": "Downloaded package is incomplete or corrupted — try again",
   "update_error_package_size": "Package size check failed (expected {expected}, got {actual})",
+  "update_error_package_checksum": "Package checksum mismatch — refusing to install a possibly replaced file",
   "update_error_http_status": "Download failed (HTTP {code})",
   "update_error_timeout": "Download timed out — try again",
   "update_error_network": "Network error — try again",
@@ -3096,5 +3097,13 @@
   "vod_play_url_empty": "Playback URL is empty",
   "vod_play_needs_parser": "This URL needs a parser, tried direct playback",
   "vod_no_config": "No video source configured yet",
-  "vod_no_config_hint": "Video sources and sites come from the cloud. Import a config under TVBox sources in the editor, tick it for this device under Devices, then refresh here."
+  "vod_no_config_hint": "Video sources and sites come from the cloud. Import a config under TVBox sources in the editor, tick it for this device under Devices, then refresh here.",
+  "epg_guide": "TV Guide",
+  "epg_today": "Today",
+  "epg_channels": "Channels",
+  "epg_no_source": "No guide URL configured in the cloud",
+  "epg_load_failed": "Failed to load the TV guide, try again later",
+  "epg_empty": "No guide data",
+  "epg_no_programme": "No programmes for this day",
+  "epg_entry": "TV Guide"
 }

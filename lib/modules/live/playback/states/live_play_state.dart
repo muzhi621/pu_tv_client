@@ -30,6 +30,7 @@ class LivePlayState {
     this.position = Duration.zero,
     this.duration,
     this.channelOverride,
+    this.userPaused = false,
   });
 
   final LiveRoom? room;
@@ -111,6 +112,11 @@ class LivePlayState {
   /// 频道表，那是目录里也看得见的那一串台，只能这里补。
   final List<LiveRoom>? channelOverride;
 
+  /// 用户的显式暂停意图，来自 [LivePlayerFacade.onUserPausedChanged]。
+  ///
+  /// 播放/暂停图标必须绑定它，而不是内核的 playerState.playing/buffering 镜像。
+  final bool userPaused;
+
   bool get showChannelBanner => channelBanner != null && channelBanner!.isNotEmpty;
 
   /// Whether the failure overlay owns the picture.
@@ -153,6 +159,7 @@ class LivePlayState {
     Duration? duration,
     bool clearDuration = false,
     List<LiveRoom>? channelOverride,
+    bool? userPaused,
   }) {
     return LivePlayState(
       room: clearRoom ? null : (room ?? this.room),
@@ -177,6 +184,7 @@ class LivePlayState {
       position: position ?? this.position,
       duration: clearDuration ? null : (duration ?? this.duration),
       channelOverride: channelOverride ?? this.channelOverride,
+      userPaused: userPaused ?? this.userPaused,
     );
   }
 }

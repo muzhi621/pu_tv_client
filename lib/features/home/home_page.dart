@@ -14,10 +14,10 @@ import 'package:pure_live/modules/live/playback/models/live_play_args.dart';
 import 'package:pure_live/platforms/sites.dart';
 import 'package:pure_live/services/settings/settings.dart';
 
-/// 启动页：只有 IPTV / 影音 / 设置三个大按钮。
+/// 启动页：只有 影音 / IPTV / 设置 三个大按钮（顺序即遥控器焦点顺序）。
 ///
 /// 2026-11-16 定版：用户明确要求去掉侧边栏和“首页里嵌频道网格”的结构。
-/// 这里只做分发：点 IPTV 直接进播放页，点影音进点播页，点设置进设置页；
+/// 这里只做分发：点影音进点播页，点 IPTV 直接进播放页，点设置进设置页；
 /// 三个目标都是**独立的路由**，所以按返回一律回到这个启动页，不会中途
 /// 掉进 IPTV 全部频道。
 ///
@@ -33,8 +33,9 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage> {
-  final FocusNode _iptvFocus = FocusNode();
+  // 声明顺序与 build 中的按钮顺序一致，保证遥控器左右移动的焦点顺序正确。
   final FocusNode _vodFocus = FocusNode();
+  final FocusNode _iptvFocus = FocusNode();
   final FocusNode _settingsFocus = FocusNode();
 
   /// 同一时间只允许一个 IPTV 启动流程：解析库要查 sqlite，快速连点会叠两个播放页。
@@ -132,8 +133,8 @@ class _HomePageState extends ConsumerState<HomePage> {
         showExitConfirmDialog(context, ref);
       },
       child: TvScaffold(
-        // 遥控器开机焦点落在第一个按钮上。
-        openingFocus: _iptvFocus,
+        // 遥控器开机焦点落在第一个按钮（影音）上。
+        openingFocus: _vodFocus,
         child: DpadRegion(
           child: Center(
             child: Column(
@@ -155,15 +156,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                     _buildTile(
                       label: i18n(kNavGroups[0].labelKey),
                       icon: kNavGroups[0].icon,
-                      focusNode: _iptvFocus,
-                      onTap: _launchIptv,
+                      focusNode: _vodFocus,
+                      onTap: () => context.push(AppRoutes.kVodBrowse),
                     ),
                     SizedBox(width: 32.ts(context)),
                     _buildTile(
                       label: i18n(kNavGroups[1].labelKey),
                       icon: kNavGroups[1].icon,
-                      focusNode: _vodFocus,
-                      onTap: () => context.push(AppRoutes.kVodBrowse),
+                      focusNode: _iptvFocus,
+                      onTap: _launchIptv,
                     ),
                     SizedBox(width: 32.ts(context)),
                     _buildTile(
@@ -200,7 +201,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         iconPosition: TvIconPosition.top,
         size: TvButtonSize.large,
         focusNode: focusNode,
-        autofocus: focusNode == _iptvFocus,
+        autofocus: focusNode == _vodFocus,
         onTap: onTap,
       ),
     );

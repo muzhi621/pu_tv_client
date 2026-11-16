@@ -7,6 +7,8 @@ abstract final class AppRoutes {
   /// 启动页按钮对应的独立页面（按返回都回到 /home）。
   static const kVodBrowse = "/vod_browse";
   static const kIptvChannels = "/iptv_channels";
+  /// EPG 节目指南（非 typed 路由，避免改动生成的 app_router.g.dart）。
+  static const kEpgGuide = "/epg_guide";
 
   /// Followed rooms
   static const kFavorite = "/favorite";

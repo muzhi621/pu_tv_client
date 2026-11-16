@@ -277,6 +277,15 @@ class RemoteConfigService {
       debugPrint('[RemoteConfig] IPTV 下发失败（沿用本地列表）: $error');
     }
 
+    // EPG 源地址（XMLTV）由云端下发，落到 Hive 供 EPG 模块读取。
+    // 单独 try：EPG 不可用时不影响频道列表与播放。
+    try {
+      final epg = document.section('iptv');
+      await RemoteConfigStore.setEpgUrl((epg['epgUrl'] ?? '').toString());
+    } catch (error) {
+      debugPrint('[RemoteConfig] EPG 地址下发失败（沿用上次缓存）: $error');
+    }
+
     // TVBox 直连源：同步套用上次成功缓存，网络刷新放后台。
     // 失败时 _resolvedVod 保持云端 sites，绝不阻断首帧。
     try {
@@ -416,6 +425,12 @@ class RemoteConfigService {
   static VodConfig? _resolvedVod;
   static final TvboxConfigLoader _vodLoader = TvboxConfigLoader();
 
+  /// url 源后台刷新的代号。_apply 会被 bootstrap / 每次心跳 / forceSync /
+  /// 前台 resumed 反复触发，旧一轮未完成时新一轮又起；只有代号最新的那轮
+  /// 才允许写回 _resolvedVod，避免新配置被上一轮的旧结果倒退覆盖。
+  static int _vodRefreshGeneration = 0;
+  static Future<void>? _vodRefreshing;
+
   static VodConfig get vod =>
       _resolvedVod ?? VodConfig.fromSection(_section('vod'));
 
@@ -437,16 +452,38 @@ class RemoteConfigService {
     _resolvedVod = TvboxConfigLoader.apply(base, cached);
 
     // 后台刷新：成功后更新内存结果，下一次心跳同步 / 冷启动即完全生效。
-    () async {
+    // fire-and-forget 但内部必须自带 try/catch（这里是 async 闭包，异常不会
+    // 传播到调用方，漏掉就成了 uncaught error）。
+    final generation = ++_vodRefreshGeneration;
+    final running = _vodRefreshing;
+    if (running != null) return; // 上一轮还没拉完，不重复发起整批请求
+    final future = _refreshVodUrlSources(base, targets, generation);
+    _vodRefreshing = future;
+    unawaited(future.whenComplete(() {
+      if (identical(_vodRefreshing, future)) _vodRefreshing = null;
+    }));
+  }
+
+  static Future<void> _refreshVodUrlSources(
+    VodConfig base,
+    List<VodSource> targets,
+    int generation,
+  ) async {
+    try {
       final fresh = <String, TvboxConfigResult>{};
       for (final source in targets) {
         final result = await _vodLoader.fetch(source.url, source.id);
         if (result != null) fresh[source.id] = result;
       }
+      // 只有最新一轮能写回：旧轮即使拉完也不能覆盖新配置解析出的结果。
+      if (generation != _vodRefreshGeneration) return;
       if (fresh.isNotEmpty) {
         _resolvedVod = TvboxConfigLoader.apply(base, fresh);
       }
-    }();
+    } catch (error, stack) {
+      // 刷新失败沿用缓存/云端 sites，绝不让 fire-and-forget 冒未捕获异常。
+      debugPrint('[RemoteConfig] url 源后台刷新失败（沿用缓存）: $error\n$stack');
+    }
   }
 
   // ------------------------------------------------------------------
@@ -606,7 +643,7 @@ class RemoteConfigService {
 }
 
 /// App 生命周期监听：回到前台（resumed）时静默拉取一次配置，让云端及时感知
-/// 设备在线并下发最新文档，无需等到下一个 15 分钟心跳。
+/// 设备在线并下发最新文档，无需等到下一个 3 分钟心跳。
 class _RemoteConfigLifecycleObserver with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {

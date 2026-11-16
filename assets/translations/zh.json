@@ -1593,6 +1593,7 @@
   "update_error_package_empty": "下载的安装包为空，请重试",
   "update_error_package_invalid": "下载的安装包不完整或已损坏，请重试",
   "update_error_package_size": "安装包大小校验失败（期望 {expected}，实际 {actual}）",
+  "update_error_package_checksum": "安装包校验和不匹配，可能已被替换，已拒绝安装",
   "update_error_http_status": "下载失败（HTTP {code}）",
   "update_error_timeout": "下载超时，请重试",
   "update_error_network": "网络连接失败，请重试",
@@ -3096,5 +3097,13 @@
   "vod_play_url_empty": "播放地址为空",
   "vod_play_needs_parser": "该地址需要解析器，已尝试直连",
   "vod_no_config": "还没有配置影视源",
-  "vod_no_config_hint": "影视点播的源与站点全部来自云端。先在编辑器「TVBox 源」导入配置，到「终端管理」为这台设备勾选源，再回到这里刷新即可。"
+  "vod_no_config_hint": "影视点播的源与站点全部来自云端。先在编辑器「TVBox 源」导入配置，到「终端管理」为这台设备勾选源，再回到这里刷新即可。",
+  "epg_guide": "节目指南",
+  "epg_today": "今天",
+  "epg_channels": "频道",
+  "epg_no_source": "云端尚未配置节目单地址",
+  "epg_load_failed": "节目单加载失败，请稍后重试",
+  "epg_empty": "暂无节目数据",
+  "epg_no_programme": "当天暂无节目",
+  "epg_entry": "节目指南"
 }

@@ -308,7 +308,10 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
     final playerNotifier = ref.read(playerSettingsControllerProvider.notifier);
     final favoriteRooms = ref.watch(favoriteRoomControllerProvider).favoriteRooms;
     final room = state.room;
-    final bool playing = state.playerState.playing || state.playerState.buffering;
+    // 图标绑定用户显式暂停意图，绝不用内核镜像：后者在 mpv 上会失真
+    // （backendReady 短路跳过 adapter.pause、Playing/Paused 事件 one-shot），
+    // 拿它显示图标就会出现「画面在播却显示播放键」的错乱。
+    final bool playing = !state.userPaused;
     final bool isFavorite = room != null && favoriteRooms.any((item) => item.hasSameIdentity(room));
     final bool danmakuOn = danmakuSettings.enableDanmakuDisplay && !danmakuSettings.hideDanmaku;
     final bool audioOnly = playerSettings.audioOnly;

@@ -451,6 +451,11 @@ class LivePlayController extends _$LivePlayController {
       // just ended read as if *this* room had ended. Real states follow.
       manager.onStateChanged.skip(1).listen(_onPlayerStateChanged),
       manager.onError.listen(_onPlayerError),
+      // 图标绑定用户意图而非内核镜像：内核状态在 mpv 上会失真，
+      // 导致暂停后图标不翻转、再点变恢复播放（表现为「暂停没反应」）。
+      manager.onUserPausedChanged.listen((paused) {
+        if (state.userPaused != paused) state = state.copyWith(userPaused: paused);
+      }),
       manager.videoFitIndex.stream.listen((index) {
         if (index != state.fitIndex) {
           state = state.copyWith(fitIndex: index);

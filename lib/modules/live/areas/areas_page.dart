@@ -6,6 +6,7 @@ import 'package:pure_live/modules/live/areas/category_provider.dart';
 import 'package:pure_live/modules/live/areas/platform_provider.dart';
 import 'package:pure_live/modules/live/areas/area_display_config.dart';
 import 'package:pure_live/services/remote_config/remote_config.dart';
+import 'package:pure_live/app/router/app/app_routes.dart';
 
 class AreasPage extends ConsumerStatefulWidget {
   /// 非空时只显示该站点的频道目录（IPTV 专用页），不显示其它平台 tab。
@@ -67,10 +68,25 @@ class _AreasPageState extends ConsumerState<AreasPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                AreasPlatformTabs(
-                  tabs: tabItems,
-                  currentIndex: index,
-                  siteId: currentSite.id,
+                Row(
+                  children: [
+                    Expanded(
+                      child: AreasPlatformTabs(
+                        tabs: tabItems,
+                        currentIndex: index,
+                        siteId: currentSite.id,
+                      ),
+                    ),
+                    // IPTV 频道目录才有 EPG 入口；直播发现页不显示。
+                    if (widget.onlySiteId != null) ...[
+                      SizedBox(width: 16.ts(context)),
+                      TvButton(
+                        title: i18nOr('epg_entry', '节目指南'),
+                        size: TvButtonSize.small,
+                        onTap: () => context.push(AppRoutes.kEpgGuide),
+                      ),
+                    ],
+                  ],
                 ),
                 SizedBox(height: 16.ts(context)),
                 Expanded(

@@ -289,7 +289,7 @@ class TvboxConfigLoader {
     }
   }
 
-  /// 拉主配置 + 最多 5 个子仓；失败返回 null，由调用方回退到云端 sites。
+  /// 拉主配置 + 最多 12 个子仓；失败返回 null，由调用方回退到云端 sites。
   Future<TvboxConfigResult?> fetch(String url, String sourceId) async {
     try {
       final response = await _dio.get<String>(url);

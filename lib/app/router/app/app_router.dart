@@ -16,6 +16,7 @@ import 'package:pure_live/features/settings/pages/app_download_page.dart';
 import 'package:pure_live/features/settings/pages/nav_order_section.dart';
 import 'package:pure_live/features/settings/pages/nav_icons_section.dart';
 import 'package:pure_live/modules/live/iptv/pages/iptv_sync_section.dart';
+import 'package:pure_live/modules/live/iptv/epg/epg_guide_page.dart';
 import 'package:pure_live/features/settings/pages/navigation_section.dart';
 import 'package:pure_live/features/settings/pages/update_history_page.dart';
 import 'package:pure_live/features/settings/pages/device_sync_section.dart';
@@ -306,6 +307,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.kIptvChannels,
         builder: (context, state) => const AreasPage(onlySiteId: 'iptv'),
+      ),
+      // EPG 指南用非 typed 路由：新增 @TypedGoRoute 会要求重跑 build_runner，
+      // 本机无 Flutter SDK；手写 GoRoute 不需改 app_router.g.dart。
+      GoRoute(
+        path: AppRoutes.kEpgGuide,
+        builder: (context, state) => const EpgGuidePage(),
       ),
     ],
   );

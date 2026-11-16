@@ -14,6 +14,8 @@ import okhttp3.Request
 import java.io.File
 import java.io.IOException
 import java.lang.reflect.InvocationTargetException
+import java.net.InetAddress
+import java.net.URI
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -171,6 +173,9 @@ internal class VodSpiderBridge(
     /** siteKey -> 已初始化好的 spider 实例。站点维度复用，避免每次操作都重建。 */
     private val spiders = ConcurrentHashMap<String, SpiderHandle>()
 
+    /** siteKey -> prepareSite 串行锁（见 onMethodCall），防止并发建重复实例。 */
+    private val siteLocks = ConcurrentHashMap<String, Any>()
+
     /** jar 绝对路径 -> 已加载的 ClassLoader，同一 jar 下多个站点共用一个。 */
     private val classLoaders = ConcurrentHashMap<String, DexClassLoader>()
 
@@ -188,8 +193,10 @@ internal class VodSpiderBridge(
      * 站点失败时把它一起报出来，才能判断是「jar 与站点不匹配」还是
      * 「native 库加载失败」。
      */
-    @Volatile
-    private var initFailure: Throwable? = null
+    // 按 jar 路径分组：多个站点用不同加固 jar 时，A 的 Init 根因不能写进 B 的
+    // 诊断信息（此前是全局 @Volatile，会互相污染）。ConcurrentHashMap 保证
+    // 4 线程池并发 prepare 时的可见性，替代原来的 @Volatile。
+    private val initFailures = ConcurrentHashMap<String, Throwable>()
 
     private class SpiderHandle(
         val siteKey: String,
@@ -251,7 +258,16 @@ internal class VodSpiderBridge(
         }
         executor.execute {
             try {
-                val value = action(call)
+                // 同一 siteKey 的 prepareSite 必须串行：4 线程池会让两个并发 prepare
+                // 同时通过 "spiders[siteKey] 不存在" 的检查，各建一个实例，先建者泄漏；
+                // spider 普遍持有可变状态/共享 OkHttp，并发 invoke 也会状态串扰。
+                // 按 siteKey 取锁（不同站点仍可并行），锁内是同步阻塞 IO，无协程 await。
+                val lock = if (call.method == "prepareSite") {
+                    siteLocks.computeIfAbsent(
+                        call.argument<String>("siteKey")?.trim().orEmpty(),
+                    ) { Any() }
+                } else null
+                val value = if (lock != null) synchronized(lock) { action(call) } else action(call)
                 mainHandler.post { result.success(value) }
             } catch (error: Throwable) {
                 Log.w(TAG, "channel ${call.method} failed", error)
@@ -357,6 +373,16 @@ internal class VodSpiderBridge(
         val jarUrl = requireUrl(call.argument<String>("jarUrl"))
         val ext = call.argument<String>("ext").orEmpty()
         val jarMd5 = call.argument<String>("jarMd5").orEmpty().trim()
+        // 2026-11-16 审查阻断项：md5 从可选改为必填。HTTPS 挡传输层中间人，
+        // md5 挡缓存投毒/源站被换包；缺一不可。诊断接口 inspect 不加载 dex，
+        // 故不强制，但凡是 prepare（会 DexClassLoader 加载）必须有校验和。
+        if (jarMd5.length != 32 || !jarMd5.all { it in '0'..'9' || it in 'a'..'f' }) {
+            throw BridgeException(
+                "jar_md5_missing",
+                "spider jar 缺少合法的 32 位 md5 校验和，已拒绝加载。请在资源库该源的 jar 地址后补上 ;md5;<32位十六进制>。",
+                null,
+            )
+        }
         val force = call.argument<Boolean>("force") == true
 
         if (!force) {
@@ -804,11 +830,11 @@ internal class VodSpiderBridge(
                 }.onSuccess {
                     invoked += label
                 }.onFailure {
-                    // 真实原因必须留住：见 [initFailure] 的说明。加固 jar 的
+                    // 真实原因必须留住：见 [initFailures] 的说明。加固 jar 的
                     // `Init.init` 内部会触发 `DexNative.<clinit>`，那一步失败后
                     // 只会以 `NoClassDefFoundError: ...DexNative` 的形式暴露，
-                    // 真实原因全丢。
-                    initFailure = it.cause ?: it
+                    // 真实原因全丢。按 jar 路径记录，避免多 jar 互相污染诊断。
+                    initFailures[jar.absolutePath] = it.cause ?: it
                     failed += "$label: ${it.cause?.javaClass?.simpleName ?: it.javaClass.simpleName}"
                     Log.w(TAG, "jar Init 调用失败 $label（${jar.name}）", it)
                 }
@@ -1059,12 +1085,80 @@ internal class VodSpiderBridge(
     private fun classAvailable(name: String): Boolean =
         runCatching { Class.forName(name, false, javaClass.classLoader) }.isSuccess
 
+    /**
+     * 校验 spider jar 地址。2026-11-16 审查阻断项：此前只判断 http(s) 前缀，
+     * 明文 http + 可选 md5 等于给中间人开了远程代码执行——DexClassLoader 会
+     * 加载下载到的任意 dex。这里收紧为强制 HTTPS，并拒绝私网/环回地址字面量。
+     *
+     * 注意：DNS 主机名解析后的 IP 无法在下载前可靠判定（DNS rebinding），
+     * 与云端 iptv/fetch 的限制同类；因此 md5 仍必须配置（见 handlePrepareSite），
+     * 二者叠加才把「替换 jar → RCE」的窗口关掉。
+     */
     private fun requireUrl(raw: String?): String {
         val value = raw?.trim().orEmpty()
-        require(value.startsWith("http://") || value.startsWith("https://")) {
-            "jarUrl 必须是 http(s) 地址，实际为「$value」"
+        val parsed = runCatching { URI(value) }.getOrNull()
+            ?: throw BridgeException("jar_url_invalid", "jarUrl 不是合法地址：「$value」", null)
+        // 强制 HTTPS：明文下载 jar 可被中间人替换成任意 dex。
+        if (!"https".equals(parsed.scheme, ignoreCase = true)) {
+            throw BridgeException(
+                "jar_url_insecure",
+                "spider jar 只支持 HTTPS 地址，已拒绝明文/非 http(s) 地址「$value」。请在资源库里改用 https 源。",
+                null,
+            )
+        }
+        if (parsed.userInfo != null) {
+            throw BridgeException("jar_url_invalid", "jarUrl 不允许带账号密码", null)
+        }
+        // URI.host 对 IPv6 字面量返回带方括号的 "[::1]"，而 InetAddress.getByName
+        // 不接受方括号；不去括号会让 ::1 / ::ffff:7f00:1 之类的环回/映射地址绕过检查。
+        val host = (parsed.host ?: "").trim().trimEnd('.')
+            .removePrefix("[").removeSuffix("]").lowercase()
+        if (host.isEmpty()) {
+            throw BridgeException("jar_url_invalid", "jarUrl 缺少主机名", null)
+        }
+        // localhost / *.localhost（RFC 6761 都解析到环回）。
+        if (host == "localhost" || host.endsWith(".localhost")
+            || host == "internal" || host.endsWith(".internal")
+            || host == "local" || host.endsWith(".local")) {
+            throw BridgeException("jar_url_private", "spider jar 不允许指向本机/内网主机名：$host", null)
+        }
+        // 只对 IP 字面量做解析判定：对普通域名调 InetAddress.getByName 会触发
+        // DNS 查询（阻塞 + DNS rebinding 仍防不住），毫无必要。IPv6 必须带冒号。
+        val looksNumeric = host.any { it in '0'..'9' }
+            && (host.contains('.') || host.contains(':'))
+            && host.all { it in '0'..'9' || it in 'a'..'f' || it in ".:" }
+        if (looksNumeric) {
+            val numeric = runCatching { InetAddress.getByName(host) }.getOrNull()
+            if (numeric != null && isBlockedAddress(numeric)) {
+                throw BridgeException("jar_url_private", "spider jar 不允许指向私网/环回地址：$host", null)
+            }
         }
         return value
+    }
+
+    /** 私网 / 环回 / 链路本地 / 云元数据 / CGNAT / 保留段一律拦截。 */
+    private fun isBlockedAddress(addr: InetAddress): Boolean {
+        val bytes = addr.address
+        if (addr.isLoopbackAddress || addr.isLinkLocalAddress
+            || addr.isSiteLocalAddress || addr.isAnyLocalAddress || addr.isMulticastAddress) {
+            return true
+        }
+        if (addr is java.net.Inet6Address) {
+            // Inet6Address 对 ::ffff:a.b.c.d 会返回 Inet4Address，走不到这里；
+            // 这里拦 ::1 之外的 fc00::/7、fe80::/10 已由上面覆盖，补 :: 未指定地址。
+            return bytes.all { it == 0.toByte() }
+        }
+        // 点分十进制补充 InetAddress 未覆盖的段：0/8、100.64/10(CGNAT)、
+        // 169.254 已由 isLinkLocal 覆盖，198.18/15(benchmark)、224/4 多播已覆盖。
+        if (bytes.size == 4) {
+            val a = bytes[0].toInt() and 0xFF
+            val b = bytes[1].toInt() and 0xFF
+            if (a == 0) return true
+            if (a == 100 && b in 64..127) return true
+            if (a == 198 && (b == 18 || b == 19)) return true
+            if (a >= 224) return true
+        }
+        return false
     }
 
     private fun sha1(value: String): String {
@@ -1117,6 +1211,10 @@ internal class VodSpiderBridge(
             }
             "jar_not_readonly" -> "jar 未能置为只读，Android 14+ 会拒绝 DexClassLoader 加载。"
             "jar_md5_mismatch" -> "jar 与配置声明的 md5 不一致。等源站镜像同步，或在资源库里更新该源的 jar 地址。"
+            "jar_md5_missing" -> "配置未声明 jar 的 md5。安全策略要求每个 spider jar 都带 32 位 md5 校验和，请更新云端资源库。"
+            "jar_url_insecure" -> "jar 地址必须用 HTTPS。明文 HTTP 下载可被中间人替换，已出于安全原因拒绝。"
+            "jar_url_private" -> "jar 地址指向本机或内网，已被安全策略拒绝。"
+            "jar_url_invalid" -> "jar 地址不合法（需为不含账号密码的 https URL）。"
             else -> null
         }
         return mapOf(
@@ -1125,7 +1223,9 @@ internal class VodSpiderBridge(
             "message" to (unwrapped.message ?: unwrapped.javaClass.simpleName),
             "hint" to hint,
             "exception" to unwrapped.javaClass.name,
-            "stack" to Log.getStackTraceString(error).take(4000),
+            // stack 含 jar 内部路径，仅 debug 构建回传；release 诊断页靠
+            // message/hint/code 已能定位，不泄露内部实现细节。
+            "stack" to if (BuildConfig.DEBUG) Log.getStackTraceString(error).take(4000) else "",
         )
     }
 
@@ -1168,7 +1268,8 @@ internal class VodSpiderBridge(
         sb.append("类 ").append(clazz.name).append(" 实例化失败：").append(rootMessage(error))
 
         // 根因：Init 阶段的失败比这里的 NoClassDefFoundError 有价值得多。
-        val init = initFailure
+        // 只读当前 jar 的记录，不拿别的 jar 的根因张冠李戴。
+        val init = initFailures[jar.absolutePath]
         if (init != null) {
             sb.append("\n根因（jar 的 Init 阶段失败）：")
                 .append(init.javaClass.simpleName).append(": ").append(rootMessage(init))

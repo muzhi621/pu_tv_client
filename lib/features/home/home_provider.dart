@@ -115,8 +115,8 @@ class NavGroup {
 /// 影音块只保留点播浏览（vodBrowse）。「放映」（moviePlayback，手机推链接到
 /// 电视播放）入口已按用户要求移除；云端即使仍下发该 id 也不会渲染。
 const List<NavGroup> kNavGroups = <NavGroup>[
-  NavGroup(id: 'iptv', labelKey: 'nav_group_iptv', icon: Icons.live_tv_outlined, children: <String>['iptv']),
   NavGroup(id: 'vod', labelKey: 'nav_group_vod', icon: Icons.movie_outlined, children: <String>['vodBrowse']),
+  NavGroup(id: 'iptv', labelKey: 'nav_group_iptv', icon: Icons.live_tv_outlined, children: <String>['iptv']),
   NavGroup(id: 'settings', labelKey: 'nav_group_settings', icon: Icons.settings_outlined, children: <String>['settings']),
 ];
 

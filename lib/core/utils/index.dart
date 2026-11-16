@@ -23,6 +23,5 @@ export 'string_similarity.dart';
 export 'string_to_boolean.dart';
 export 'text_util.dart';
 export 'toast_util.dart';
-export 'url_parse/url_parse_engine.dart';
 export 'version_util.dart';
 export 'web_socket_util.dart';
