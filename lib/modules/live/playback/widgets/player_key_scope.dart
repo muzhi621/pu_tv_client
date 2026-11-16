@@ -371,7 +371,7 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     // 面板 / 控制条 / 浮层的开关决定原生通道是否接管。只在状态真的切换时才
     // 发一次平台调用（[_syncNativeCapture] 内部做了去重），本组件不因状态
     // 变化重建，画面层不受影响。
-    ref.listen(livePlayControllerProvider(widget.args), (_, __) => _syncNativeCapture());
+    ref.listen(livePlayControllerProvider(widget.args), (_, _) => _syncNativeCapture());
 
     return PopScope(
       // Back closes what is on screen before it leaves the player: an option
