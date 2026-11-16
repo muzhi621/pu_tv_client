@@ -1,4 +1,7 @@
 import 'package:pure_live/exports/exports.dart';
+// LivePlayArgs 不在 barrel 里：点播标记（args.vod）必须显式构造，
+// 靠 `LiveRoom` 直传路由会把 vod 丢成默认 false。
+import 'package:pure_live/modules/live/playback/models/live_play_args.dart';
 
 /// 把一条已解析好的点播地址交给现有播放器。
 ///
