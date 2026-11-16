@@ -17,6 +17,7 @@ import 'package:pure_live/modules/live/playback/services/live_room_hint_cache.da
 import 'package:pure_live/modules/live/playback/services/live_play_repository.dart';
 import 'package:pure_live/services/player_settings/player_settings_controller.dart';
 import 'package:pure_live/modules/live/playback/controllers/danmaku_session_controller.dart';
+import 'package:pure_live/modules/live/iptv/services/iptv_resume_channel.dart';
 
 part 'live_play_controller.g.dart';
 
@@ -490,6 +491,7 @@ class LivePlayController extends _$LivePlayController {
 
     if (playerState.playing || playerState.ready) {
       _cancelStallReport();
+      _rememberIptvChannel();
     } else if (playerState.opening || playerState.buffering) {
       // Not restarted: media_core may re-enter buffering once per
       // line, and each pass would otherwise push back the deadline.
@@ -507,6 +509,27 @@ class LivePlayController extends _$LivePlayController {
     if (playerState.completed && !state.switchingStream) {
       _followRoomAfterPlaybackEnded();
     }
+  }
+
+  /// 已经落盘的续播频道 id，避免播放状态流每帧重复写偏好。
+  String? _rememberedChannelId;
+
+  /// 记住这一台，供 IPTV 入口下次直接续播。
+  ///
+  /// 只在**真正播起来**之后写：换源遗留的死链、拉不到流的频道不该变成下次
+  /// 启动的默认台，否则用户每次进 IPTV 都要先看一次失败。点播（TVBox）借用
+  /// IPTV 站点播直链，不参与这里的记录。
+  void _rememberIptvChannel() {
+    if (args.vod || args.platform != Sites.iptvSite) return;
+
+    final LiveRoom? room = state.room;
+    if (room == null) return;
+
+    final String id = room.normalizedRoomId;
+    if (id.isEmpty || id == _rememberedChannelId) return;
+
+    _rememberedChannelId = id;
+    IptvResumeChannel.save(id);
   }
 
   /// Keeps the screen awake for as long as the player route is open.

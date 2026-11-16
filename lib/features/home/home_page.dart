@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' show log;
 
 import 'package:dpad/dpad.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -10,8 +11,11 @@ import 'package:pure_live/features/home/home_update_dialog.dart';
 import 'package:pure_live/features/home/remote_notice_dialog.dart';
 import 'package:pure_live/features/home/exit_confirm_dialog.dart';
 import 'package:pure_live/features/settings/tv_settings_page.dart';
+import 'package:pure_live/modules/live/iptv/services/iptv_resume_channel.dart';
 import 'package:pure_live/modules/live/movie_playback/movie_playback_page.dart';
 import 'package:pure_live/modules/live/movie_playback/vod_browse_page.dart';
+import 'package:pure_live/modules/live/playback/models/live_play_args.dart';
+import 'package:pure_live/platforms/sites.dart';
 import 'package:pure_live/services/refresh_config/refresh_config_controller.dart';
 
 /// 首页外壳：左侧一级栏（IPTV / 影音 / 设置）+ 右侧二级菜单与内容区。
@@ -38,6 +42,49 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// here: its primary item opens the settings route directly.
   late String _currentGroupId;
 
+  /// 续播查询进行中：同一个动作被重复触发（快速连点 IPTV、首帧与点击叠加）
+  /// 时不再叠第二个播放页。
+  bool _resumingIptv = false;
+
+  /// 一次「进 IPTV 就续播」还没结算完。为 true 时 IPTV 内容区留空，
+  /// 免得频道目录先渲染一帧、再被播放页盖住（用户看到的就是「这个页面还在」）。
+  bool _iptvResumePending = false;
+
+  /// 选中 IPTV 就续播上次那台（与酷9 的行为一致），频道目录只作兜底：
+  ///
+  /// * 没有播放记录（首次安装 / 刚清过数据）→ 照旧显示频道目录；
+  /// * 记录里的频道已被删除（换源、重新导入）→ 作废记录，回落到目录。
+  ///
+  /// 从播放页返回时不会再自动跳一次：那条路径不经过 [_selectNavGroup]，
+  /// 于是返回后停在频道目录，想换别的台也有地方去。
+  Future<void> _resumeIptvChannel() async {
+    if (_resumingIptv) return;
+
+    final String? id = IptvResumeChannel.channelId;
+    if (id == null) {
+      if (_iptvResumePending) setState(() => _iptvResumePending = false);
+      return;
+    }
+
+    _resumingIptv = true;
+    try {
+      final channel = await DbService.to.db.getChannelById(id);
+      if (!mounted) return;
+      if (channel == null) {
+        IptvResumeChannel.clear();
+        return;
+      }
+      // 只带 roomId：播放页会回库重新解析线路与地址，续播拿到的永远是最新的一条。
+      LivePlayRoute(LivePlayArgs(platform: Sites.iptvSite, roomId: channel.id)).push(context);
+    } catch (e, s) {
+      // 续播是增强项：查库失败不该把用户挡在空白页上，回落到频道目录即可。
+      log('resume iptv channel failed: $e', name: 'HomePage', error: e, stackTrace: s);
+    } finally {
+      _resumingIptv = false;
+      if (mounted && _iptvResumePending) setState(() => _iptvResumePending = false);
+    }
+  }
+
   /// Select a primary nav group and land on its first visible secondary item.
   /// The settings group keeps the existing "open the settings route" behaviour.
   void _selectNavGroup(String groupId) {
@@ -45,7 +92,11 @@ class _HomePageState extends ConsumerState<HomePage> {
       const SettingsMenuRoute().push(context);
       return;
     }
-    setState(() => _currentGroupId = groupId);
+    setState(() {
+      _currentGroupId = groupId;
+      // 选中 IPTV 即续播：频道目录不再作为落地页，只在没有记录时兜底。
+      if (groupId == 'iptv') _iptvResumePending = IptvResumeChannel.channelId != null;
+    });
     final childIndexes = navChildIndexes(resolveNavGroups(), groupId);
     final items = ref
         .read(sideMenuListProvider)
@@ -57,6 +108,8 @@ class _HomePageState extends ConsumerState<HomePage> {
       // 云端白名单漏了这一块也要能进去：直接落到块内的主页面。
       ref.read(sideMenuIndexProvider.notifier).changeIndex(childIndexes.first);
     }
+
+    if (groupId == 'iptv') unawaited(_resumeIptvChannel());
   }
 
   /// 一级栏常驻块（IPTV / 影音 / 设置）。
@@ -91,8 +144,11 @@ class _HomePageState extends ConsumerState<HomePage> {
     super.initState();
     // 一级栏启动默认块：云端 navigation.defaultGroupId，旧配置/非法值回退 iptv。
     _currentGroupId = resolveDefaultGroupId(resolveNavGroups());
+    // 启动就落在 IPTV 时同样直接续播，别让用户先看到频道目录再跳。
+    _iptvResumePending = _currentGroupId == 'iptv' && IptvResumeChannel.channelId != null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      if (_iptvResumePending) unawaited(_resumeIptvChannel());
       unawaited(RemoteNoticeDialog.maybeShow(context));
       unawaited(HomeUpdateDialog.maybeShow(context, ref));
     });
@@ -314,6 +370,11 @@ class _HomePageState extends ConsumerState<HomePage> {
         return const VodBrowsePage();
       case TvMenuType.iptv:
         // IPTV 专用频道页：只保留 iptv 站点的频道目录（Sites.iptvSite == 'iptv'）。
+        // 续播结算前把它挂起来（Offstage 仍然构建，目录请求照发）：既不闪一帧
+        // 频道网格，用户从播放页返回时目录也已经在手上。
+        if (_iptvResumePending) {
+          return const Offstage(offstage: true, child: AreasPage(onlySiteId: 'iptv'));
+        }
         return const AreasPage(onlySiteId: 'iptv');
       // 直播 / UGC 菜单已下线。老缓存里若残留这些 TvMenuType 值，统一回退到
       // IPTV 频道页，绝不渲染空白内容区。

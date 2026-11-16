@@ -1,7 +1,7 @@
 {
-  "version": "3.0.27",
-  "version_num": 130026,
-  "version_desc": "-Fix: TVBox 加固站点报「Attempt to load writable file」——Android 17 对 targetSdk 37 的应用禁止加载 app 可写目录里的 .so，而 TVBox 加固壳必然把 native 库释放到自己的缓存目录再加载，宿主无法插手改权限；targetSdk 保持 36 以恢复加载\n-Fix: 点播站点报「该地址需要解析器，已尝试直连」后必然播不了——新增网页嗅探：抓一次页面解出真实流地址（支持 m3u8/mp4/flv 与 JSON 形态的解析结果），播放时补上 Referer 与 UA\n-Fix: IPTV 播放页控制条精简——去掉关注、弹幕开关、弹幕设置、切换直播间、内核切换；清晰度与线路改为「有得选才出现」（IPTV 直链只有一个默认码率/一条地址，点开只有一行，等于无效点击），现在点屏幕只剩暂停、重试、画面比例、音频模式\n-Fix: targetSdk 保持 36（compileSdk 仍 37），避开 Android 17 的只读 so 限制——TVBox 加固 jar 把 native 库释放到 cacheDir 后 System.load，在 targetSdk 37 会被系统拒绝，这些站点在 Android 17 设备上会直接报错",
+  "version": "3.0.28",
+  "version_num": 130028,
+  "version_desc": "-Feat: IPTV 选中即续播——点左侧 IPTV 直接进上次看的那台并自动起播，不再先落在频道目录页；起播成功才记录，换源留下的死链不会变成下次的默认台。频道被删除时记录自动作废，回落到频道目录\n-Fix: 版本号与清单对齐（pubspec 3.0.28+29 / version_num 130028）——上一版只改了清单，装 3.0.27 的设备会被反复提示更新",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",
