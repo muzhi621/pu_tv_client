@@ -27,6 +27,9 @@ class VodBrowsePage extends StatefulWidget {
 class _VodBrowsePageState extends State<VodBrowsePage> {
   static const double _pagePadding = 32;
 
+  /// 顶部菜单条两端留白：比正文页边距更靠内，让两端按钮向屏幕中间收。
+  static const double _menuInset = 52;
+
   VodConfig _config = VodConfig.empty;
   VodSiteEngine? _engine;
   VodSite? _site;
@@ -305,25 +308,25 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
     final site = _site;
     final canPage = _keyword.isNotEmpty || _tid.isNotEmpty;
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: _pagePadding.ts(context)),
+      padding: EdgeInsets.symmetric(horizontal: _menuInset.ts(context)),
       child: Row(
         children: [
           TvButton(
             title: i18n('vod_pick_site'),
             icon: const Icon(Icons.dns_outlined),
             iconPosition: TvIconPosition.left,
-            size: TvButtonSize.small,
+            size: TvButtonSize.medium,
             isSecondary: true,
             autofocus: true,
             onTap: _pickSite,
           ),
-          SizedBox(width: 14.ts(context)),
+          SizedBox(width: 18.ts(context)),
           Expanded(
             child: Text(
               site?.name ?? '',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.t22.copyWith(
+              style: AppTextStyles.t24.copyWith(
                 fontWeight: FontWeight.w600,
                 color: tvTheme.primaryTextColor,
               ),
@@ -332,36 +335,36 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
           if (canPage) ...[
             TvButton(
               title: i18n('vod_prev_page'),
-              size: TvButtonSize.small,
+              size: TvButtonSize.medium,
               isSecondary: true,
               onTap: _pageNo <= 1 ? null : () => _loadCategory(_tid, page: _pageNo - 1),
             ),
-            SizedBox(width: 8.ts(context)),
+            SizedBox(width: 10.ts(context)),
             Text(
               '$_pageNo / ${_page?.pageCount ?? 1}',
-              style: AppTextStyles.t16.copyWith(color: tvTheme.secondaryTextColor),
+              style: AppTextStyles.t18.copyWith(color: tvTheme.secondaryTextColor),
             ),
-            SizedBox(width: 8.ts(context)),
+            SizedBox(width: 10.ts(context)),
             TvButton(
               title: i18n('vod_next_page'),
-              size: TvButtonSize.small,
+              size: TvButtonSize.medium,
               isSecondary: true,
               onTap: (_page?.hasMore ?? false) ? () => _loadCategory(_tid, page: _pageNo + 1) : null,
             ),
-            SizedBox(width: 14.ts(context)),
+            SizedBox(width: 18.ts(context)),
           ],
           TvButton(
             title: i18n('vod_search'),
             icon: const Icon(Icons.search_rounded),
             iconPosition: TvIconPosition.left,
-            size: TvButtonSize.small,
+            size: TvButtonSize.medium,
             isSecondary: true,
             onTap: _search,
           ),
-          SizedBox(width: 10.ts(context)),
+          SizedBox(width: 14.ts(context)),
           TvButton(
             title: i18n('vod_refresh'),
-            size: TvButtonSize.small,
+            size: TvButtonSize.medium,
             isSecondary: true,
             onTap: _keyword.isEmpty && _tid.isEmpty ? _loadHome : () => _loadCategory(_tid, page: _pageNo),
           ),
@@ -469,12 +472,12 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
       entries.add((category.id, category.name));
     }
     return SizedBox(
-      height: 46.ts(context),
+      height: 56.ts(context),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: _pagePadding.ts(context)),
+        padding: EdgeInsets.symmetric(horizontal: _menuInset.ts(context)),
         itemCount: entries.length,
-        separatorBuilder: (_, __) => SizedBox(width: 10.ts(context)),
+        separatorBuilder: (_, __) => SizedBox(width: 14.ts(context)),
         itemBuilder: (context, index) {
           final (tid, name) = entries[index];
           final selected = tid == _tid;
@@ -488,12 +491,12 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
             },
             child: Container(
               alignment: Alignment.center,
-              padding: EdgeInsets.symmetric(horizontal: 18.ts(context)),
+              padding: EdgeInsets.symmetric(horizontal: 26.ts(context)),
               decoration: BoxDecoration(
                 color: selected
                     ? tvTheme.focusColor.withValues(alpha: 0.18)
                     : tvTheme.backgroundColor.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(12.sp),
+                borderRadius: BorderRadius.circular(14.sp),
                 border: Border.all(
                   color: selected ? tvTheme.focusColor : Colors.transparent,
                   width: 1.5.sp,
@@ -501,7 +504,7 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
               ),
               child: Text(
                 name,
-                style: AppTextStyles.t16.copyWith(
+                style: AppTextStyles.t19.copyWith(
                   color: selected ? tvTheme.focusColor : tvTheme.primaryTextColor,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                 ),

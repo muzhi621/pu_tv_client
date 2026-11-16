@@ -29,6 +29,8 @@ class VodDetailPage extends StatefulWidget {
 
 class _VodDetailPageState extends State<VodDetailPage> {
   static const double _pagePadding = 32;
+  /// 顶部菜单条两端留白：比正文页边距更靠内，让两端向屏幕中间收。
+  static const double _menuInset = 52;
 
   VodDetail? _detail;
   String _error = '';
@@ -145,24 +147,24 @@ class _VodDetailPageState extends State<VodDetailPage> {
 
   Widget _buildHeader(TvThemeData tvTheme) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: _pagePadding.ts(context)),
+      padding: EdgeInsets.symmetric(horizontal: _menuInset.ts(context)),
       child: Row(
         children: [
           TvButton(
             title: i18n('vod_back'),
             icon: const Icon(Icons.arrow_back_rounded),
             iconPosition: TvIconPosition.left,
-            size: TvButtonSize.small,
+            size: TvButtonSize.medium,
             isSecondary: true,
             onTap: () => Navigator.of(context).maybePop(),
           ),
-          SizedBox(width: 16.ts(context)),
+          SizedBox(width: 20.ts(context)),
           Expanded(
             child: Text(
               _detail?.name.isNotEmpty == true ? _detail!.name : widget.item.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.t26.copyWith(
+              style: AppTextStyles.t28.copyWith(
                 fontWeight: FontWeight.w600,
                 color: tvTheme.primaryTextColor,
                 height: 1,
@@ -171,17 +173,17 @@ class _VodDetailPageState extends State<VodDetailPage> {
           ),
           if (_resolving)
             Padding(
-              padding: EdgeInsets.only(left: 16.ts(context)),
+              padding: EdgeInsets.only(left: 20.ts(context)),
               child: SizedBox(
-                width: 22.ts(context),
-                height: 22.ts(context),
+                width: 26.ts(context),
+                height: 26.ts(context),
                 child: const CircularProgressIndicator(strokeWidth: 2),
               ),
             ),
-          SizedBox(width: 16.ts(context)),
+          SizedBox(width: 20.ts(context)),
           Text(
             widget.site.name,
-            style: AppTextStyles.t16.copyWith(color: tvTheme.secondaryTextColor),
+            style: AppTextStyles.t18.copyWith(color: tvTheme.secondaryTextColor),
           ),
         ],
       ),
