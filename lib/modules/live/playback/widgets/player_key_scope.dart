@@ -6,6 +6,48 @@ import 'package:pure_live/services/favorites/favorite_room_controller.dart';
 import 'package:pure_live/modules/live/playback/states/live_play_state.dart';
 import 'package:pure_live/modules/live/playback/controllers/live_play_controller.dart';
 
+/// 把播放页的手势处理器交给子树（主要是视频层）。
+///
+/// **为什么需要它**：视频是原生 Texture（media_kit 的 `mkv.Video`）。Flutter 的
+/// `Texture` widget 在命中测试里 `hitTestSelf` 为 true，会把指针事件**吃掉**，
+/// 于是视频上方和外层的 `GestureDetector` 都收不到触摸——手机上点屏幕
+/// 完全没有反应。
+///
+/// 解法是在视频层**上面**再叠一层透明的捕获层：它不是原生视图，指针事件
+/// 一定先到它，再由它决定要不要往下传。
+///
+/// 同一个 [PlayerKeyScope] 同时提供按���与手势两套语义，手势层复用同一份
+/// 回调，避免两处实现漂移。
+class PlayerGestureScope extends InheritedWidget {
+  const PlayerGestureScope({
+    super.key,
+    required this.onTap,
+    required this.onPanStart,
+    required this.onPanUpdate,
+    required this.onPanEnd,
+    required this.onPanCancel,
+    required super.child,
+  });
+
+  final VoidCallback onTap;
+  final GestureDragStartCallback onPanStart;
+  final GestureDragUpdateCallback onPanUpdate;
+  final GestureDragEndCallback onPanEnd;
+  final VoidCallback onPanCancel;
+
+  /// 取手势处理器；子树没有这个 scope 时返回 null（调用方自行降级）。
+  static PlayerGestureScope? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<PlayerGestureScope>();
+
+  @override
+  bool updateShouldNotify(PlayerGestureScope oldWidget) =>
+      onTap != oldWidget.onTap ||
+      onPanStart != oldWidget.onPanStart ||
+      onPanUpdate != oldWidget.onPanUpdate ||
+      onPanEnd != oldWidget.onPanEnd ||
+      onPanCancel != oldWidget.onPanCancel;
+}
+
 /// Key handling for the whole player — **without d-pad**.
 ///
 /// Modelled on the reference player
@@ -423,14 +465,21 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
         // 手势的语义与按键对齐：单击 = OK（唤出控制条 + 左侧频道列表），
         // 直播上下滑 = ↑↓（换台），点播左右滑 = 快进 / 后退。不复用按键派发，
         // 因为按键那条链要先过焦点判定，而触摸场景下没有可依靠的焦点。
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
+        child: PlayerGestureScope(
           onTap: _onTap,
           onPanStart: _onPanStart,
           onPanUpdate: _onPanUpdate,
           onPanEnd: _onPanEnd,
           onPanCancel: _onPanCancel,
-          child: widget.child,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _onTap,
+            onPanStart: _onPanStart,
+            onPanUpdate: _onPanUpdate,
+            onPanEnd: _onPanEnd,
+            onPanCancel: _onPanCancel,
+            child: widget.child,
+          ),
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'package:rxdart/rxdart.dart';
 import 'package:pure_live/exports/package_export.dart';
 import 'package:pure_live/modules/live/playback/models/live_play_args.dart';
 import 'package:pure_live/modules/live/playback/widgets/danmaku/danmaku_overlay.dart';
+import 'package:pure_live/modules/live/playback/widgets/player_key_scope.dart';
 import 'package:pure_live/modules/live/playback/controllers/live_play_controller.dart';
 import 'package:pure_live/modules/live/playback/widgets/video_player/audio_only_surface.dart';
 import 'package:pure_live/modules/live/playback/widgets/video_player/video_controller_panel.dart';
@@ -190,6 +191,20 @@ class _TvVideoSurfaceState extends ConsumerState<TvVideoSurface> {
         children: [
           videoLayer,
           DanmakuOverlay(args: widget.args),
+          // 触摸捕获层：必须在视频**之上**。
+          //
+          // 视频是原生 Texture（media_kit 的 `mkv.Video`），它自己的
+          // hitTestSelf 为 true，会把指针事件吃掉——外层的 GestureDetector
+          // 因此永远收不到触摸，手机上点屏幕毫无反应。这层是普通 widget，
+          // 指针事件一定先到它。
+          //
+          // 放在弹幕之后：弹幕自己带 IgnorePointer，两者不冲突；但捕获层要
+          // 在弹幕之上，才能保证「画面上任何一点」都能接住。
+          //
+          // 控制条与失败浮层是后加入的兄弟节点（Positioned），层级更高，
+          // 它们的按钮不会被这层挡住。
+          if (!state.showControls && !showError && !state.isOffline)
+            const Positioned.fill(child: _TouchCaptureLayer()),
           // The loading overlay covers both the initial start and every
           // later moment the surface provably has no picture: a source
           // opening, a line switch, an engine switch. The availability
@@ -433,6 +448,36 @@ class _ChannelBannerToast extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 视频之上的透明触摸捕获层。
+///
+/// 它不画任何东西，只把指针事件接住并转成播放页的手势语义（单击 / 滑动）。
+/// 必须存在的原因：原生 Texture 会吃掉指针事件，没有这层，手机上点屏幕
+/// 完全没反应。
+///
+/// 事件处理来自 [PlayerGestureScope]（播放页提供），所以与遥控器共用同一套
+/// 语义，不会出现「触摸能做而按键不能」的分叉。
+class _TouchCaptureLayer extends StatelessWidget {
+  const _TouchCaptureLayer();
+
+  @override
+  Widget build(BuildContext context) {
+    final PlayerGestureScope? gestures = PlayerGestureScope.maybeOf(context);
+    // 没有 scope（组件被单独使用时）就不接管，交给下层自己处理。
+    if (gestures == null) return const SizedBox.shrink();
+
+    return GestureDetector(
+      // opaque：即使子节点没有内容，也要占满并接收事件。
+      behavior: HitTestBehavior.opaque,
+      onTap: gestures.onTap,
+      onPanStart: gestures.onPanStart,
+      onPanUpdate: gestures.onPanUpdate,
+      onPanEnd: gestures.onPanEnd,
+      onPanCancel: gestures.onPanCancel,
+      child: const SizedBox.expand(),
     );
   }
 }

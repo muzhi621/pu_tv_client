@@ -177,6 +177,20 @@ internal class VodSpiderBridge(
     /** 本次进程内已强刷重下过的 jar URL：类找不到时的重试每 URL 只做一次。 */
     private val refreshedJars = ConcurrentHashMap.newKeySet<String>()
 
+    /**
+     * jar 的 `Init.init` 最近一次失败的原因。
+     *
+     * 为什么必须留住它：加固 jar 的 `Init.init` 会触发 `DexNative.<clinit>`
+     * （读 jar 内 assets 的 so → `System.load` → 解密内层 dex）。这一步失败后，
+     * ART 把 `DexNative` 标记为 erroneous，之后实例化 Guard 类时只会抛
+     * `NoClassDefFoundError: com.github.catvod.spider.DexNative` —— 只有一个类名，
+     * 真正的原因（`UnsatisfiedLinkError` / `SecurityException` / 文件缺失）全丢了。
+     * 站点失败时把它一起报出来，才能判断是「jar 与站点不匹配」还是
+     * 「native 库加载失败」。
+     */
+    @Volatile
+    private var initFailure: Throwable? = null
+
     private class SpiderHandle(
         val siteKey: String,
         val api: String,
@@ -384,7 +398,7 @@ internal class VodSpiderBridge(
         } catch (error: Throwable) {
             throw BridgeException(
                 "instantiate_failed",
-                "类 ${clazz.name} 实例化失败：${rootMessage(error)}",
+                describeInstantiateFailure(clazz, jar, error),
                 error,
             )
         }
@@ -704,7 +718,19 @@ internal class VodSpiderBridge(
             ).apply { mkdirs() }
             // parent 传 app 的 ClassLoader，spider.jar 里对 Spider / net / utils
             // 的引用才能解析到本 APK 的 classes.dex。
-            val loader = DexClassLoader(jar.absolutePath, outDir.absolutePath, null, javaClass.classLoader)
+            //
+            // 第三个参数（librarySearchPath）**不能传 null**：加固 jar 的
+            // `DexNative.<clinit>` 会把 jar 内 assets 的 so 释放到缓存目录再
+            // `System.load`，它自己声明的 native 方法（getLoader/getSpider）
+            // 由这个 so 注册。librarySearchPath 为空时该 loader 找不到任何
+            // .so，native 方法一律 UnsatisfiedLinkError。
+            // 上游 FongMi 的 JarLoader 同样传了 cachePath（见其 JarLoader.load）。
+            val loader = DexClassLoader(
+                jar.absolutePath,
+                outDir.absolutePath,
+                outDir.absolutePath,
+                javaClass.classLoader,
+            )
             // FongMi/tvbox 的 JarLoader 在加载 jar 后会调
             // com.github.catvod.spider.Init.init(Context)（JarLoader.load 的既定
             // 步骤）。Guard 系 jar（wexguard/ftyguard 加固）靠它解密内层
@@ -778,6 +804,11 @@ internal class VodSpiderBridge(
                 }.onSuccess {
                     invoked += label
                 }.onFailure {
+                    // 真实原因必须留住：见 [initFailure] 的说明。加固 jar 的
+                    // `Init.init` 内部会触发 `DexNative.<clinit>`，那一步失败后
+                    // 只会以 `NoClassDefFoundError: ...DexNative` 的形式暴露，
+                    // 真实原因全丢。
+                    initFailure = it.cause ?: it
                     failed += "$label: ${it.cause?.javaClass?.simpleName ?: it.javaClass.simpleName}"
                     Log.w(TAG, "jar Init 调用失败 $label（${jar.name}）", it)
                 }
@@ -1117,6 +1148,53 @@ internal class VodSpiderBridge(
 
     private fun rootMessage(error: Throwable): String =
         unwrap(error).message ?: unwrap(error).javaClass.simpleName
+
+    /**
+     * 站点实例化失败的说明。
+     *
+     * 只报「类 X 实例化失败：NoClassDefFoundError: com.github.catvod.spider.DexNative」
+     * 是没用的：加固 jar 的 `DexNative.<clinit>` 失败后，ART 会把该类标记为
+     * erroneous，之后任何引用都只抛这个类名，真实原因（native 库加载失败 /
+     * so 缺失 / 权限问题）被完全掩盖。
+     *
+     * 所以这里把三件事拼在一起：
+     * 1. 表面错误；
+     * 2. **jar 的 Init 阶段留下的真实失败原因**（若有）—— 这才是根因；
+     * 3. jar 内实际有哪些 `com.github.catvod.spider.*` 类，用来判断
+     *    「jar 与站点不匹配」（类名对不上）还是「类在但初始化失败」。
+     */
+    private fun describeInstantiateFailure(clazz: Class<*>, jar: File, error: Throwable): String {
+        val sb = StringBuilder()
+        sb.append("类 ").append(clazz.name).append(" 实例化失败：").append(rootMessage(error))
+
+        // 根因：Init 阶段的失败比这里的 NoClassDefFoundError 有价值得多。
+        val init = initFailure
+        if (init != null) {
+            sb.append("\n根因（jar 的 Init 阶段失败）：")
+                .append(init.javaClass.simpleName).append(": ").append(rootMessage(init))
+        }
+
+        // jar 内有没有这个类 / 它的同族类：区分「站点与 jar 不匹配」与
+        // 「类在但初始化失败」。
+        val spiderClasses = spiderClassNames(jar)
+        if (spiderClasses.isEmpty()) {
+            sb.append("\n该 jar 内没有任何 com.github.catvod.spider 类，")
+                .append("站点与 jar 不匹配（可能是配置里的 spider 地址指向了别的包）。")
+        } else {
+            val simple = clazz.simpleName
+            val hasSame = spiderClasses.any { it.equals(simple, ignoreCase = true) }
+            if (!hasSame) {
+                sb.append("\njar 内没有与 ").append(simple).append(" 同名的类，")
+                    .append("站点与 jar 不匹配。jar 内共 ").append(spiderClasses.size)
+                    .append(" 个 spider 类，例如：")
+                    .append(spiderClasses.take(8).joinToString(", "))
+            } else {
+                sb.append("\njar 内存在 ").append(simple)
+                    .append("，失败发生在类初始化阶段（多为 native 库加载失败）。")
+            }
+        }
+        return sb.toString()
+    }
 
     /**
      * QuickJS 能力探测（#63）。
