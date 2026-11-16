@@ -1,5 +1,31 @@
 [
   {
+    "version": "3.0.24",
+    "title": "v3.0.24",
+    "date": "2026-11-16",
+    "github": "https://github.com/muzhi621/pu_tv_client/releases/tag/v3.0.24",
+    "author": {
+      "name": "github-actions[bot]",
+      "avatar": "https://avatars.githubusercontent.com/in/15368?v=4",
+      "profile": "https://github.com/apps/github-actions"
+    },
+    "changelog": "📦 纯粹直播 v3.0.24\n本次更新内容：\n-Feat: 手机/触屏操作——播放页此前只有遥控器按键链，点屏幕没有任何反应；现在单击画面唤出控制条与左侧频道列表、再点一次收起，直播上下滑动切换频道，点播左右滑动快进/后退 10 秒\n-Feat: IPTV 换台改为左侧频道列表（酷9 的交互）——按上下键或右键唤出，列表打开即高亮当前频道，↑↓ 移动高亮、OK 或直接点击该行切台、← 返回收起；单频道时不再打开空列表\n-Fix: 侧栏面板默认贴左边，宽度按屏幕收窄（手机竖屏不再超出屏幕），并移除面板外层多余的 d-pad 焦点区——面板自身已有焦点与按键处理，两套焦点体系会互相抢焦点\n-Fix: 面板每一行都可以点击（原来只能看不能点），点一行等于遥控器定位后按 OK\n-Fix: 触摸手势里引用了未定义的 state 变量导致这段代码编译不过（此前从未进包），已修正\n-Fix: 左侧频道列表与控制条同时出现时，列表会压住控制条左半边的按钮——现在列表底部按控制条高度留白，控制条收起后自动补满\n📺 版本说明：\n• 默认只发布 **Impeller 渲染器**；若画面异常/黑屏，可手动触发构建并勾选 include_skia 单独生成 Skia 兼容版\n• **armeabi-v7a：绝大多数电视盒子（32 位系统），推荐先装这个**\n• arm64-v8a：仅 64 位系统设备（如 NVIDIA Shield、部分新旗舰）\n• 不再发布 x86_64（只用于模拟器）\n• 不确定选哪个：adb shell getprop ro.product.cpu.abilist，列表含 arm64-v8a 才用 arm64 包\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
+    "files": [
+      {
+        "name": "PureLive-TV-arm64-v8a-impeller",
+        "size": "41.46mb",
+        "downloads": 0,
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.24/PureLive-TV-arm64-v8a-impeller.apk"
+      },
+      {
+        "name": "PureLive-TV-armeabi-v7a-impeller",
+        "size": "39.43mb",
+        "downloads": 0,
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.24/PureLive-TV-armeabi-v7a-impeller.apk"
+      }
+    ]
+  },
+  {
     "version": "3.0.23",
     "title": "v3.0.23",
     "date": "2026-11-16",
