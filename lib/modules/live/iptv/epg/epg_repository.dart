@@ -49,7 +49,8 @@ class EpgRepository {
     final response = await _http.dio.get<String>(
       url,
       options: Options(
-        responseType: ResponseType.string,
+        // dio 没有 ResponseType.string；XMLTV 是纯文本，用 plain 拿原始字符串。
+        responseType: ResponseType.plain,
         headers: HttpClient.iptvHeaders(),
         receiveTimeout: const Duration(seconds: 30),
       ),
