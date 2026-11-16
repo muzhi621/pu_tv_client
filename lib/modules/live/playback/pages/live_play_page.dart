@@ -46,9 +46,15 @@ class LivePlayPage extends ConsumerWidget {
             // The panel overlays the video instead of sitting beside it: playback
             // keeps the whole screen and the danmaku keep their geometry.
             if (state.showSidePanel)
-              Positioned(
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
                 top: 24.sp,
-                bottom: 24.sp,
+                // 控制条在最上层（它属于视频表面内部），面板在它下面：底部要让开
+                // 一条控制条的高度，否则手机上点一下屏幕，左侧列表会把控制条
+                // 左半边的按钮（播放/暂停、关注、线路…）整片压住。
+                // 控制条 5 秒后自动收起，面板随之补满高度，动画把这次变化抹平。
+                bottom: state.showControls ? 120.sp * TvTextScale.factorOf(context) : 24.sp,
                 left: PlayerPanelLayout.isLeft ? PlayerPanelLayout.offset.ts(context) : null,
                 right: PlayerPanelLayout.isLeft ? null : PlayerPanelLayout.offset.ts(context),
                 width: panelWidth,
