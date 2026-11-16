@@ -99,30 +99,35 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
     final ch = await db.getChannelById(category.areaId);
     if (ch == null) return [];
 
-    items.add(
-      LiveRoom(
-        roomId: ch.id,
-        title: ch.name,
-        nick: _sourceLabel(ch.groupTitle, category.typeName),
-        cover: ch.tvgLogo ?? '',
-        area: ch.groupTitle ?? '',
-        watching: '',
-        avatar: defaultAvatar,
-        status: true,
-        liveStatus: LiveStatus.live,
-        platform: Sites.iptvSite,
-        link: ch.streamUrl,
-        data: ch.streamUrl,
-        catchUpMode: ch.catchupMode,
-        catchUpSource: ch.catchupSource,
-        catchUpDays: ch.catchupDays,
-        catchUpCorrectionHours: ch.catchupCorrectionHours,
-        httpHeaders: _channelHeaders(HttpHeaderPolicy.decode(ch.httpHeadersJson)),
-      ),
-    );
+    items.add(roomOf(ch, sourceLabel: _sourceLabel(ch.groupTitle, category.typeName)));
 
     return items;
   }
+
+  /// 数据库频道行 → 可播放房间。
+  ///
+  /// 播放页的换台列表（同一节目源的全部频道）也走这里：同一频道在目录卡片、
+  /// 左侧列表和换台后的会话里必须是同一份映射，否则封面 / 请求头 / 回看参数
+  /// 会随入口不同而变。
+  LiveRoom roomOf(Channel ch, {String? sourceLabel}) => LiveRoom(
+    roomId: ch.id,
+    title: ch.name,
+    nick: sourceLabel ?? _sourceLabel(ch.groupTitle, ''),
+    cover: ch.tvgLogo ?? '',
+    area: ch.groupTitle ?? '',
+    watching: '',
+    avatar: defaultAvatar,
+    status: true,
+    liveStatus: LiveStatus.live,
+    platform: Sites.iptvSite,
+    link: ch.streamUrl,
+    data: ch.streamUrl,
+    catchUpMode: ch.catchupMode,
+    catchUpSource: ch.catchupSource,
+    catchUpDays: ch.catchupDays,
+    catchUpCorrectionHours: ch.catchupCorrectionHours,
+    httpHeaders: _channelHeaders(HttpHeaderPolicy.decode(ch.httpHeadersJson)),
+  );
 
   // =========================================================
   // Room details.

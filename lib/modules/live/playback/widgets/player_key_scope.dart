@@ -326,11 +326,7 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     // 动辄上百个台的 IPTV 包——用户能先看见自己在哪一个台、前后还有哪些台，
     // 而不是盲按到画面黑一下才知道换成了什么。
     if (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.arrowDown) {
-      if (controller.channelRooms.length > 1) {
-        controller.openPanel(LivePlayPanel.playlist);
-      } else {
-        ToastUtil.show(i18nOr('ui_no_switchable_channel', 'No channel available to switch to'));
-      }
+      unawaited(_openChannelList(controller));
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowLeft) {
@@ -338,10 +334,25 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowRight) {
-      controller.togglePanel(LivePlayPanel.playlist);
+      unawaited(_openChannelList(controller));
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
+  }
+
+  /// 打开左侧频道列表，必要时先把列表补齐。
+  ///
+  /// IPTV 的换台表来自数据库（见 [LivePlayController.ensureChannelList]），
+  /// 不是路由参数里那一项：不等它就开，会开出一张只有当前频道的列表，
+  /// 或者干脆判成「没有可切换的频道」。
+  Future<void> _openChannelList(LivePlayController controller) async {
+    await controller.ensureChannelList();
+    if (!mounted) return;
+    if (controller.channelRooms.length > 1) {
+      controller.openPanel(LivePlayPanel.playlist);
+    } else {
+      ToastUtil.show(i18nOr('ui_no_switchable_channel', 'No channel available to switch to'));
+    }
   }
 
   /// Queues a channel switch by [delta] (-1 previous, 1 next).
@@ -352,16 +363,20 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
   void _switchChannel(int delta) {
     _pendingChannelDelta += delta;
     _channelDebounce?.cancel();
-    _channelDebounce = Timer(_channelDebounceWindow, _commitChannelSwitch);
+    _channelDebounce = Timer(_channelDebounceWindow, () => unawaited(_commitChannelSwitch()));
   }
 
   /// Commits the accumulated channel delta: one route replace, one release.
-  void _commitChannelSwitch() {
+  Future<void> _commitChannelSwitch() async {
     final int delta = _pendingChannelDelta;
     _pendingChannelDelta = 0;
     if (delta == 0 || !mounted) return;
 
     final controller = ref.read(livePlayControllerProvider(widget.args).notifier);
+    // 列表可能还没补上（IPTV），等它到位再算目标台。
+    await controller.ensureChannelList();
+    if (!mounted) return;
+
     final rooms = controller.channelRooms;
     final target = controller.relativeChannel(delta);
     if (target == null) {
@@ -492,7 +507,9 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
   /// 直播时把**左侧频道列表**一起带出来：点屏幕的意图基本都是"我要换台"，
   /// 只弹一条控制条等于让用户再找一次入口。列表里高亮停在当前频道上，点一行
   /// 或按 OK 就切过去，这就是酷9 的那套交互。
-  void _onTap() {
+  void _onTap() => unawaited(_handleTap());
+
+  Future<void> _handleTap() async {
     if (!mounted) return;
     final state = ref.read(livePlayControllerProvider(widget.args));
     final controller = ref.read(livePlayControllerProvider(widget.args).notifier);
@@ -510,7 +527,11 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     }
 
     controller.showControls();
+    if (widget.args.vod) return;
     // 只有一个台时开列表没有意义，还会让人以为"点出了一张空面板"。
+    // 直播的列表可能还在补（IPTV 的换台表来自数据库），等它到位再判。
+    await controller.ensureChannelList();
+    if (!mounted) return;
     if (controller.channelRooms.length > 1) controller.openPanel(LivePlayPanel.playlist);
   }
 

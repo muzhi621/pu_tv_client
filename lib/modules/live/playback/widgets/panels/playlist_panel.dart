@@ -39,7 +39,12 @@ class _PlaylistPanelState extends ConsumerState<PlaylistPanel> {
   /// Highlighted row. Opens on the **current** channel (as the 酷9 channel list
   /// does) instead of the first row: in a long IPTV package the viewer would
   /// otherwise have to hunt for the channel that is already playing.
-  late int _index = ref.read(livePlayControllerProvider(widget.args).notifier).channelIndex;
+  ///
+  /// Null until the viewer moves the highlight, so the row keeps tracking the
+  /// current channel while the list is still arriving: the IPTV channel table is
+  /// loaded after the page opens (see [LivePlayController.ensureChannelList]),
+  /// and pinning the index during initState would freeze it on row 0.
+  int? _index;
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +53,7 @@ class _PlaylistPanelState extends ConsumerState<PlaylistPanel> {
     final List<LiveRoom> rooms = controller.channelRooms;
     final LiveRoom? current = state.room;
     final favorites = ref.watch(favoriteRoomControllerProvider).favoriteRooms;
-    final int index = rooms.isEmpty ? 0 : _index.clamp(0, rooms.length - 1);
+    final int index = rooms.isEmpty ? 0 : (_index ?? controller.channelIndex).clamp(0, rooms.length - 1);
 
     return PlayerIndexPanel(
       // IPTV 的列表就是频道表，叫"频道列表"才对得上用户看到的东西；其他站点

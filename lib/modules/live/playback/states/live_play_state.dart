@@ -29,6 +29,7 @@ class LivePlayState {
     this.fetchingDetail = false,
     this.position = Duration.zero,
     this.duration,
+    this.channelOverride,
   });
 
   final LiveRoom? room;
@@ -101,6 +102,15 @@ class LivePlayState {
   final Duration position;
   final Duration? duration;
 
+  /// 换台用的频道表，覆盖 [LivePlayArgs.playlist]。
+  ///
+  /// 由控制器在打开播放页后从数据源补齐，目前只有 IPTV 会写：IPTV 目录把
+  /// **每个频道**当成一个分区，从目录进播放时调用方只带着那一个频道，
+  /// 于是「上/下一个频道」和左侧列表全都是空的（用户看到的是
+  /// 「没有可切换的频道」）。真实的换台语境是同一节目源（provider）下的
+  /// 频道表，那是目录里也看得见的那一串台，只能这里补。
+  final List<LiveRoom>? channelOverride;
+
   bool get showChannelBanner => channelBanner != null && channelBanner!.isNotEmpty;
 
   /// Whether the failure overlay owns the picture.
@@ -142,6 +152,7 @@ class LivePlayState {
     Duration? position,
     Duration? duration,
     bool clearDuration = false,
+    List<LiveRoom>? channelOverride,
   }) {
     return LivePlayState(
       room: clearRoom ? null : (room ?? this.room),
@@ -165,6 +176,7 @@ class LivePlayState {
       fetchingDetail: fetchingDetail ?? this.fetchingDetail,
       position: position ?? this.position,
       duration: clearDuration ? null : (duration ?? this.duration),
+      channelOverride: channelOverride ?? this.channelOverride,
     );
   }
 }

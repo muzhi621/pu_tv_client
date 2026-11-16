@@ -123,6 +123,11 @@ class LivePlayController extends _$LivePlayController {
     // it now throws "uninitialized provider".
     Future<void>.microtask(_bootstrap);
 
+    // 换台列表预热。IPTV 的入口只带得动一个频道（见 [ensureChannelList]），
+    // 用户往往是「先点屏幕再找台」，等点击那一刻才查库会让第一次点击落空，
+    // 所以进页面就把同源频道表补上。
+    unawaited(ensureChannelList());
+
     return LivePlayState(playerState: PlayerCoreState());
   }
 
@@ -1071,7 +1076,10 @@ class LivePlayController extends _$LivePlayController {
   /// rooms and up/down keeps working when the entry list is short or exhausted.
   /// Offline and IPTV history entries are left out — there is nothing to switch to.
   List<LiveRoom> get channelRooms {
-    final List<LiveRoom> source = args.playlist;
+    // IPTV 的换台表由 [ensureChannelList] 从数据源补齐，优先于调用方带来的
+    // 单频道列表；其它站点仍然用进来的那份 list。
+    final List<LiveRoom> override = state.channelOverride ?? const <LiveRoom>[];
+    final List<LiveRoom> source = override.length > 1 ? override : args.playlist;
 
     final List<LiveRoom> history = SettingsService.to.historyState.historyRooms
         .where((room) => room.platform != Sites.iptvSite && room.liveStatus == LiveStatus.live)
@@ -1087,6 +1095,54 @@ class LivePlayController extends _$LivePlayController {
     }
 
     return rooms;
+  }
+
+  /// 换台列表的加载状态（幂等缓存）。
+  Future<void>? _channelLoad;
+
+  /// 补齐换台用的频道表，返回时 [channelRooms] 已经可以被使用。
+  ///
+  /// 只有 IPTV 需要：它的目录把**每个频道**当成一个分区（[IptvSite.getCategores]），
+  /// 从目录点进播放时调用方只带着这一个频道，`args.playlist` 长度是 1 ——
+  /// 换台和左侧列表因此全是空的，用户看到的是「没有可切换的频道」。
+  ///
+  /// 换台的正确语境是同一节目源（provider）下的频道表，也就是目录里那一整串台，
+  /// 只能回数据库取。幂等：重复调用复用同一次查询，触摸和按键两条路径都会进来。
+  Future<void> ensureChannelList() {
+    if (_channelLoad != null) return _channelLoad!;
+    // 点播（TVBox 影音）借用 iptv 站点播直链，没有频道表可补；
+    // 其它非 IPTV 站点、或调用方已经带来了多个频道，同样没有要补的。
+    if (args.vod || args.platform != Sites.iptvSite || args.playlist.length > 1) {
+      return Future<void>.value();
+    }
+    return _channelLoad = _loadIptvChannelList();
+  }
+
+  Future<void> _loadIptvChannelList() async {
+    try {
+      final db = DbService.to.db;
+      final channel = await db.getChannelById(args.roomId);
+      if (channel == null || !ref.mounted) return;
+
+      final rows = await db.getChannelsForProvider(channel.providerId);
+      if (!ref.mounted) return;
+
+      // 隐藏的频道在目录里看不到，也就不该出现在换台列表；顺序沿用播放列表
+      // 顺序（sortOrder），否则上下切换的次序和用户看到的目录不一致。
+      final visible = rows.where((row) => !row.hidden).toList()
+        ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+
+      if (visible.length < 2) return;
+
+      final IptvSite site = IptvSite();
+
+      state = state.copyWith(
+        channelOverride: <LiveRoom>[for (final row in visible) site.roomOf(row)],
+      );
+    } catch (e, s) {
+      // 换台列表是增强项：读库失败不该把正在播的画面拖进错误态。
+      log('ensureChannelList failed: $e', name: 'LivePlayController', error: e, stackTrace: s);
+    }
   }
 
   /// Index of the current room in the channel list, or 0 when it is missing.
