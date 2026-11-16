@@ -714,10 +714,29 @@ final class LivePlayerFacade {
   }
 
   /// Toggles play/pause.
+  ///
+  /// 不能让内核自己判断：media_core 的 `togglePlayPause()` 读的是它内部的
+  /// 镜像状态，而 `open()` 返回后那个状态可能一直停在 `buffering`（本文件
+  /// 的 `_onLiveStateChanged` 专门把这种合成 buffering 修正为 playing 给 UI
+  /// 看）。于是界面显示「播放中」、用户点暂停，内核却以为还在 buffering，
+  /// 转去调 `resume()`——表现就是暂停按钮点了没反应。
+  ///
+  /// 这里用本 facade 已经维护的两份事实判断：UI 状态流和 adapter 的
+  /// Playing 事件。只要二者任一认为在播，就明确走 `pause()`。
   Future<void> togglePlayPause() async {
     if (_disposed) return;
 
-    await _controller.togglePlayPause();
+    final PlayerCoreState state = _stateSubject.value;
+    // 注意不能用 `state.ready`：内核里 ready 只表示生命周期就绪，paused /
+    // buffering 都算 ready，拿它判断会让第二次点击仍然走 pause（暂停后永远
+    // 恢复不了）。只用「UI 状态流认为在播」或「adapter 报过 Playing」。
+    final bool playing = state.playing || _playingSubject.value;
+
+    if (playing) {
+      await _controller.pause();
+    } else {
+      await _controller.resume();
+    }
     _bindCurrentHandle();
   }
 

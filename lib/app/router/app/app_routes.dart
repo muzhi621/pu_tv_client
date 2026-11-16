@@ -4,6 +4,10 @@ abstract final class AppRoutes {
   /// Home
   static const kInitial = "/home";
 
+  /// 启动页按钮对应的独立页面（按返回都回到 /home）。
+  static const kVodBrowse = "/vod_browse";
+  static const kIptvChannels = "/iptv_channels";
+
   /// Followed rooms
   static const kFavorite = "/favorite";
 

@@ -295,6 +295,18 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       return null;
     },
-    routes: $appRoutes,
+    // 启动页的三个入口各自是一个独立路由：播放页 / 点播页 / 设置页按返回
+    // 都直接回到 /home，而不是回到嵌在首页里的某个内容 tab。
+    routes: [
+      ...$appRoutes,
+      GoRoute(
+        path: AppRoutes.kVodBrowse,
+        builder: (context, state) => const VodBrowsePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.kIptvChannels,
+        builder: (context, state) => const AreasPage(onlySiteId: 'iptv'),
+      ),
+    ],
   );
 });

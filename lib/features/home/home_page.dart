@@ -2,28 +2,27 @@ import 'dart:async';
 import 'dart:developer' show log;
 
 import 'package:dpad/dpad.dart';
-import 'package:flutter_animate/flutter_animate.dart';
-import 'package:pure_live/exports/package_export.dart';
 import 'package:pure_live/app/router/app/app_router.dart';
+import 'package:pure_live/app/router/app/app_routes.dart';
+import 'package:pure_live/exports/package_export.dart';
+import 'package:pure_live/features/home/exit_confirm_dialog.dart';
 import 'package:pure_live/features/home/home_provider.dart';
-import 'package:pure_live/modules/live/areas/areas_page.dart';
 import 'package:pure_live/features/home/home_update_dialog.dart';
 import 'package:pure_live/features/home/remote_notice_dialog.dart';
-import 'package:pure_live/features/home/exit_confirm_dialog.dart';
-import 'package:pure_live/features/settings/tv_settings_page.dart';
 import 'package:pure_live/modules/live/iptv/services/iptv_resume_channel.dart';
-import 'package:pure_live/modules/live/movie_playback/movie_playback_page.dart';
-import 'package:pure_live/modules/live/movie_playback/vod_browse_page.dart';
 import 'package:pure_live/modules/live/playback/models/live_play_args.dart';
 import 'package:pure_live/platforms/sites.dart';
-import 'package:pure_live/services/refresh_config/refresh_config_controller.dart';
 import 'package:pure_live/services/settings/settings.dart';
 
-/// 首页外壳：左侧一级栏（IPTV / 影音 / 设置）+ 右侧二级菜单与内容区。
+/// 启动页：只有 IPTV / 影音 / 设置三个大按钮。
 ///
-/// 2026-11-15 起直播与 bilibili UGC 影音整体下线：这里不再有 live ↔ video
-/// 模式切换，也不再渲染关注 / 热门 / 分区 / 搜索 / 历史等直播页面。
-/// 内容区只保留 IPTV 频道页与 TVBox 点播页，二者共用 LivePlayRoute 播放器。
+/// 2026-11-16 定版：用户明确要求去掉侧边栏和“首页里嵌频道网格”的结构。
+/// 这里只做分发：点 IPTV 直接进播放页，点影音进点播页，点设置进设置页；
+/// 三个目标都是**独立的路由**，所以按返回一律回到这个启动页，不会中途
+/// 掉进 IPTV 全部频道。
+///
+/// 频道目录仅作为兜底：本机一个可见 IPTV 频道都没有时，点 IPTV 才落到
+/// `/iptv_channels`（也要先有频道才能播）。
 class HomePage extends ConsumerStatefulWidget {
   final bool keepAlive;
 
@@ -34,46 +33,50 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage> {
-  /// One stable focus node per primary navigation group.
-  final Map<String, FocusNode> _groupFocusNodes = {};
+  final FocusNode _iptvFocus = FocusNode();
+  final FocusNode _vodFocus = FocusNode();
+  final FocusNode _settingsFocus = FocusNode();
 
-  FocusNode _groupNode(String id) => _groupFocusNodes.putIfAbsent(id, FocusNode.new);
+  /// 同一时间只允许一个 IPTV 启动流程：解析库要查 sqlite，快速连点会叠两个播放页。
+  bool _launchingIptv = false;
 
-  /// Currently selected primary group (iptv / vod). 'settings' never lives
-  /// here: its primary item opens the settings route directly.
-  late String _currentGroupId;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(RemoteNoticeDialog.maybeShow(context));
+      unawaited(HomeUpdateDialog.maybeShow(context, ref));
+    });
+  }
 
-  /// 续播查询进行中：同一个动作被重复触发（快速连点 IPTV、首帧与点击叠加）
-  /// 时不再叠第二个播放页。
-  bool _resumingIptv = false;
-
-  /// 一次「进 IPTV 就续播」还没结算完。为 true 时 IPTV 内容区被挂起（见
-  /// [_buildPageContent]），免得频道目录先渲染一帧、再被播放页盖住
-  /// （用户看到的就是「这个页面还在」）。
-  bool _iptvResumePending = false;
+  @override
+  void dispose() {
+    _iptvFocus.dispose();
+    _vodFocus.dispose();
+    _settingsFocus.dispose();
+    super.dispose();
+  }
 
   /// 观看历史里最近一条 IPTV 频道。
   ///
-  /// 老版本（≤3.0.27）播放时只写观看历史，没有 [IptvResumeChannel] 这类记录，
-  /// 所以升级后的**第一次**启动要靠它来接上——否则用户会以为「续播没做」。
-  /// 历史是倒序的（最新在前，见 `upsertHistoryRoom`），取第一条即可。
+  /// 老版本（≤3.0.27）播放时只写观看历史，没有 [IptvResumeChannel] 记录，
+  /// 升级后的第一次点 IPTV 要靠它接上。历史是倒序的，取第一条即可。
   LiveRoom? _lastIptvHistoryRoom() {
     for (final room in SettingsService.to.historyState.historyRooms) {
-      // 用归一化 id 比较：历史里的 platform 大小写不一定和常量一致。
       if (room.normalizedPlatformId == Sites.iptvSite && room.normalizedRoomId.isNotEmpty) return room;
     }
     return null;
   }
 
-  /// 解析续播目标，按可靠度依次尝试：
+  /// 解析 IPTV 的播放目标，按可靠度依次尝试：
   ///
-  /// 1. [IptvResumeChannel] —— 上次真的起播成功的台（最准）；
-  /// 2. 观看历史里最近一条 IPTV 频道 —— 覆盖「升级上来第一次启动」；
-  /// 3. 库里第一个可见频道 —— 覆盖「装好就打开」的新设备，符合电视开机即看的习惯。
+  /// 1. [IptvResumeChannel] —— 上次真正起播成功的台；
+  /// 2. 观看历史里最近一条 IPTV 频道 —— 覆盖升级后第一次启动；
+  /// 3. 库里第一个可见频道 —— 覆盖新设备 / 清过历史的设备。
   ///
-  /// 返回 null 表示库里一个可见频道都没有（云端 IPTV 源还没下发/同步），
-  /// 这时只能落在频道目录上。
-  Future<LivePlayArgs?> _resolveIptvResumeArgs() async {
+  /// 返回 null 表示库里一个可见频道都没有（云端源还没同步下来）。
+  Future<LivePlayArgs?> _resolveIptvArgs() async {
     final db = DbService.to.db;
 
     final String? savedId = IptvResumeChannel.channelId;
@@ -87,7 +90,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     final LiveRoom? fromHistory = _lastIptvHistoryRoom();
     if (fromHistory != null) {
       final channel = await db.getChannelById(fromHistory.normalizedRoomId);
-      // 带上房间快照，播放页第一帧就有台名/台标；地址仍以回库解析的结果为准。
+      // 带上房间快照，播放页第一帧就有台名/台标；地址仍以回库解析的为准。
       if (channel != null) return LivePlayArgs.fromRoom(fromHistory);
     }
 
@@ -96,331 +99,110 @@ class _HomePageState extends ConsumerState<HomePage> {
     return LivePlayArgs(platform: Sites.iptvSite, roomId: first.id);
   }
 
-  /// 选中 IPTV 就进播放页（与酷9 的行为一致），频道目录不再作为落地页，
-  /// 只在库里一个可见频道都没有时兜底显示。
-  ///
-  /// 从播放页返回时不会再自动跳一次：那条路径不经过 [_selectNavGroup]，
-  /// 于是返回后停在频道目录，想换别的台/换源也有地方去。
-  Future<void> _resumeIptvChannel() async {
-    if (_resumingIptv) return;
-
-    _resumingIptv = true;
+  /// 点 IPTV：直接进播放页。频道目录只在没有任何可播频道时兜底。
+  Future<void> _launchIptv() async {
+    if (_launchingIptv) return;
+    _launchingIptv = true;
     try {
-      final LivePlayArgs? args = await _resolveIptvResumeArgs();
+      final LivePlayArgs? args = await _resolveIptvArgs();
       if (!mounted) return;
-      if (args != null) {
-        // 只带 id / 房间快照：播放页会回库重新解析线路与地址，
-        // 续播拿到的永远是最新的一条。
-        LivePlayRoute(args).push(context);
+      if (args == null) {
+        log('iptv launch: no visible channel in db', name: 'HomePage');
+        context.push(AppRoutes.kIptvChannels);
         return;
       }
-      log('iptv resume skipped: no visible channel in db', name: 'HomePage');
+      // 只带 id / 房间快照：播放页会回库重新解析线路与地址。
+      LivePlayRoute(args).push(context);
     } catch (e, s) {
-      // 续播是增强项：解析失败不该把用户挡在空白页上，回落到频道目录即可。
-      log('resume iptv channel failed: $e', name: 'HomePage', error: e, stackTrace: s);
+      log('launch iptv failed: $e', name: 'HomePage', error: e, stackTrace: s);
+      if (mounted) context.push(AppRoutes.kIptvChannels);
     } finally {
-      _resumingIptv = false;
-      if (mounted && _iptvResumePending) setState(() => _iptvResumePending = false);
+      _launchingIptv = false;
     }
-  }
-
-  /// Select a primary nav group and land on its first visible secondary item.
-  /// The settings group keeps the existing "open the settings route" behaviour.
-  void _selectNavGroup(String groupId) {
-    if (groupId == 'settings') {
-      const SettingsMenuRoute().push(context);
-      return;
-    }
-    setState(() {
-      _currentGroupId = groupId;
-      // 选中 IPTV 即进播放页：频道目录不再作为落地页（见 [_resumeIptvChannel]）。
-      if (groupId == 'iptv') _iptvResumePending = true;
-    });
-    final childIndexes = navChildIndexes(resolveNavGroups(), groupId);
-    final items = ref
-        .read(sideMenuListProvider)
-        .where((item) => childIndexes.contains(item.index))
-        .toList();
-    if (items.isNotEmpty) {
-      ref.read(sideMenuIndexProvider.notifier).changeIndex(items.first.index);
-    } else if (childIndexes.isNotEmpty) {
-      // 云端白名单漏了这一块也要能进去：直接落到块内的主页面。
-      ref.read(sideMenuIndexProvider.notifier).changeIndex(childIndexes.first);
-    }
-
-    if (groupId == 'iptv') unawaited(_resumeIptvChannel());
-  }
-
-  /// 一级栏常驻块（IPTV / 影音 / 设置）。
-  ///
-  /// 2026-11-15 二改：不再在左侧追加当前块的二级菜单。影音块曾带
-  /// 「影音 / 放映」两项，选中后左侧会重复出现一排图标，用户明确要求去掉。
-  /// 现在一个一级块直接对应一个内容页：IPTV → 频道页，影音 → 点播浏览页。
-  List<Widget> _buildRailItems(bool isExpanded, List<NavGroup> groups) {
-    return <Widget>[
-      for (final group in groups)
-        Padding(
-          padding: EdgeInsets.only(bottom: 12.ts(context)),
-          child: _buildAdaptiveItem(
-            ref: ref,
-            item: AppMenuItem(
-              index: -1 - groups.indexOf(group),
-              title: i18n(group.labelKey),
-              shortTitle: i18n(group.labelKey),
-              icon: group.icon,
-            ),
-            isExpanded: isExpanded,
-            isSelected: _currentGroupId == group.id,
-            focusNode: _groupNode(group.id),
-            onTap: () => _selectNavGroup(group.id),
-          ),
-        ),
-    ];
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    // 一级栏启动默认块：云端 navigation.defaultGroupId，旧配置/非法值回退 iptv。
-    _currentGroupId = resolveDefaultGroupId(resolveNavGroups());
-    // 启动就落在 IPTV 时直接进播放页，别让用户先看到频道目录再跳。
-    // 这里不判断「有没有历史/记录」——目标由 [_resolveIptvResumeArgs] 现场解析，
-    // 库里只要有可见频道就一定进得去。
-    _iptvResumePending = _currentGroupId == 'iptv';
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (_iptvResumePending) unawaited(_resumeIptvChannel());
-      unawaited(RemoteNoticeDialog.maybeShow(context));
-      unawaited(HomeUpdateDialog.maybeShow(context, ref));
-    });
-  }
-
-  @override
-  void dispose() {
-    for (final node in _groupFocusNodes.values) {
-      node.dispose();
-    }
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentIndex = ref.watch(sideMenuIndexProvider);
-    final menuList = ref.watch(sideMenuListProvider);
-    final isExpanded = ref.watch(isMenuExpandedProvider);
-    final groups = resolveNavGroups();
-    final currentTvTheme = context.tvTheme;
-    final bool effectiveKeepAlive =
-        widget.keepAlive && ref.watch(refreshConfigControllerProvider.select((s) => s.homeKeepAlive));
-
-    // 内容页始终取自当前一级块的 children；选中项被白名单隐藏或刚切换了一级块时，
-    // 自动落到该块首个页面（IPTV 块固定落到 iptv，影音块固定落到 vodBrowse）。
-    final childIndexes = navChildIndexes(groups, _currentGroupId);
-    final visibleIndexes = menuList
-        .map((item) => item.index)
-        .where((index) => childIndexes.contains(index))
-        .toSet();
-    final int? landing = visibleIndexes.isNotEmpty
-        ? visibleIndexes.first
-        : (childIndexes.isNotEmpty ? childIndexes.first : null);
-    if (!childIndexes.contains(currentIndex) && landing != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(sideMenuIndexProvider.notifier).changeIndex(landing);
-      });
-    }
-
-    ref.listen(sideMenuIndexProvider, (_, next) {
-      if (!visibleIndexes.contains(next)) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        // 二级项已不在左侧渲染，焦点统一落在当前一级块上，避免指向未挂载节点。
-        final node = _groupNode(_currentGroupId);
-        if (node.hasFocus) return;
-        DpadRegion.ofNode(node)?.noteFocus(node);
-        node.requestFocus();
-      });
-    });
-
-    final sidebarWidth = isExpanded ? 228.ts(context) : 160.ts(context);
-
-    // 只缓存三个可达页面；「放映」（moviePlayback）已从左侧入口移除，
-    // 其余已下线的直播/UGC 类型同样回退 IPTV 页。
-    const cacheableTypes = [
-      TvMenuType.iptv,
-      TvMenuType.vodBrowse,
-      TvMenuType.settings,
-    ];
-
-    final currentMenuType = TvMenuType.fromIndex(currentIndex);
-    final isCurrentCacheable = cacheableTypes.contains(currentMenuType);
-    final stackIndex = cacheableTypes.indexOf(currentMenuType);
+    final theme = context.tvTheme;
 
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
+      onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         showExitConfirmDialog(context, ref);
       },
       child: TvScaffold(
-        openingFocus: _groupNode(_currentGroupId),
-        child: Row(
-          children: [
-            DpadRegion(
-              child: AnimatedContainer(
-                key: const Key('home-sidebar'),
-                duration: const Duration(milliseconds: 150),
-                curve: Curves.easeOutCubic,
-                width: sidebarWidth,
-                color: currentTvTheme.backgroundColor.withValues(alpha: 0.62),
-                padding: EdgeInsets.symmetric(vertical: 24.ts(context)),
-                child: LayoutBuilder(
-                  builder: (context, constraints) => Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: TvDigitalClock(
-                          format: isExpanded ? 'HH:mm:ss' : 'HH:mm',
-                          style: AppTextStyles.t20.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: currentTvTheme.primaryTextColor,
-                            height: 1,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                      ),
-                      if (isExpanded)
-                        TvDigitalClock(
-                          format: 'yyyy/MM/dd',
-                          style: AppTextStyles.t14.copyWith(
-                            fontWeight: FontWeight.w500,
-                            color: currentTvTheme.secondaryTextColor,
-                            height: 1,
-                          ),
-                        ),
-                      SizedBox(height: 15.ts(context)),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: Column(children: _buildRailItems(isExpanded, groups)),
-                        ),
-                      ),
-                    ],
+        // 遥控器开机焦点落在第一个按钮上。
+        openingFocus: _iptvFocus,
+        child: DpadRegion(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  i18n('app_name'),
+                  style: AppTextStyles.t28.copyWith(
+                    color: theme.primaryTextColor,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 2,
                   ),
                 ),
-              ),
-            ),
-            Expanded(
-              child: DpadRegion(
-                child: Padding(
-                  padding: EdgeInsets.all(8.ts(context)),
-                  child: effectiveKeepAlive
-                      ? Stack(
-                          children: [
-                            Visibility(
-                              visible: isCurrentCacheable,
-                              maintainState: true,
-                              child: IndexedStack(
-                                index: stackIndex != -1 ? stackIndex : 0,
-                                children: cacheableTypes.map((type) {
-                                  final isCurrent = currentMenuType == type;
-                                  return TvLazyWrapper(
-                                    isCurrent: isCurrent,
-                                    child: _buildPageContent(context, ref, type)
-                                        .animate(target: isCurrent ? 1.0 : 0.0)
-                                        .fadeIn(duration: 200.ms, curve: Curves.easeOutCubic)
-                                        .scale(
-                                          begin: const Offset(0.95, 0.95),
-                                          end: const Offset(1.0, 1.0),
-                                          duration: 250.ms,
-                                          curve: Curves.easeOutCubic,
-                                        ),
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                            if (!isCurrentCacheable)
-                              Container(
-                                key: ValueKey(currentIndex),
-                                child: _buildPageContent(context, ref, currentMenuType)
-                                    .animate()
-                                    .fadeIn(duration: 200.ms, curve: Curves.easeOutCubic),
-                              ),
-                          ],
-                        )
-                      : Container(
-                          key: ValueKey(currentIndex),
-                          child: _buildPageContent(context, ref, currentMenuType)
-                              .animate()
-                              .fadeIn(duration: 200.ms, curve: Curves.easeOutCubic),
-                        ),
+                SizedBox(height: 44.ts(context)),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _buildTile(
+                      label: i18n(kNavGroups[0].labelKey),
+                      icon: kNavGroups[0].icon,
+                      focusNode: _iptvFocus,
+                      onTap: _launchIptv,
+                    ),
+                    SizedBox(width: 32.ts(context)),
+                    _buildTile(
+                      label: i18n(kNavGroups[1].labelKey),
+                      icon: kNavGroups[1].icon,
+                      focusNode: _vodFocus,
+                      onTap: () => context.push(AppRoutes.kVodBrowse),
+                    ),
+                    SizedBox(width: 32.ts(context)),
+                    _buildTile(
+                      label: i18n(kNavGroups[2].labelKey),
+                      icon: kNavGroups[2].icon,
+                      focusNode: _settingsFocus,
+                      onTap: () => const SettingsMenuRoute().push(context),
+                    ),
+                  ],
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildAdaptiveItem({
-    required WidgetRef ref,
-    required AppMenuItem item,
-    required bool isExpanded,
-    required bool isSelected,
+  Widget _buildTile({
+    required String label,
+    required IconData icon,
+    required FocusNode focusNode,
     required VoidCallback onTap,
-    FocusNode? focusNode,
   }) {
-    if (isExpanded) {
-      return Container(
-        width: double.infinity,
-        padding: EdgeInsets.symmetric(horizontal: 16.ts(context)),
-        child: TvButton(
-          title: item.title,
-          icon: Icon(item.icon),
-          iconPosition: TvIconPosition.left,
-          size: TvButtonSize.medium,
-          isSecondary: !isSelected,
-          selected: isSelected,
-          useFadedFocus: true,
-          focusNode: focusNode,
-          onTap: onTap,
-        ),
-      ).animate().fadeIn(duration: 150.ms).slideX(begin: -0.05, end: 0, duration: 200.ms, curve: Curves.easeOutCubic);
-    }
-
-    return TvIconButton(
-      icon: Icon(item.icon),
-      label: item.shortTitle.isEmpty ? item.title : item.shortTitle,
-      selected: isSelected,
-      size: TvIconButtonSize.medium,
-      useFadedFocus: true,
-      isSecondary: !isSelected,
-      expand: false,
-      focusNode: focusNode,
-      onTap: onTap,
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        minWidth: 240.ts(context),
+        minHeight: 150.ts(context),
+        maxWidth: 320.ts(context),
+      ),
+      child: TvButton(
+        title: label,
+        icon: Icon(icon),
+        iconPosition: TvIconPosition.top,
+        size: TvButtonSize.large,
+        focusNode: focusNode,
+        autofocus: focusNode == _iptvFocus,
+        onTap: onTap,
+      ),
     );
-  }
-
-  Widget _buildPageContent(BuildContext context, WidgetRef ref, TvMenuType type) {
-    switch (type) {
-      case TvMenuType.settings:
-        return const SettingsCatalogView();
-      case TvMenuType.moviePlayback:
-        return const MoviePlaybackPage();
-      case TvMenuType.vodBrowse:
-        // 点播浏览：源与站点全部来自云端下发的 vod 节，本地没有任何内置源。
-        return const VodBrowsePage();
-      case TvMenuType.iptv:
-        // IPTV 专用频道页：只保留 iptv 站点的频道目录（Sites.iptvSite == 'iptv'）。
-        // 续播结算前把它挂起来（Offstage 仍然构建，目录请求照发）：既不闪一帧
-        // 频道网格，用户从播放页返回时目录也已经在手上。
-        if (_iptvResumePending) {
-          return const Offstage(offstage: true, child: AreasPage(onlySiteId: 'iptv'));
-        }
-        return const AreasPage(onlySiteId: 'iptv');
-      // 直播 / UGC 菜单已下线。老缓存里若残留这些 TvMenuType 值，统一回退到
-      // IPTV 频道页，绝不渲染空白内容区。
-      default:
-        return const AreasPage(onlySiteId: 'iptv');
-    }
   }
 }
