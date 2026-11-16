@@ -195,6 +195,23 @@ internal class VodSpiderBridge(
         channel.setMethodCallHandler(this)
     }
 
+    /**
+     * jar 里的 `Init` 需要的 Context。
+     *
+     * **必须是 Application，不能是 Activity。** 这不是风格问题，是硬约束：
+     * 加固 jar 的 `Init.init(Context)` 字节码是
+     * `move-object v1,v2 → check-cast v1, Landroid/app/Application → iput-object`，
+     * 传 Activity 必然抛 ClassCastException，于是 `Init` 单例上的 Application
+     * 字段留空，后面 `DexNative.<clinit>` 调 `Init.context().getCacheDir()`
+     * 直接 NPE（现场报错：Attempt to invoke virtual method 'java.io.File
+     * android.content.Context.getCacheDir()' on a null object reference）。
+     *
+     * 上游 FongMi 的 `JarLoader.initDex` 传的是 `App.get()`（Application），
+     * 这里对齐上游。
+     */
+    private fun jarInitContext(): Context =
+        context.applicationContext ?: context
+
     fun dispose() {
         channel.setMethodCallHandler(null)
         for (handle in spiders.values) {
@@ -693,6 +710,11 @@ internal class VodSpiderBridge(
             // 步骤）。Guard 系 jar（wexguard/ftyguard 加固）靠它解密内层
             // DexClassLoader，不调则 Guard 类实例化后不可用。
             maybeInvokeJarInit(jar, loader)
+
+            // 兜底：有些 jar 没有可调用的 Init 入口（或入口签名不匹配），
+            // 但 Guard 系的 `Init` 单例上仍带着一个 Application 字段，
+            // 直接把它写上，保证 `Init.context()` 不返回 null。
+            ensureJarInitContext(jar, loader)
             loader
         }
 
@@ -707,6 +729,10 @@ internal class VodSpiderBridge(
      * 逐个调用并把成功的方法名与失败原因写进日志，加固包出问题时只有
      * 这行日志能说明到底卡在哪一步。
      *
+     * **传入的 Context 必须是 Application**（见 [jarInitContext]）：加固包
+     * 的 `Init.init` 内部 `check-cast` 成 Application，传 Activity 直接
+     * ClassCastException。
+     *
      * 但防白嫖 jar 的 Init 会校验宿主包名并 `Process.killProcess`——进程被杀
      * 比站点不可用严重得多。dex 里同时出现 killProcess 与 getPackageName
      * 就视为带这种保护，跳过原 Init（宁可这个 jar 的 Guard 类不可用）。
@@ -718,6 +744,7 @@ internal class VodSpiderBridge(
         }
 
         val contextClass = android.content.Context::class.java
+        val initContext = jarInitContext()
         val invoked = mutableListOf<String>()
         val failed = mutableListOf<String>()
 
@@ -741,7 +768,7 @@ internal class VodSpiderBridge(
                 if (!zeroArgEntry && (!acceptsContext || !tailIsString)) continue
 
                 val args = params.mapIndexed { index, _ ->
-                    if (index == 0) context else "" as Any?
+                    if (index == 0) initContext else "" as Any?
                 }.toTypedArray()
 
                 val label = "${clazz.simpleName}.${method.name}/${params.size}"
@@ -762,6 +789,95 @@ internal class VodSpiderBridge(
         } else {
             Log.i(TAG, "jar Init 完成 ${jar.name}: ok=[${invoked.joinToString()}] fail=[${failed.joinToString()}]")
         }
+    }
+
+    /**
+     * 兜底：把 Application 写进 jar 的 `Init` 单例字段。
+     *
+     * 目标不是静态字段，而是 **`Init` 单例上的实例字段**——实测加固包
+     * （wexguard）的 `Init` 结构是：
+     * ```
+     * Init$Loader.oOoOoOoOoOoOoO0o : Init        // 静态单例
+     * Init.oOoOoOoOoOoOoO0o       : Application   // 实例字段 ← 要写的是这个
+     * Init.oOoOoOo0oOo0o0oO       : DexClassLoader
+     * Init.oOo0oOo0Oo0oO0Oo       : ClassLoader
+     * ```
+     * `Init.context()` 读的就是那个 Application 字段。字段为空时，
+     * `DexNative.<clinit>` 里的 `Init.context().getCacheDir()` 直接 NPE，
+     * 现场报错正是 "Attempt to invoke virtual method 'java.io.File
+     * android.content.Context.getCacheDir()' on a null object reference"。
+     *
+     * 实例字段不能 `field.set(null, value)`，必须先拿到单例对象再写。
+     * 单例有两个来源，都试：`Init.get()` 静态方法、`Init$Loader` 的静态字段。
+     *
+     * 正常路径不需要走到这里——[maybeInvokeJarInit] 调 `Init.init(Application)`
+     * 就会把它写好，并顺带初始化 DexClassLoader。这里只给「Init 入口不可用」
+     * 的 jar 兜底；写字段不触发 jar 里的任何逻辑。
+     *
+     * @return 实际写入的 `类名.字段名`，写进日志便于排查加固包差异。
+     */
+    private fun ensureJarInitContext(jar: File, loader: ClassLoader): List<String> {
+        val application = context.applicationContext ?: context
+        val written = mutableListOf<String>()
+
+        // 单例实例的来源：静态方法 get() / 静态字段。
+        val singletons = mutableListOf<Any>()
+        for (className in listOf(
+            "com.github.catvod.spider.Init",
+            "com.github.catvod.spider.Init\$Loader",
+        )) {
+            val clazz = runCatching { Class.forName(className, false, loader) }.getOrNull() ?: continue
+            runCatching {
+                clazz.declaredMethods
+                    .firstOrNull {
+                        java.lang.reflect.Modifier.isStatic(it.modifiers) &&
+                            it.parameterCount == 0 &&
+                            it.returnType == clazz
+                    }
+                    ?.apply { isAccessible = true }
+                    ?.invoke(null)
+            }.getOrNull()?.let { singletons.add(it) }
+            runCatching {
+                clazz.declaredFields
+                    .firstOrNull {
+                        java.lang.reflect.Modifier.isStatic(it.modifiers) && it.type == clazz
+                    }
+                    ?.apply { isAccessible = true }
+                    ?.get(null)
+            }.getOrNull()?.let { singletons.add(it) }
+        }
+
+        // 实例字段：在单例对象上写。
+        for (singleton in singletons) {
+            var current: Class<*>? = singleton.javaClass
+            while (current != null && current != Any::class.java) {
+                val owner = current
+                for (field in owner.declaredFields) {
+                    if (java.lang.reflect.Modifier.isStatic(field.modifiers)) continue
+                    val type = field.type
+                    // 只写「吃得下 Application」的字段：Context / Application。
+                    // DexClassLoader / ClassLoader 这类字段不碰，交给 jar 自己的
+                    // Init.init 去填（那需要 native 参与，写了反而坏事）。
+                    val acceptsApplication = type == Context::class.java ||
+                        type == android.app.Application::class.java
+                    if (!acceptsApplication) continue
+                    runCatching {
+                        field.isAccessible = true
+                        field.set(singleton, application)
+                    }.onSuccess {
+                        written += "${owner.simpleName}.${field.name}"
+                    }.onFailure {
+                        Log.w(TAG, "写入 Application 失败 ${owner.simpleName}.${field.name}", it)
+                    }
+                }
+                current = owner.superclass
+            }
+        }
+
+        if (written.isNotEmpty()) {
+            Log.i(TAG, "jar Application 写入完成 ${jar.name}: ${written.joinToString()}")
+        }
+        return written
     }
 
     // ------------------------------------------------------------- 反射工具

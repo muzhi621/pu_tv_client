@@ -39,6 +39,12 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
   int _lastLeftTapAt = 0;
   Timer? _leftTapTimer;
 
+  /// 原生兜底通道的注册令牌（0 = 未注册 / 非 Android）。
+  int _nativeKeyToken = 0;
+
+  /// 原生通道当前是否处于接管状态，避免每次状态变化都发一次平台调用。
+  bool _nativeCapture = false;
+
   /// Channel switches are debounced: rapid presses accumulate their delta and
   /// one session teardown commits the total, so mashing Down walks several
   /// rooms instead of fighting the route replace mid-flight.
@@ -53,15 +59,92 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     super.initState();
     // 兜底按键通道（见 [_onGlobalKey]）。
     HardwareKeyboard.instance.addHandler(_onGlobalKey);
+    // 原生兜底通道：视频 surface 抢焦点时按键进不到引擎，这一层在
+    // dispatchKeyEvent 阶段就把方向键/确认键转发过来。只在纯视频态接管，
+    // 首帧后再同步一次，避免与控制条/浮层的首帧焦点竞争。
+    _nativeKeyToken = AndroidTvKeys.listen(_onNativeKeyDown);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncNativeCapture());
   }
 
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onGlobalKey);
+    AndroidTvKeys.stopListening(_nativeKeyToken);
+    _nativeKeyToken = 0;
     _leftTapTimer?.cancel();
     _channelDebounce?.cancel();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  /// 原生通道的接管范围。
+  ///
+  /// 只在**侧栏打开时**交回 Flutter：侧栏里的播放列表靠框架默认的方向键焦点
+  /// 遍历滚动，一旦被原生接管就滚不动；而控制条、失败浮层都是自己实现
+  /// `onKeyEvent` 的（按选中索引走），原生合成的按键会先派给它们自己的
+  /// Focus 节点（见 [_dispatchNativeKey]），语义完全一致——所以播放器最需要
+  /// 救的「唤出菜单 / 操作菜单」这两步，即使在 Flutter 收不到按键的机器上也成立。
+  void _syncNativeCapture() {
+    if (!mounted) return;
+    final state = ref.read(livePlayControllerProvider(widget.args));
+    final bool capture = !state.showSidePanel;
+    if (capture == _nativeCapture) return;
+    _nativeCapture = capture;
+    unawaited(AndroidTvKeys.setEnabled(capture));
+    // 回到视频态：控制条/浮层关闭时会把 primaryFocus 一起带走（失败浮层
+    // 自己 requestFocus、卸载后焦点不回到本页），页面级 handler 就收不到按键。
+    // 这里把焦点抢回来，保证遥控器在每一轮关闭浮层之后都还是活的。
+    if (capture) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_focusNode.hasFocus) _focusNode.requestFocus();
+      });
+    }
+  }
+
+  /// 原生转发的按键 → 复用既有按键逻辑，不另写一套语义。
+  void _onNativeKeyDown(int androidKeyCode) {
+    if (!mounted) return;
+    final LogicalKeyboardKey? key = _logicalKeyOf(androidKeyCode);
+    if (key == null) return;
+    _dispatchNativeKey(key);
+  }
+
+  static LogicalKeyboardKey? _logicalKeyOf(int code) => switch (code) {
+        AndroidTvKeys.keyCodeDpadUp => LogicalKeyboardKey.arrowUp,
+        AndroidTvKeys.keyCodeDpadDown => LogicalKeyboardKey.arrowDown,
+        AndroidTvKeys.keyCodeDpadLeft => LogicalKeyboardKey.arrowLeft,
+        AndroidTvKeys.keyCodeDpadRight => LogicalKeyboardKey.arrowRight,
+        AndroidTvKeys.keyCodeDpadCenter ||
+        AndroidTvKeys.keyCodeEnter ||
+        AndroidTvKeys.keyCodeNumpadEnter ||
+        AndroidTvKeys.keyCodeMenu =>
+          LogicalKeyboardKey.select,
+        _ => null,
+      };
+
+  static PhysicalKeyboardKey _physicalKeyOf(LogicalKeyboardKey key) => switch (key) {
+        LogicalKeyboardKey.arrowUp => PhysicalKeyboardKey.arrowUp,
+        LogicalKeyboardKey.arrowDown => PhysicalKeyboardKey.arrowDown,
+        LogicalKeyboardKey.arrowLeft => PhysicalKeyboardKey.arrowLeft,
+        LogicalKeyboardKey.arrowRight => PhysicalKeyboardKey.arrowRight,
+        _ => PhysicalKeyboardKey.enter,
+      };
+
+  /// 把原生按键合成一次 [KeyDownEvent] 派发下去。
+  ///
+  /// 先给当前 primary focus（控制条 / 失败浮层自己的 Focus），它不处理才落到
+  /// 本页的 [_onKeyEvent]。这样原生通道与 Flutter 原生按键走的是同一条语义链。
+  void _dispatchNativeKey(LogicalKeyboardKey key) {
+    final KeyDownEvent event = KeyDownEvent(
+      timeStamp: Duration.zero,
+      physicalKey: _physicalKeyOf(key),
+      logicalKey: key,
+    );
+    final FocusNode? primary = FocusManager.instance.primaryFocus;
+    if (primary != null && primary != _focusNode) {
+      if (primary.onKeyEvent?.call(primary, event) == KeyEventResult.handled) return;
+    }
+    _onKeyEvent(_focusNode, event);
   }
 
   /// 兜底按键通道：不依赖焦点链。
@@ -285,6 +368,11 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
 
   @override
   Widget build(BuildContext context) {
+    // 面板 / 控制条 / 浮层的开关决定原生通道是否接管。只在状态真的切换时才
+    // 发一次平台调用（[_syncNativeCapture] 内部做了去重），本组件不因状态
+    // 变化重建，画面层不受影响。
+    ref.listen(livePlayControllerProvider(widget.args), (_, __) => _syncNativeCapture());
+
     return PopScope(
       // Back closes what is on screen before it leaves the player: an option
       // list, then the side panel, then the controls and the room card — and

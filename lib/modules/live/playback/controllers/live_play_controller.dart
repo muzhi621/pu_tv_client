@@ -467,6 +467,14 @@ class LivePlayController extends _$LivePlayController {
 
     state = state.copyWith(playerState: playerState, hasStartedPlayback: started);
 
+    // 起播成功就清掉停滞/失败残留的 errorMessage。
+    // showFailureOverlay 只认「errorMessage 非空」，而失败浮层是全屏且自己
+    // requestFocus 的：错误不清，画面已经在播也照样盖着失败浮层，遥控器 OK
+    // 被当成「重试」、方向键被浮层吃掉——表现就是「菜单唤不出来」。
+    if ((playerState.playing || playerState.ready) && state.errorMessage != null) {
+      state = state.copyWith(clearErrorMessage: true);
+    }
+
     // 点播进度只在真正播起来之后采样；出错或播完就停，避免定时器把
     // 已经失效的适配器读成 0 秒。
     if (args.vod && (playerState.playing || playerState.ready)) {

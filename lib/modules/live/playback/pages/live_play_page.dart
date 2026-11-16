@@ -33,10 +33,12 @@ class LivePlayPage extends ConsumerWidget {
         body: Stack(
           fit: StackFit.expand,
           children: [
-            DpadRegion(
-              memoryKey: 'live_play/video',
-              child: TvVideoSurface(args: args),
-            ),
+            // 视频区**不是** d-pad 节点：整个播放器的按键由本页的
+            // PlayerKeyScope 统一处理（见 tv_video_surface 的说明）。
+            // 这里曾经包过一层 DpadRegion，它会自建焦点区域并记忆焦点，
+            // 把 primaryFocus 从页面级 Focus 抢走后，方向键被当焦点遍历吞掉，
+            // 表现正是「画面在播、遥控器唤不出菜单」——两套焦点体系不能共存。
+            TvVideoSurface(args: args),
             // The panel overlays the video instead of sitting beside it: playback
             // keeps the whole screen and the danmaku keep their geometry.
             if (state.showSidePanel)
