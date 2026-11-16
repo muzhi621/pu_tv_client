@@ -25,6 +25,7 @@ class IptvResumeChannel {
   static void save(String channelId) {
     final String id = channelId.trim();
     if (id.isEmpty) return;
+    if (!HivePrefUtil.isInitialized) return;
     if (HivePrefUtil.getString(_key) == id) return;
     HivePrefUtil.setString(_key, id);
   }
