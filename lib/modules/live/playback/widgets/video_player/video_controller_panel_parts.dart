@@ -112,6 +112,10 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
     final int optionCount = _optionsWithClose(state).length;
     if (barCount == 0) return;
 
+    // 条上的按钮数会随会话变化（清晰度/线路只有一条时整颗按钮不出现），
+    // 索引可能落在旧的一格之外：先收回边界，否则一次按键会跳过一颗。
+    if (_barIndex >= barCount) _barIndex = barCount - 1;
+
     // Any key keeps the controls on screen while the user is working them.
     ref.read(livePlayControllerProvider(widget.args).notifier).keepControlsAlive();
 
@@ -311,9 +315,13 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
     // 点播条只留「播放相关」动作：关注、弹幕、换台在影音里没有意义，
     // 留着只会让遥控器要按更多下才够到快进/暂停。
     final bool vod = widget.args.vod;
+    // IPTV 直播频道：直链单码率、无弹幕、频道由左侧列表管，没有「直播间」概念。
+    // 这些按钮在这里一个都点不出结果，留着只是让遥控器多走几格——
+    // 一台盒子上真正要用的只有暂停、重试、比例和音频模式。
+    final bool iptvLive = widget.args.platform == Sites.iptvSite && !vod;
 
     return <_PanelAction>[
-      if (!vod)
+      if (!vod && !iptvLive)
         _PanelAction(
           icon: isFavorite ? Icons.favorite : Icons.favorite_border,
           label: isFavorite ? i18n('followed') : i18n('follow'),
@@ -334,7 +342,7 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
       ),
       _PanelAction(icon: Icons.refresh_rounded, label: i18n('retry'), onSelect: controller.retry),
       // danmaku toggle / danmaku settings / danmaku filter stay adjacent.
-      if (!vod)
+      if (!vod && !iptvLive)
         _PanelAction(
           asset: danmakuOn ? 'assets/images/video/danmu_open.svg' : 'assets/images/video/danmu_close.svg',
           label: danmakuOn ? i18n('ui_danmaku_on') : i18n('ui_danmaku_off'),
@@ -342,7 +350,7 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
             danmakuSettings.copyWith(enableDanmakuDisplay: !danmakuOn, hideDanmaku: danmakuOn),
           ),
         ),
-      if (!vod)
+      if (!vod && !iptvLive)
         _PanelAction(
           asset: 'assets/images/video/danmu_setting.svg',
           label: i18n('danmaku_settings'),
@@ -350,20 +358,25 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
           onSelect: () => controller.togglePanel(LivePlayPanel.danmakuSettings),
         ),
       // #68 减法：弹幕过滤（屏蔽词）系统已降级，入口移除
-      _PanelAction(
-        icon: Icons.high_quality_rounded,
-        label: _qualityLabel(state),
-        active: _panel == _OptionsPanel.quality,
-        loading: state.switchingStream,
-        onSelect: () => _openPanel(_OptionsPanel.quality, state),
-      ),
-      _PanelAction(
-        icon: Icons.density_small_rounded,
-        label: i18n('multiview_line', args: {'index': '${state.lineIndex + 1}'}),
-        active: _panel == _OptionsPanel.line,
-        loading: state.switchingStream,
-        onSelect: () => _openPanel(_OptionsPanel.line, state),
-      ),
+      //
+      // 清晰度与线路只在**有得选**时出现：IPTV 频道是单码率直链（一个「默认」
+      // 一个地址），按钮点开是一张只有一行的列表，等于给用户一次无效点击。
+      if (state.qualities.length > 1)
+        _PanelAction(
+          icon: Icons.high_quality_rounded,
+          label: _qualityLabel(state),
+          active: _panel == _OptionsPanel.quality,
+          loading: state.switchingStream,
+          onSelect: () => _openPanel(_OptionsPanel.quality, state),
+        ),
+      if (state.playUrls.length > 1)
+        _PanelAction(
+          icon: Icons.density_small_rounded,
+          label: i18n('multiview_line', args: {'index': '${state.lineIndex + 1}'}),
+          active: _panel == _OptionsPanel.line,
+          loading: state.switchingStream,
+          onSelect: () => _openPanel(_OptionsPanel.line, state),
+        ),
       _PanelAction(
         icon: Icons.video_settings_outlined,
         label: _fitLabel(state),
@@ -379,18 +392,21 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
         label: audioOnly ? i18n('ui_audio_only') : i18n('ui_video_mode'),
         onSelect: () => playerNotifier.updateSettings(playerSettings.copyWith(audioOnly: !audioOnly)),
       ),
-      if (!vod)
+      if (!vod && !iptvLive)
         _PanelAction(
           icon: Icons.swap_horiz_rounded,
           label: i18n('switch_live_room'),
           onSelect: () => unawaited(_switchRoom(state.room)),
         ),
-      _PanelAction(
-        icon: Icons.memory_rounded,
-        label: _engineLabel(),
-        active: _panel == _OptionsPanel.kernel,
-        onSelect: () => _openPanel(_OptionsPanel.kernel, state),
-      ),
+      // 内核切换在设置里有一整节（播放器内核），IPTV 这种「选中就播」的场景
+      // 不需要在遥控器路径上再放一个调试开关。
+      if (!iptvLive)
+        _PanelAction(
+          icon: Icons.memory_rounded,
+          label: _engineLabel(),
+          active: _panel == _OptionsPanel.kernel,
+          onSelect: () => _openPanel(_OptionsPanel.kernel, state),
+        ),
     ];
   }
 
@@ -636,7 +652,7 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
               icon: action.icon,
               asset: action.asset,
               label: action.label,
-              selected: _zone == _Zone.bar && index == _barIndex,
+              selected: _zone == _Zone.bar && index == _barIndex.clamp(0, actions.length - 1),
               accent: tvTheme.focusColor,
               tinted: action.active,
               loading: action.loading,

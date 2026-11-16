@@ -71,7 +71,25 @@ android {
         // audio+video streams. The compat branch keeps Flutter's lower floor
         // and uses mpv's audio-files side channel instead.
         minSdk = 26
-        targetSdk = 37
+        // **刻意保持 36，不要跟着升到 37。**
+        //
+        // Android 17（SDK 37）新增行为变更「Safer DCL」：targetSdk >= 37 且
+        // 设备是 Android 17+ 时，`System.load()` 加载的文件**必须只读**，否则抛
+        //   UnsatisfiedLinkError: Attempt to load writable file: <path>
+        //
+        // TVBox 生态的加固 jar（wexguard / ftyguard）必然踩中：它们把 native 库
+        // 从 jar 内 assets 释放到自己的 cacheDir 再 `System.load`，写出来的文件
+        // 一定是 app 可写的（FileOutputStream 默认权限），宿主**无法**在它
+        // 写完之后、load 之前插手把文件改成只读。
+        //
+        // 触发条件是「设备 Android 17+」**且**「targetSdk >= 37」两条同时成立，
+        // 缺一条就保持旧的宽松行为。所以降到 36 即可恢复（compileSdk 仍保持 37，
+        // 新 API 照常可用）。上游 FongMi 同样是 37，在 Android 17 上跑这些加固
+        // jar 也是坏的——我们降到 36 是刻意向 TVBox 生态兼容。
+        //
+        // 代价：Android 17 其余按 targetSdk 37 门控的行为变更（本地网络访问默认
+        // 拦截、大屏方向限制等）不再对我们生效，这些限制对本项目都是多余的。
+        targetSdk = 36
         multiDexEnabled = true
         versionCode = flutter.versionCode
         versionName = flutter.versionName
