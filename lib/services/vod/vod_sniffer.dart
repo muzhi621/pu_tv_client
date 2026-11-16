@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:pure_live/core/common/http_client.dart';
 import 'package:pure_live/exports/package_export.dart';
 
 /// 网页嗅探：把「网页/解析页地址」还原成真实流地址。
@@ -31,6 +30,16 @@ import 'package:pure_live/exports/package_export.dart';
 ///
 /// 所以它只把「本来必然失败」变成「多数情况能播」，不会让任何原本能播的
 /// 地址变差。
+/// 嗅探结果：真实地址 + 播放时建议带的请求头。
+///
+/// Dart 不允许在类里再声明类，所以这个类型放在顶层。
+class VodSnifferResult {
+  const VodSnifferResult(this.url, this.headers);
+
+  final String url;
+  final Map<String, String> headers;
+}
+
 class VodSniffer {
   const VodSniffer._();
 
@@ -54,18 +63,10 @@ class VodSniffer {
     caseSensitive: false,
   );
 
-  /// 嗅探结果：真实地址 + 播放时建议带的请求头。
-  class Result {
-    const Result(this.url, this.headers);
-
-    final String url;
-    final Map<String, String> headers;
-  }
-
   /// 嗅探一个页面地址，返回真实流地址；失败返回 null。
   ///
   /// [headers] 是站点给的播放头（UA/Referer 等），会带上一起请求页面。
-  static Future<Result?> sniff(String pageUrl, {Map<String, String> headers = const <String, String>{}}) async {
+  static Future<VodSnifferResult?> sniff(String pageUrl, {Map<String, String> headers = const <String, String>{}}) async {
     final target = pageUrl.trim();
     if (target.isEmpty || !target.startsWith('http')) return null;
 
@@ -96,7 +97,7 @@ class VodSniffer {
       final playHeaders = _requestHeaders(headers);
       playHeaders.removeWhere((key, _) => key.toLowerCase() == 'referer');
       playHeaders['referer'] = target;
-      return Result(found, playHeaders);
+      return VodSnifferResult(found, playHeaders);
     } catch (_) {
       // 嗅探是兜底，失败就失败，不能因此影响正常播放。
       return null;
