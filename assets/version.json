@@ -1,7 +1,7 @@
 {
-  "version": "3.0.33",
-  "version_num": 130033,
-  "version_desc": "-品牌: 项目正式更名为 SUTV——APP 显示名、安卓包名(com.mystyle.sutv.tv)、APK 文件名(SUTV-*.apk)、云端配置编辑器标题全部改为 SUTV\n-注意: 包名变更会导致无法覆盖安装旧版，需要先卸载旧的「纯粹直播」再安装本版；云端连接地址、令牌、配置数据保持不变，装好后原有 IPTV 源与设置照常读取",
+  "version": "3.0.34",
+  "version_num": 130034,
+  "version_desc": "-影音顶部「刷新」按钮补齐图标，与「选站点」「搜索」保持同样大小\n-修复退出弹窗先闪旧二维码再切云端新码的问题：加载中留白，仅失败时回退内置码",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",

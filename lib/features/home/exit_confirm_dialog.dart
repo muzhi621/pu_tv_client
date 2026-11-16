@@ -193,7 +193,11 @@ class _CloudExitConfirmDialog extends StatelessWidget {
     return CachedNetworkImage(
       imageUrl: url,
       fit: BoxFit.contain,
-      placeholder: (_, __) => Image.asset('assets/images/wechat.png', fit: BoxFit.contain),
+      // 云端配了新码时绝不能拿内置旧码当占位图：弹窗淡入的一瞬会先闪出旧二维码，
+      // 等网络图加载完才切成云端新码，正是「闪现之前的二维码」的由来。
+      // 加载期间留白（外层容器本身是白底圆角），加载完成直接呈现云端码。
+      placeholder: (_, __) => const SizedBox.expand(),
+      // 只有真正加载失败才回退内置码，保证断网也有码可扫（稳定态，不是闪现）。
       errorWidget: (_, __, ___) => const Image(image: fallback, fit: BoxFit.contain),
     );
   }

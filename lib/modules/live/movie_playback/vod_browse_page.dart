@@ -364,6 +364,8 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
           SizedBox(width: 14.ts(context)),
           TvButton(
             title: i18n('vod_refresh'),
+            icon: const Icon(Icons.refresh_rounded),
+            iconPosition: TvIconPosition.left,
             size: TvButtonSize.medium,
             isSecondary: true,
             onTap: _keyword.isEmpty && _tid.isEmpty ? _loadHome : () => _loadCategory(_tid, page: _pageNo),
