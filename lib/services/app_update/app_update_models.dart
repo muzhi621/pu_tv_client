@@ -75,7 +75,7 @@ class AppUpdateRecord {
 /// (checksums, source zips, …).
 ///
 /// Matched as a token instead of a prefix: the TV packages are named
-/// `PureLive-TV-arm64-v8a-impeller.apk`, the older mobile ones
+/// `SUTV-arm64-v8a-impeller.apk` (older releases used `PureLive-TV-`), the older mobile ones
 /// `PureLive-2.0.20-12020-android-arm64-v8a-release.apk` and `app-armeabi-v7a-release.apk`,
 /// and the manifest writes a bare `arm64-v8a` — a `startsWith` test sees none of
 /// the prefixed ones.
@@ -271,7 +271,7 @@ String safeDownloadFileName(String url, {String? suggestedName}) {
   candidate = String.fromCharCodes(candidate.runes);
 
   if (candidate.isEmpty || candidate == '.' || candidate == '..') {
-    candidate = 'PureLive-tv-update.apk';
+    candidate = 'SUTV-update.apk';
   }
 
   if (RegExp(r'^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)', caseSensitive: false).hasMatch(candidate)) {

@@ -59,7 +59,7 @@
 -dontwarn com.github.catvod.**
 
 # 宿主侧桥接类由 Dart 按固定名字调用，混淆后方法名变化会破坏协议。
--keep class com.mystyle.purelive.tv.VodSpiderBridge { *; }
+-keep class com.mystyle.sutv.tv.VodSpiderBridge { *; }
 
 # ------------------------------------------------------------------
 # 7.1 spider.jar 是「预编译字节码」，按字面名引用宿主的公共库

@@ -21,7 +21,7 @@ val hasReleaseSigning = listOf("keyAlias", "keyPassword", "storePassword").all {
 } && releaseStoreFile?.isFile == true
 
 android {
-    namespace = "com.mystyle.purelive.tv"
+    namespace = "com.mystyle.sutv.tv"
 
     buildFeatures {
         buildConfig = true
@@ -65,7 +65,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     defaultConfig {
-        applicationId = "com.mystyle.purelive.tv"
+        applicationId = "com.mystyle.sutv.tv"
         // FFmpeg (ffmpeg_kit_extended_flutter) requires API 26; the DASH merge
         // relay in media_core_ingest shells out to it for bilibili's split
         // audio+video streams. The compat branch keeps Flutter's lower floor

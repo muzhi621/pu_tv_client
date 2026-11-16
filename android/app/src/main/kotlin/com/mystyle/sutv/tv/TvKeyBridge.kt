@@ -1,4 +1,4 @@
-package com.mystyle.purelive.tv
+package com.mystyle.sutv.tv
 
 import android.view.KeyEvent
 import io.flutter.plugin.common.BinaryMessenger

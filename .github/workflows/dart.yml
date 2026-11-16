@@ -128,11 +128,11 @@ jobs:
             [ -e "$f" ] || continue
             abi=$(echo "$f" | grep -oE 'arm64-v8a|armeabi-v7a|x86_64' | head -1)
             if echo "$f" | grep -q 'skia'; then renderer='skia'; else renderer='impeller'; fi
-            mv "$f" "PureLive-TV-${abi}-${renderer}.apk"
+            mv "$f" "SUTV-${abi}-${renderer}.apk"
             count=$((count + 1))
           done
           echo "==== 本次产物 ===="
-          ls -lh PureLive-TV-*.apk
+          ls -lh SUTV-*.apk
           # A build whose artifacts are not named as expected must fail here, not
           # publish a release with nothing in it.
           if [ "$count" -eq 0 ]; then
@@ -147,7 +147,7 @@ jobs:
           {
             echo "## 📊 APK 体积清单（按条目大小倒序，前 25 项）"
             echo ""
-            for f in build/app/outputs/flutter-apk/PureLive-TV-*.apk; do
+            for f in build/app/outputs/flutter-apk/SUTV-*.apk; do
               [ -e "$f" ] || continue
               echo "### $(basename "$f") · $(du -h "$f" | cut -f1)"
               echo '```'
@@ -171,8 +171,8 @@ jobs:
       - name: 上传 APK 产物（运行页可下载）
         uses: actions/upload-artifact@v4
         with:
-          name: PureLive-TV-${{ steps.meta.outputs.tag }}
-          path: build/app/outputs/flutter-apk/PureLive-TV-*.apk
+          name: SUTV-${{ steps.meta.outputs.tag }}
+          path: build/app/outputs/flutter-apk/SUTV-*.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -182,7 +182,7 @@ jobs:
           tag_name: ${{ steps.meta.outputs.tag }}
           name: ${{ steps.meta.outputs.tag }}
           body: |
-            📦 纯粹直播 ${{ steps.meta.outputs.tag }}
+            📦 SUTV ${{ steps.meta.outputs.tag }}
             本次更新内容：
             ${{ steps.version.outputs.desc }}
             📺 版本说明：
@@ -194,7 +194,7 @@ jobs:
 
             本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。
           prerelease: false
-          files: build/app/outputs/flutter-apk/PureLive-TV-*.apk
+          files: build/app/outputs/flutter-apk/SUTV-*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -207,7 +207,7 @@ jobs:
           {
             echo "## 📦 $tag 下载路径"
             echo ""
-            for f in build/app/outputs/flutter-apk/PureLive-TV-*.apk; do
+            for f in build/app/outputs/flutter-apk/SUTV-*.apk; do
               [ -e "$f" ] || continue
               name=$(basename "$f")
               echo "- [$name]($base/$name) · $(du -h "$f" | cut -f1)"

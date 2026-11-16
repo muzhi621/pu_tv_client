@@ -1,4 +1,4 @@
-package com.mystyle.purelive.tv
+package com.mystyle.sutv.tv
 
 import android.content.Context
 import android.os.Build

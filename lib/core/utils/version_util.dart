@@ -10,7 +10,7 @@ import 'package:pure_live/services/remote_config/remote_config.dart';
 
 /// Download URLs assembled from the release identity itself, following the
 /// names the Android release workflow uploads:
-/// `{projectUrl}/releases/download/v{version}/PureLive-TV-{abi}-{renderer}.apk`.
+/// `{projectUrl}/releases/download/v{version}/SUTV-{abi}-{renderer}.apk`.
 ///
 /// The last resort of the update flow: the release's real asset list and the
 /// releases.json file list are tried first, and this fills in when a release
@@ -47,14 +47,17 @@ class ReleaseAssetUrls {
     return '$normalizedProject/releases/download/v$normalizedVersion';
   }
 
-  /// The package for one ABI, e.g. `PureLive-TV-arm64-v8a-skia.apk`. Releases
-  /// from before the dual-variant split carry no renderer in the name.
+  /// The package for one ABI, e.g. `SUTV-arm64-v8a-impeller.apk`. Releases
+  /// from version 3.0.33 carried the old `PureLive-TV-` prefix; those are
+  /// resolved from the GitHub asset list / releases.json (which are tried
+  /// before this fallback), so the assembled name only ever targets new
+  /// SUTV-prefixed releases.
   String apkForAbi(String abi, {String renderer = ''}) {
     if (!isValid) return '';
     final String name = abi.trim().toLowerCase();
     if (name.isEmpty) return '';
     final String tag = renderer.trim().toLowerCase();
-    return '$releaseBase/PureLive-TV-$name${tag.isEmpty ? '' : '-$tag'}.apk';
+    return '$releaseBase/SUTV-$name${tag.isEmpty ? '' : '-$tag'}.apk';
   }
 }
 
