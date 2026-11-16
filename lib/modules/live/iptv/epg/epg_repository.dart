@@ -7,6 +7,7 @@ library;
 
 import 'dart:convert';
 
+import 'package:dio/dio.dart';
 import 'package:pure_live/core/common/http_client.dart';
 import 'package:pure_live/core/utils/hive_pref_util.dart';
 import 'package:pure_live/services/remote_config/remote_config_store.dart';

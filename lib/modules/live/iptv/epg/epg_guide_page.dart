@@ -6,7 +6,9 @@
 library;
 
 import 'package:dpad/dpad.dart';
-import 'package:flutter/material.dart';
+// package_export 提供 flutter/riverpod，common_export 提供 core 的
+// tvTheme/i18nOr/TvButton 等；两者互补，缺一会导致 ConsumerState 等类型找不到。
+import 'package:pure_live/exports/package_export.dart';
 import 'package:pure_live/exports/common_export.dart';
 
 import 'epg_model.dart';

@@ -118,13 +118,13 @@ String parseAssetDigest(Object? raw) {
   final value = raw.toString().trim().toLowerCase();
   if (!value.startsWith('sha256:')) return '';
   final hex = value.substring(7).trim();
-  if (hex.length != 64 || hex.any((c) => !_isHex(c))) return '';
+  if (hex.length != 64 || !hex.codeUnits.every(_isHexCode)) return '';
   return hex;
 }
 
-bool _isHex(String c) =>
-    (c.codeUnitAt(0) >= 0x30 && c.codeUnitAt(0) <= 0x39)
-    || (c.codeUnitAt(0) >= 0x61 && c.codeUnitAt(0) <= 0x66);
+bool _isHexCode(int c) =>
+    (c >= 0x30 && c <= 0x39) // 0-9
+    || (c >= 0x61 && c <= 0x66); // a-f（上面已 toLowerCase）
 
 class ReleaseAssetInfo {
   const ReleaseAssetInfo({

@@ -69,7 +69,7 @@ String _localizedText(Iterable<XmlElement> nodes, {String fallback = ''}) {
 }
 
 Iterable<XmlElement> _childrenNamed(XmlElement parent, String name) =>
-    parent.childElements().where((e) => e.name.local == name);
+    parent.childElements.where((e) => e.name.local == name);
 
 /// 解析 XMLTV 文档。格式非法时抛 [XmltvParseException]。
 EpgGuide parseXmltv(String xmlText) {
@@ -90,7 +90,7 @@ EpgGuide parseXmltv(String xmlText) {
   // ---- 频道 ----
   final channels = <EpgChannel>[];
   final channelIds = <String>{};
-  for (final node in root.childElements().where((e) => e.name.local == 'channel')) {
+  for (final node in root.childElements.where((e) => e.name.local == 'channel')) {
     final id = node.getAttribute('id')?.trim() ?? '';
     if (id.isEmpty || !channelIds.add(id)) continue;
     final names = _childrenNamed(node, 'display-name');
@@ -106,7 +106,7 @@ EpgGuide parseXmltv(String xmlText) {
 
   // ---- 节目 ----
   final programmes = <EpgProgramme>[];
-  for (final node in root.childElements().where((e) => e.name.local == 'programme')) {
+  for (final node in root.childElements.where((e) => e.name.local == 'programme')) {
     final channelId = node.getAttribute('channel')?.trim() ?? '';
     if (channelId.isEmpty) continue;
     final start = parseXmltvTime(node.getAttribute('start') ?? '');
