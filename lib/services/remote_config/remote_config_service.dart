@@ -798,6 +798,22 @@ class RemoteConfigService {
   static String get updateMinSupportedVersion =>
       updateManaged ? rcString(_section('update')['minSupportedVersion'], '') : '';
 
+  /// 套餐指定的目标版本（云端「在线更新」板块选定的版本）。
+  ///
+  /// 非空表示「这台终端该升到这一版」：版本号、说明、按架构的直链都在配置里，
+  /// 检查更新时不必再去问云端清单——按套餐分配固件就靠它。空串 = 没指定，
+  /// 维持原来的「按更新源查清单」。
+  static String get updateVersion =>
+      updateManaged ? rcString(_section('update')['version'], '').trim() : '';
+
+  /// 目标版本的扁平版本号（`3.0.43` → `130043`）；云端没给时由客户端推导。
+  static int get updateVersionNum =>
+      updateManaged ? rcInt(_section('update')['versionNum'], 0) : 0;
+
+  /// 目标版本的更新说明；空串表示云端没写，终端只显示版本号。
+  static String get updateVersionDesc =>
+      updateManaged ? rcString(_section('update')['versionDesc'], '').trim() : '';
+
   static String get updateChangelog =>
       rcLocalized(_section('update')['changelogI18n'], _locale);
 

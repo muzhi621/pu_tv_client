@@ -176,6 +176,12 @@ class VersionUtil {
     return RemoteConfigService.updateDownloadUrls.containsValue(value);
   }
 
+  /// 套餐是否下发了目标版本（云端「在线更新」板块选定的版本）。
+  ///
+  /// 为 true 时终端不再查云端清单：升到哪一版、从哪下载都已经写在配置里。
+  /// 这样「按套餐分配不同固件」才成立——问云端清单只会把结论推翻成"最新版"。
+  static bool get hasPinnedUpdate => RemoteConfigService.updateVersion.isNotEmpty;
+
   static List<String> get _versionUrls {
     // mirror 模式：把云端下发的反代前缀放在最前面，后面照旧跟上内置镜像，
     // 前缀那家挂了也不会卡死（RaceHttp 会接着试）。
@@ -256,7 +262,57 @@ class VersionUtil {
     return hasNewVersion();
   }
 
+  /// `3.0.43` → `130043`：100000 的产品位 + major*10000 + minor*100 + patch。
+  ///
+  /// 与云端 flattenVersion 一致。注意 [_flattenedVersion] 是另一套（不带产品位）
+  /// 的老规则，只用来给缺 `version_num` 的清单兜底 build 号，别混用。
+  static int flattenVersionNum(String version) {
+    final parts = version.split(RegExp(r'[-+]')).first
+        .replaceFirst(RegExp('^[vV]'), '').trim().split('.');
+    final major = int.tryParse(parts.isNotEmpty ? parts[0] : '');
+    if (major == null) return 0;
+    final minor = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+    final patch = parts.length > 2 ? int.tryParse(parts[2]) ?? 0 : 0;
+    return 100000 + major * 10000 + minor * 100 + patch;
+  }
+
+  /// 套餐指定了目标版本时直接用配置判定，不联网。
+  ///
+  /// 下载地址仍由 [downloadUrlForAbi] 给（云端 downloads 已经展开成完整直链），
+  /// 所以这里只负责「有没有新版」这一个结论。
+  ///
+  /// 返回 false 表示配置里没有目标版本，调用方继续走原来的清单流程。
+  static bool _applyPinnedVersion() {
+    final version = RemoteConfigService.updateVersion;
+    if (version.isEmpty) return false;
+    try {
+      final pinnedNum = RemoteConfigService.updateVersionNum;
+      _applyVersionData(<String, dynamic>{
+        'version': version,
+        // 云端没带 versionNum 时按同一套规则推导，别让 3.0.43 被判成比 3.0.42 旧。
+        'version_num': pinnedNum > 0 ? pinnedNum : flattenVersionNum(version),
+        'version_desc': RemoteConfigService.updateVersionDesc,
+        // 两个架构都声明为「已发布」：具体下哪个由设备 ABI + downloads 决定。
+        'android_abis': const <String>['arm64-v8a', 'armeabi-v7a'],
+      });
+      _setHasNewVersion(hasNewVersion());
+      debugPrint('🏁 Update pinned by cloud config: $version');
+      return true;
+    } catch (error) {
+      // 版本号格式不合法（例如云端手填写成 latest）：退回清单流程，别让检查更新直接失败。
+      debugPrint('⚠️ Pinned update version unusable: $error');
+      return false;
+    }
+  }
+
   Future<bool> _runCheckUpdate() async {
+    // 套餐指定的版本优先，且不受「检查间隔」限制：云端改完套餐就说明该升了，
+    // 被「今天已经查过」挡住会让新分配的固件等上一整天。
+    if (_applyPinnedVersion()) {
+      await RemoteConfigService.markUpdateChecked();
+      return true;
+    }
+
     if (!RemoteConfigService.updateAutoCheck || !RemoteConfigService.shouldCheckUpdateNow()) {
       _resetAfterFailedCheck();
       return false;

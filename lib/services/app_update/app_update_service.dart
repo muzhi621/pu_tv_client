@@ -242,6 +242,16 @@ class AppUpdateController extends _$AppUpdateController {
   /// of the proxies (the same prefixes the download path uses, in front of
   /// `api.github.com`). Returns null when no candidate answered.
   Future<List<ReleaseAssetInfo>?> _fetchLatestReleaseAssets() async {
+    // 套餐指定了目标版本且给了直链：装哪个包、从哪下都在配置里了，不需要
+    // 资产列表，更不该为了一个展示用的列表去连 api.github.com（国内基本不通）。
+    // 只有「指定了版本却没给直链」时才继续往下走，让原来的兜底链兜住。
+    if (VersionUtil.hasPinnedUpdate
+        && (VersionUtil.downloadUrlForAbi('arm64-v8a').isNotEmpty
+            || VersionUtil.downloadUrlForAbi('armeabi-v7a').isNotEmpty)) {
+      _patchState(latestAssets: const <ReleaseAssetInfo>[]);
+      return const <ReleaseAssetInfo>[];
+    }
+
     // 云端清单已经带回了最新 release 的资产（含 size 与 digest），直接用：
     // 这一步原来是更新页最常见的失败点——国内直连 api.github.com 基本不通。
     // 直连 / 镜像模式下云端资产作废：那是上一轮云端清单留下的，

@@ -569,4 +569,26 @@ void main() {
       expect(find.byType(AppStatusView), findsNothing, reason: 'an available update is not a status card');
     });
   });
+
+  // 云端「在线更新」板块选定的版本会展开进 sections.update，终端据此判定
+  // 「有没有新版」并直接下载。这里固化两侧最容易写错的那一半：版本号比较。
+  group('云端指定更新版本', () {
+    test('版本号扁平化带产品位，与云端 flattenVersion 一致', () {
+      // 少了 100000 这个产品位，3.0.43 会算成 30043，和仓库 releases 里的
+      // version_num 差一个数量级，比对永远对不上。
+      expect(VersionUtil.flattenVersionNum('3.0.43'), 130043);
+      expect(VersionUtil.flattenVersionNum('v3.0.9'), 130009);
+      expect(VersionUtil.flattenVersionNum('3.0'), 130000);
+      expect(VersionUtil.flattenVersionNum('3.0.42+43'), 130042);
+      expect(VersionUtil.flattenVersionNum('3.1.0-beta'), 130100);
+      expect(VersionUtil.flattenVersionNum('latest'), 0);
+      expect(VersionUtil.flattenVersionNum(''), 0);
+    });
+
+    test('指定版本比当前版本新才提示更新，同版本不重复提示', () {
+      expect(VersionUtil.isNewerVersion('3.0.43', '3.0.42'), isTrue);
+      expect(VersionUtil.isNewerVersion('3.0.42', '3.0.42'), isFalse);
+      expect(VersionUtil.isNewerVersion('3.0.41', '3.0.42'), isFalse);
+    });
+  });
 }
