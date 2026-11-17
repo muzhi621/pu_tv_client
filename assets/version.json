@@ -1,7 +1,7 @@
 {
-  "version": "3.0.41",
-  "version_num": 130041,
-  "version_desc": "-移除 FFmpeg 运行时：安装包再减约 9.4 MB（IPTV/TVBox 走不到 FFmpeg 转封装链路）\n-设置再精简：网络与代理、通用设置、备份与恢复、刷新设置整组下掉\n-IPTV 请求头（UA/Referer/Cookie）改由云端下发，电视端不再提供本地入口\n-移除已下线平台的图标资源，安装包再减约 0.65 MB",
+  "version": "3.0.42",
+  "version_num": 130042,
+  "version_desc": "-TVBox 爬虫 jar 改为后台预热：配置一到就偷偷下好，点开站点即可播放，不再提示「需要下载」\n-检查更新改走云端中继：由云端代拉 GitHub 版本与资产信息，国内网络也能正常检测与下载\n-更新源云端可配：云端中继 / GitHub / 镜像 GitHub / 自定义地址 / 上传清单五种方式，arm64 与 armv7 可分别指定下载地址",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",
