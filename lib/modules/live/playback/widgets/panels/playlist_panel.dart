@@ -49,6 +49,14 @@ class _PlaylistPanelState extends ConsumerState<PlaylistPanel> {
   int? _index;
 
   @override
+  void initState() {
+    super.initState();
+    // 节目单是全局数据，第一次打开频道列表时预热一次（幂等）：
+    // 先用本地缓存同步建索引，过期再后台刷新，数据到达后由 revision 触发重建。
+    EpgPlaybackService.instance.ensureLoaded();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final state = ref.watch(livePlayControllerProvider(widget.args));
     final controller = ref.read(livePlayControllerProvider(widget.args).notifier);
@@ -60,10 +68,8 @@ class _PlaylistPanelState extends ConsumerState<PlaylistPanel> {
     // 仍然是"播放列表"（那里还有主播房间的概念）。
     final bool iptv = widget.args.platform == Sites.iptvSite || current?.platform == Sites.iptvSite;
 
-    // 每行副标题显示「正在播什么」：节目单是全局数据，这里第一次用到时预热
-    // （幂等），并在数据到达后由 revision 触发重建。
+    // 每行副标题显示「正在播什么」：数据由 initState 预热，这里只读目录。
     final EpgPlaybackService epg = EpgPlaybackService.instance;
-    epg.ensureLoaded();
 
     return ValueListenableBuilder<int>(
       valueListenable: epg.revision,
