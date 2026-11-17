@@ -3106,5 +3106,7 @@
   "epg_load_failed": "Failed to load the TV guide, try again later",
   "epg_empty": "No guide data",
   "epg_no_programme": "No programmes for this day",
-  "epg_entry": "TV Guide"
+  "epg_entry": "TV Guide",
+  "epg_now_playing": "Now playing",
+  "epg_next": "Up next"
 }

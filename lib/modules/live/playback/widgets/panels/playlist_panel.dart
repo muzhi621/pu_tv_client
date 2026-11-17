@@ -6,6 +6,8 @@ import 'package:pure_live/services/favorites/favorite_room_controller.dart';
 import 'package:pure_live/modules/live/playback/widgets/panels/player_room_row.dart';
 import 'package:pure_live/modules/live/playback/controllers/live_play_controller.dart';
 import 'package:pure_live/modules/live/playback/widgets/panels/player_index_panel.dart';
+import 'package:pure_live/modules/live/iptv/epg/epg_model.dart';
+import 'package:pure_live/modules/live/iptv/epg/epg_playback_service.dart';
 
 /// Playlist panel shown inside the player, as an index list of room cards.
 ///
@@ -54,33 +56,58 @@ class _PlaylistPanelState extends ConsumerState<PlaylistPanel> {
     final LiveRoom? current = state.room;
     final favorites = ref.watch(favoriteRoomControllerProvider).favoriteRooms;
     final int index = rooms.isEmpty ? 0 : (_index ?? controller.channelIndex).clamp(0, rooms.length - 1);
+    // IPTV 的列表就是频道表，叫"频道列表"才对得上用户看到的东西；其他站点
+    // 仍然是"播放列表"（那里还有主播房间的概念）。
+    final bool iptv = widget.args.platform == Sites.iptvSite || current?.platform == Sites.iptvSite;
 
-    return PlayerIndexPanel(
-      // IPTV 的列表就是频道表，叫"频道列表"才对得上用户看到的东西；其他站点
-      // 仍然是"播放列表"（那里还有主播房间的概念）。
-      title: widget.args.platform == Sites.iptvSite || current?.platform == Sites.iptvSite
-          ? i18nOr('ui_channel_list', '频道列表')
-          : i18nOr('ui_playlist', 'Playlist'),
-      rows: <PlayerPanelRow>[for (final LiveRoom room in rooms) PlayerPanelRow(label: room.title, subtitle: room.nick)],
-      selectedIndex: index,
-      onSelectionChanged: (i) => setState(() => _index = i),
-      emptyHint: i18n('ui_none'),
-      onSelect: (i) => _openRoom(rooms[i], rooms),
-      onAdjustLeft: (i) => _toggleFollow(rooms[i]),
-      onAdjustRight: (i) => _toggleFollow(rooms[i]),
-      onClose: controller.toggleSidePanel,
-      showCloseRow: false,
-      rowExtent: PlayerRoomRow.extentOf(context, large: _largeRows),
-      rowBuilder: (context, i, selected) => PlayerRoomRow(
-        room: rooms[i],
-        selected: selected,
-        large: _largeRows,
-        active: current != null && rooms[i].hasSameIdentity(current),
-        favorite: favorites.any((item) => item.hasSameIdentity(rooms[i])),
-        // Left/Right follow or unfollow on this row, so the row says so.
-        showFollowAction: true,
+    // 每行副标题显示「正在播什么」：节目单是全局数据，这里第一次用到时预热
+    // （幂等），并在数据到达后由 revision 触发重建。
+    final EpgPlaybackService epg = EpgPlaybackService.instance;
+    epg.ensureLoaded();
+
+    return ValueListenableBuilder<int>(
+      valueListenable: epg.revision,
+      builder: (context, _, __) => PlayerIndexPanel(
+        title: iptv ? i18nOr('ui_channel_list', '频道列表') : i18nOr('ui_playlist', 'Playlist'),
+        rows: <PlayerPanelRow>[
+          for (final LiveRoom room in rooms) PlayerPanelRow(label: room.title, subtitle: room.nick),
+        ],
+        selectedIndex: index,
+        onSelectionChanged: (i) => setState(() => _index = i),
+        emptyHint: i18n('ui_none'),
+        onSelect: (i) => _openRoom(rooms[i], rooms),
+        onAdjustLeft: (i) => _toggleFollow(rooms[i]),
+        onAdjustRight: (i) => _toggleFollow(rooms[i]),
+        onClose: controller.toggleSidePanel,
+        showCloseRow: false,
+        rowExtent: PlayerRoomRow.extentOf(context, large: _largeRows),
+        rowBuilder: (context, i, selected) => PlayerRoomRow(
+          room: rooms[i],
+          selected: selected,
+          large: _largeRows,
+          active: current != null && rooms[i].hasSameIdentity(current),
+          favorite: favorites.any((item) => item.hasSameIdentity(rooms[i])),
+          // Left/Right 在 IPTV 频道表里仍然关注/取消关注，但不再在行内画「关注」
+          // 文字：那个 pill 紧贴频道名，把「CCTV2 高清」这类名字挤成「CCTV2…」，
+          // 而电视观看距离下频道名可读性远比一个状态词重要。直播间列表保留该
+          // 提示——那里关注的是主播，用户需要看到当前状态。
+          showFollowAction: !iptv,
+          // IPTV 频道没有观众数，右侧那列「人数待更新」对每行都一样，纯占宽，
+          // 传空串让行只留平台名，把宽度还给频道名。
+          trailing: iptv ? '' : null,
+          // 台号 + 正在播：IPTV 频道表的两个核心信息（换台靠台号，选台靠节目）。
+          indexLabel: iptv ? i + 1 : null,
+          nowPlaying: iptv ? _nowPlaying(epg, rooms[i]) : null,
+        ),
       ),
     );
+  }
+
+  /// 该频道正在播的节目名；没有节目单/没匹配到返回 null（行内回退分组名）。
+  String? _nowPlaying(EpgPlaybackService epg, LiveRoom room) {
+    final EpgProgramme? programme = epg.currentOf(room.title);
+    if (programme == null) return null;
+    return programme.title.trim().isEmpty ? null : programme.title.trim();
   }
 
   void _openRoom(LiveRoom room, List<LiveRoom> rooms) {

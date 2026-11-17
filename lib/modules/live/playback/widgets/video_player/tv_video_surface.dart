@@ -5,10 +5,14 @@ import 'package:pure_live/modules/live/playback/models/live_play_args.dart';
 import 'package:pure_live/modules/live/playback/widgets/danmaku/danmaku_overlay.dart';
 import 'package:pure_live/modules/live/playback/widgets/player_key_scope.dart';
 import 'package:pure_live/modules/live/playback/controllers/live_play_controller.dart';
+import 'package:pure_live/modules/live/playback/states/live_play_state.dart';
 import 'package:pure_live/modules/live/playback/widgets/video_player/audio_only_surface.dart';
 import 'package:pure_live/modules/live/playback/widgets/video_player/video_controller_panel.dart';
 import 'package:pure_live/modules/live/playback/widgets/placeholder/not_living_video_widget.dart';
 import 'package:pure_live/modules/live/playback/widgets/video_player/playback_failure_overlay.dart';
+import 'package:pure_live/modules/live/iptv/epg/epg_lookup.dart';
+import 'package:pure_live/modules/live/iptv/epg/epg_model.dart';
+import 'package:pure_live/modules/live/iptv/epg/epg_playback_service.dart';
 
 /// Video surface: a Stack of the PlayerManager video layer, the flame_barrage
 /// overlay, loading/error overlays and an auto-hiding D-pad control panel.
@@ -100,6 +104,15 @@ class _TvVideoSurfaceState extends ConsumerState<TvVideoSurface> {
   /// field without this check.
   LivePlayerFacade? get _playerManagerOrNull =>
       GlobalPlayerService.instance.initialized ? GlobalPlayerService.instance.livePlayer : null;
+
+  @override
+  void initState() {
+    super.initState();
+    // 切台信息条要显示「正在播什么」，节目单在这里预热一次：先用本地缓存
+    // 同步建索引，过期再后台刷新。放 initState 而不是 build：build 会被
+    // 播放状态高频触发，重复调用虽然幂等，但没必要。
+    EpgPlaybackService.instance.ensureLoaded();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -294,7 +307,13 @@ class _TvVideoSurfaceState extends ConsumerState<TvVideoSurface> {
               if (state.showChannelBanner)
                 Padding(
                   padding: EdgeInsets.only(top: 10.sp),
-                  child: _ChannelBannerToast(text: state.channelBanner!),
+                  // 切台信息条：频道序号 + 名称 + 正在播/下一档（EPG）。
+                  // 没有节目单时自动退化成「序号 + 名称」，不会空出一条。
+                  child: _ChannelInfoBanner(
+                    state: state,
+                    rooms: controller.channelRooms,
+                    index: controller.channelIndex,
+                  ),
                 ),
             ],
           ),
@@ -306,7 +325,15 @@ class _TvVideoSurfaceState extends ConsumerState<TvVideoSurface> {
           left: 0,
           right: 0,
           top: 64.sp,
-          child: _ChannelBannerToast(text: state.channelBanner!),
+          // 切台时不带顶部房间卡，但信息条仍然要给出频道号与节目单：
+          // 这正是用户按「上/下一台」后最想知道的两件事。
+          child: state.room != null
+              ? _ChannelInfoBanner(
+                  state: state,
+                  rooms: controller.channelRooms,
+                  index: controller.channelIndex,
+                )
+              : _ChannelBannerToast(text: state.channelBanner!),
         ),
       );
     }
@@ -449,6 +476,211 @@ class _ChannelBannerToast extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 切台信息条：频道序号、频道名、几项真实可得的参数，以及 EPG 的
+/// 「正在播 / 简介 / 下一档」。
+///
+/// 参考酷9 的换台浮层，但**只画拿得到的数据**：IPTV 是单码率直链，
+/// 没有时移、没有多声轨，播放器也没有对外抛分辨率/帧率，硬编一组
+/// 「720x576 / 25FPS / 立体声」出来只会让用户以为那是真实状态。
+/// 因此标签只保留三项：平台、分组、协议（IPv4/IPv6，由当前播放地址判断），
+/// 有多线路时才追加「线路 n/m」。
+///
+/// EPG 数据来自 [EpgPlaybackService]（同步查、异步刷新）。匹配不到节目时
+/// 整块节目区不渲染，条子退化成「序号 + 频道名」，与改造前一样短。
+class _ChannelInfoBanner extends StatelessWidget {
+  const _ChannelInfoBanner({required this.state, required this.rooms, required this.index});
+
+  final LivePlayState state;
+  final List<LiveRoom> rooms;
+
+  /// 当前频道在 [rooms] 里的下标（0 基），用于显示「3 / 120」。
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    final LiveRoom? room = state.room;
+    if (room == null) return const SizedBox.shrink();
+    final tvTheme = context.tvTheme;
+    final EpgPlaybackService epg = EpgPlaybackService.instance;
+
+    final String title = room.title.trim().isNotEmpty ? room.title.trim() : i18n('untitled_room');
+    final int total = rooms.length;
+    final String number = total == 0 ? '' : '${index.clamp(0, total - 1) + 1} / $total';
+
+    final List<String> urls = state.playUrls;
+    final int line = urls.isEmpty ? 0 : state.lineIndex.clamp(0, urls.length - 1);
+    final String protocol = _protocolOf(urls.isEmpty ? '' : urls[line]);
+
+    return IgnorePointer(
+      child: Center(
+        child: ValueListenableBuilder<int>(
+          // 背景拉到节目单后重建一次，否则浮层会一直显示「无节目信息」。
+          valueListenable: epg.revision,
+          builder: (context, _, __) {
+            final DateTime now = DateTime.now();
+            final EpgProgramme? current = epg.currentOf(title);
+            final EpgProgramme? next = epg.nextOf(title);
+            return ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: 880.ts(context)),
+              child: Container(
+                margin: EdgeInsets.symmetric(horizontal: 32.ts(context)),
+                padding: EdgeInsets.fromLTRB(22.ts(context), 14.ts(context), 22.ts(context), 14.ts(context)),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.74),
+                  borderRadius: BorderRadius.circular(14.ts(context)),
+                  border: Border.all(color: tvTheme.focusColor.withValues(alpha: 0.45)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        if (number.isNotEmpty) ...[
+                          Text(
+                            number,
+                            style: AppTextStyles.t22.copyWith(
+                              color: tvTheme.focusColor,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          SizedBox(width: 14.ts(context)),
+                        ],
+                        Expanded(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.t24.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 12.ts(context)),
+                        if (room.platform.trim().isNotEmpty)
+                          _InfoPill(label: room.platform.toUpperCase(), accent: tvTheme.focusColor, filled: true),
+                        if (room.nick.trim().isNotEmpty) ...[
+                          SizedBox(width: 8.ts(context)),
+                          _InfoPill(label: room.nick.trim()),
+                        ],
+                        if (protocol.isNotEmpty) ...[
+                          SizedBox(width: 8.ts(context)),
+                          _InfoPill(label: protocol),
+                        ],
+                        if (urls.length > 1) ...[
+                          SizedBox(width: 8.ts(context)),
+                          _InfoPill(label: '线路 ${line + 1}/${urls.length}'),
+                        ],
+                      ],
+                    ),
+                    if (current != null) ...[
+                      SizedBox(height: 10.ts(context)),
+                      Divider(height: 1, color: Colors.white.withValues(alpha: 0.16)),
+                      SizedBox(height: 10.ts(context)),
+                      _EpgLine(
+                        prefix: i18nOr('epg_now_playing', '正在播放'),
+                        range: formatEpgRange(current.start, current.end),
+                        title: _programmeTitle(current),
+                        prefixColor: tvTheme.focusColor,
+                      ),
+                      if (current.description.trim().isNotEmpty)
+                        Padding(
+                          padding: EdgeInsets.only(top: 6.ts(context), left: 84.ts(context)),
+                          child: Text(
+                            current.description.trim(),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.t16.copyWith(
+                              color: Colors.white70,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                      if (next != null)
+                        Padding(
+                          padding: EdgeInsets.only(top: 6.ts(context)),
+                          child: _EpgLine(
+                            prefix: i18nOr('epg_next', '下一节目'),
+                            range: formatEpgRange(next.start, next.end),
+                            title: _programmeTitle(next),
+                            prefixColor: Colors.white54,
+                          ),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  /// 节目名优先用主标题；XMLTV 常把细节放 subTitle（「第 12 集」这类）。
+  String _programmeTitle(EpgProgramme programme) {
+    final String sub = programme.subTitle.trim();
+    if (sub.isEmpty || programme.title.contains(sub)) return programme.title;
+    return '${programme.title} · $sub';
+  }
+
+  /// 由播放地址判断协议族：IPv6 主机在 Uri 里带冒号（方括号已被解析掉）。
+  ///
+  /// 只做「看一眼」，不做 DNS 解析：那是网络请求，不该出现在绘图层。
+  String _protocolOf(String url) {
+    if (url.isEmpty) return '';
+    final String host = Uri.tryParse(url)?.host ?? '';
+    if (host.isEmpty) return '';
+    return host.contains(':') ? 'IPv6' : 'IPv4';
+  }
+}
+
+/// 「标签 + 时间段 + 标题」一行：正在播放与下一节目共用同一套对齐。
+class _EpgLine extends StatelessWidget {
+  const _EpgLine({
+    required this.prefix,
+    required this.range,
+    required this.title,
+    required this.prefixColor,
+  });
+
+  final String prefix;
+  final String range;
+  final String title;
+  final Color prefixColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          // 固定宽度让两行的「时间段」对齐，扫读时不用重新找起点。
+          width: 84.ts(context),
+          child: Text(
+            prefix,
+            style: AppTextStyles.t16.copyWith(color: prefixColor, fontWeight: FontWeight.w600),
+          ),
+        ),
+        Text(
+          range,
+          style: AppTextStyles.t16.copyWith(color: Colors.white70, fontWeight: FontWeight.w500),
+        ),
+        SizedBox(width: 12.ts(context)),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.t18.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
     );
   }
 }

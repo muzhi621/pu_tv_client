@@ -3106,5 +3106,7 @@
   "epg_load_failed": "节目单加载失败，请稍后重试",
   "epg_empty": "暂无节目数据",
   "epg_no_programme": "当天暂无节目",
-  "epg_entry": "节目指南"
+  "epg_entry": "节目指南",
+  "epg_now_playing": "正在播放",
+  "epg_next": "下一节目"
 }

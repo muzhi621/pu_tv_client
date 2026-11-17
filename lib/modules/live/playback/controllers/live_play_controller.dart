@@ -1231,13 +1231,16 @@ class LivePlayController extends _$LivePlayController {
 
   Timer? _channelBannerTimer;
 
-  /// Shows the channel name for two seconds after an up/down switch.
+  /// 切台后在画面上停留几秒显示频道信息与节目单。
+  ///
+  /// 从 2 秒加到 5 秒：信息条现在带「正在播 / 简介 / 下一档」三行，
+  /// 2 秒只够看清频道名，节目还没读完就消失了。
   void showChannelBanner(String text) {
     _channelBannerTimer?.cancel();
 
     state = state.copyWith(channelBanner: text);
 
-    _channelBannerTimer = Timer(const Duration(seconds: 2), () {
+    _channelBannerTimer = Timer(const Duration(seconds: 5), () {
       if (ref.mounted) {
         state = state.copyWith(clearChannelBanner: true);
       }

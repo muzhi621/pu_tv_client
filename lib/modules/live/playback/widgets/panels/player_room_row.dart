@@ -28,6 +28,8 @@ class PlayerRoomRow extends ConsumerWidget {
     this.showFollowAction = false,
     this.trailing,
     this.large = false,
+    this.indexLabel,
+    this.nowPlaying,
   });
 
   final LiveRoom room;
@@ -36,6 +38,14 @@ class PlayerRoomRow extends ConsumerWidget {
   /// The room that is playing right now, tinted so the playlist shows where the
   /// session is.
   final bool active;
+
+  /// 频道号（1 基）。IPTV 频道表就是观众的台号表，显示出来才好用数字键
+  /// 或「按台号找台」；直播间列表不传，避免给房间硬安一个序号。
+  final int? indexLabel;
+
+  /// 该频道正在播的节目（EPG）。有就顶掉副标题里的分组名——
+  /// 「正在播什么」比「属于哪个分组」有用得多，而分组名已经由台标兜着。
+  final String? nowPlaying;
 
   /// Whether the room is followed.
   final bool favorite;
@@ -76,10 +86,17 @@ class PlayerRoomRow extends ConsumerWidget {
     final AppSettingsModel app = ref.watch(appSettingsControllerProvider);
 
     final String title = room.title.trim().isNotEmpty ? room.title.trim() : i18n('untitled_room');
+    // 台标兜底仍用分组名（截图里「卫」「央」就是分组首字）；副标题优先给
+    // 「正在播放」，没有节目单时回退成原来的分组名。
     final String nick = room.nick.trim();
+    final String playing = (nowPlaying ?? '').trim();
+    final String subtitle = playing.isNotEmpty ? playing : nick;
 
     final Color foreground = selected ? Colors.white : tvTheme.primaryTextColor;
     final Color muted = selected ? Colors.white70 : tvTheme.secondaryTextColor;
+    // 空串（而不是 null）表示这一行不要右侧读数：IPTV 频道没有观众数，
+    // 「人数待更新」对每一行都一样，留着只吃频道名的宽度。
+    final String meta = trailing ?? _meta(app, ref.read(appSettingsControllerProvider.notifier));
 
     final double rowHeight = (large ? 88.0 : 60.0).sp * boxScale;
     final double rowRadius = large ? 14.ts(context) : 10.ts(context);
@@ -104,7 +121,36 @@ class PlayerRoomRow extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          TvCommonAvatar(avatarUrl: room.avatar, fallbackName: nick, radius: avatarRadius),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              TvCommonAvatar(avatarUrl: room.avatar, fallbackName: nick, radius: avatarRadius),
+              // 台号徽标叠在台标左上角：单独占一列会把频道名挤窄，而这里
+              // 本来就有空白角落可用。
+              if (indexLabel != null && indexLabel! > 0)
+                Positioned(
+                  left: -4.ts(context),
+                  top: -4.ts(context),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 5.ts(context), vertical: 1.ts(context)),
+                    constraints: BoxConstraints(minWidth: (large ? 22.0 : 18.0).sp * boxScale),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: selected ? Colors.white : tvTheme.focusColor,
+                      borderRadius: BorderRadius.circular(6.ts(context)),
+                    ),
+                    child: Text(
+                      '${indexLabel!}',
+                      style: AppTextStyles.of((large ? 13.0 : 11.0) * scale).copyWith(
+                        color: selected ? tvTheme.focusColor : Colors.white,
+                        fontWeight: FontWeight.w700,
+                        height: 1.1,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
           SizedBox(width: large ? 16.ts(context) : 12.ts(context)),
           Expanded(
             child: Column(
@@ -137,13 +183,16 @@ class PlayerRoomRow extends ConsumerWidget {
                       ),
                   ],
                 ),
-                if (nick.isNotEmpty) SizedBox(height: large ? 3.ts(context) : 0),
-                if (nick.isNotEmpty)
+                if (subtitle.isNotEmpty) SizedBox(height: large ? 3.ts(context) : 0),
+                if (subtitle.isNotEmpty)
                   Text(
-                    nick,
+                    subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.of(nickSize).copyWith(fontWeight: FontWeight.w500, color: muted),
+                    style: AppTextStyles.of(nickSize).copyWith(
+                      fontWeight: FontWeight.w500,
+                      color: playing.isNotEmpty ? tvTheme.focusColor : muted,
+                    ),
                   ),
               ],
             ),
@@ -159,14 +208,15 @@ class PlayerRoomRow extends ConsumerWidget {
                   style: AppTextStyles.of(platformSize).copyWith(fontWeight: FontWeight.w600, color: muted),
                 ),
               SizedBox(height: large ? 3.ts(context) : 0),
-              Text(
-                trailing ?? _meta(app, ref.read(appSettingsControllerProvider.notifier)),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.of(
-                  metaSize,
-                ).copyWith(fontWeight: FontWeight.w500, color: selected ? Colors.white : tvTheme.focusColor),
-              ),
+              if (meta.isNotEmpty)
+                Text(
+                  meta,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.of(
+                    metaSize,
+                  ).copyWith(fontWeight: FontWeight.w500, color: selected ? Colors.white : tvTheme.focusColor),
+                ),
             ],
           ),
         ],
