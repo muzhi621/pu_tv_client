@@ -62,7 +62,8 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
     super.initState();
     _config = RemoteConfigService.vod;
     _engine = VodSiteEngine(config: _config);
-    _site = _config.sites.isEmpty ? null : _config.sites.first;
+    // 云端可以指定「默认站点」；没指定时仍是第一个站点（与升级前一致）。
+    _site = _config.preferredSite;
     if (_site != null) {
       _loadHome();
     }
@@ -86,7 +87,8 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
     setState(() {
       _config = next;
       _engine = VodSiteEngine(config: next);
-      _site = next.sites.first;
+      // 配置刷新时也回到云端默认站点：用户没手动切过站点，就该按最新下发走。
+      _site = next.preferredSite;
       _home = null;
       _page = null;
       _error = '';
@@ -105,7 +107,7 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
     setState(() {
       _config = next;
       _engine = VodSiteEngine(config: next);
-      _site = next.sites.isEmpty ? null : next.sites.first;
+      _site = next.preferredSite;
       _syncing = false;
       _error = '';
     });

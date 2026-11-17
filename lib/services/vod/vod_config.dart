@@ -14,6 +14,7 @@ class VodConfig {
     this.sites = const <VodSite>[],
     this.sourceIds = const <String>[],
     this.siteIds = const <String>[],
+    this.defaultSiteId = '',
     this.lockLibrary = false,
     this.libraryRevision = 0,
   });
@@ -26,6 +27,10 @@ class VodConfig {
       sites: _list(raw['sites']).map(VodSite.fromJson).toList(growable: false),
       sourceIds: _strings(raw['sourceIds']),
       siteIds: _strings(raw['siteIds']),
+      // 云端「默认站点」：打开影音时先选谁。服务端已在展开时校验过它确实
+      // 在下发列表里，这里仍按 id 找一次，找不到就回退第一个站点——老配置
+      // 没有这个字段，行为与升级前完全一致。
+      defaultSiteId: _str(raw['defaultSiteId']),
       lockLibrary: raw['lockLibrary'] == true,
       libraryRevision: raw['libraryRevision'] is int ? raw['libraryRevision'] as int : 0,
     );
@@ -41,11 +46,30 @@ class VodConfig {
   final List<String> sourceIds;
   final List<String> siteIds;
 
+  /// 云端指定的默认站点 id；空 = 没有指定。
+  final String defaultSiteId;
+
   /// true 表示这台设备锁定了库快照，云端再改资源库不影响它。
   final bool lockLibrary;
   final int libraryRevision;
 
   bool get isEmpty => sources.isEmpty && sites.isEmpty;
+
+  /// 打开影音时的首屏站点。
+  ///
+  /// 云端指定的 [defaultSiteId] 优先；没指定、或那个站点已经被库删掉/被白名单
+  /// 排掉（服务端展开时会清空，但客户端仍要能兜住旧数据），回退第一个站点。
+  /// 影音页的三处重建（首次、配置刷新、手动重拉）都走这里，避免默认站点只在
+  /// 冷启动时生效。
+  VodSite? get preferredSite {
+    if (sites.isEmpty) return null;
+    if (defaultSiteId.isNotEmpty) {
+      for (final site in sites) {
+        if (site.id == defaultSiteId) return site;
+      }
+    }
+    return sites.first;
+  }
 
   /// 需要 jar 的站点：api 以 csp_ 开头。
   List<VodSite> get spiderSites =>
