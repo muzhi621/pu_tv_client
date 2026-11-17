@@ -14,7 +14,10 @@ import 'package:pure_live/modules/live/playback/models/live_play_args.dart';
 import 'package:pure_live/platforms/sites.dart';
 import 'package:pure_live/services/settings/settings.dart';
 
-/// 启动页：只有 影音 / IPTV / 设置 三个大按钮（顺序即遥控器焦点顺序）。
+/// 启动页：只有 IPTV / 影音 / 设置 三个大按钮（顺序即遥控器焦点顺序）。
+///
+/// 2026-11-17：IPTV 调到首位，开机焦点直接落在 IPTV（与云端
+/// `navigation.groups` / `defaultGroupId=iptv` 一致）。
 ///
 /// 2026-11-16 定版：用户明确要求去掉侧边栏和“首页里嵌频道网格”的结构。
 /// 这里只做分发：点影音进点播页，点 IPTV 直接进播放页，点设置进设置页；
@@ -33,9 +36,9 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage> {
-  // 声明顺序与 build 中的按钮顺序一致，保证遥控器左右移动的焦点顺序正确。
-  final FocusNode _vodFocus = FocusNode();
+  // 焦点节点本身无序，渲染顺序由 [kNavGroups] 决定（首位 IPTV）。
   final FocusNode _iptvFocus = FocusNode();
+  final FocusNode _vodFocus = FocusNode();
   final FocusNode _settingsFocus = FocusNode();
 
   /// 同一时间只允许一个 IPTV 启动流程：解析库要查 sqlite，快速连点会叠两个播放页。
@@ -133,8 +136,8 @@ class _HomePageState extends ConsumerState<HomePage> {
         showExitConfirmDialog(context, ref);
       },
       child: TvScaffold(
-        // 遥控器开机焦点落在第一个按钮（影音）上。
-        openingFocus: _vodFocus,
+        // 遥控器开机焦点落在第一个按钮上（kNavGroups 首位 = IPTV）。
+        openingFocus: _iptvFocus,
         child: DpadRegion(
           child: Center(
             child: Column(
@@ -152,28 +155,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    _buildTile(
-                      label: i18n(kNavGroups[0].labelKey),
-                      icon: kNavGroups[0].icon,
-                      focusNode: _vodFocus,
-                      onTap: () => context.push(AppRoutes.kVodBrowse),
-                    ),
-                    SizedBox(width: 32.ts(context)),
-                    _buildTile(
-                      label: i18n(kNavGroups[1].labelKey),
-                      icon: kNavGroups[1].icon,
-                      focusNode: _iptvFocus,
-                      onTap: _launchIptv,
-                    ),
-                    SizedBox(width: 32.ts(context)),
-                    _buildTile(
-                      label: i18n(kNavGroups[2].labelKey),
-                      icon: kNavGroups[2].icon,
-                      focusNode: _settingsFocus,
-                      onTap: () => const SettingsMenuRoute().push(context),
-                    ),
-                  ],
+                  children: _buildTiles(),
                 ),
               ],
             ),
@@ -181,6 +163,33 @@ class _HomePageState extends ConsumerState<HomePage> {
         ),
       ),
     );
+  }
+
+  /// 首页三按钮：顺序取自 [kNavGroups]（首位 IPTV），动作与焦点按分组 id 绑定。
+  ///
+  /// 早先这里用 `kNavGroups[0] / [1] / [2]` 硬编码下标配死各自的 onTap，一旦调整
+  /// 一级块顺序，标签会和跳转对不上（IPTV 的按钮跳去点播）。改成按 id 查表后，
+  /// 顺序只由 [kNavGroups] 决定，两者不会再错位。
+  List<Widget> _buildTiles() {
+    final Map<String, _TileAction> actions = <String, _TileAction>{
+      'iptv': _TileAction(_iptvFocus, _launchIptv),
+      'vod': _TileAction(_vodFocus, () => context.push(AppRoutes.kVodBrowse)),
+      'settings': _TileAction(_settingsFocus, () => const SettingsMenuRoute().push(context)),
+    };
+
+    final List<Widget> tiles = <Widget>[];
+    for (final NavGroup group in kNavGroups) {
+      final _TileAction? action = actions[group.id];
+      if (action == null) continue;
+      if (tiles.isNotEmpty) tiles.add(SizedBox(width: 32.ts(context)));
+      tiles.add(_buildTile(
+        label: i18n(group.labelKey),
+        icon: group.icon,
+        focusNode: action.node,
+        onTap: action.onTap,
+      ));
+    }
+    return tiles;
   }
 
   Widget _buildTile({
@@ -201,9 +210,20 @@ class _HomePageState extends ConsumerState<HomePage> {
         iconPosition: TvIconPosition.top,
         size: TvButtonSize.large,
         focusNode: focusNode,
-        autofocus: focusNode == _vodFocus,
+        autofocus: focusNode == _iptvFocus,
         onTap: onTap,
       ),
     );
   }
+}
+
+/// 首页一个大按钮的动作与焦点节点。
+///
+/// 与 [NavGroup.id] 一一对应，使得「按钮顺序」和「点下去去哪」解耦：
+/// 顺序改 [kNavGroups] 即可，动作不会跟着错位。
+class _TileAction {
+  final FocusNode node;
+  final VoidCallback onTap;
+
+  const _TileAction(this.node, this.onTap);
 }

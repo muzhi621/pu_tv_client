@@ -1,7 +1,7 @@
 {
-  "version": "3.0.39",
-  "version_num": 130039,
-  "version_desc": "-修复部分 TVBox 源无法加载：spider jar 不再强制 HTTPS，允许 http 源\n-spider jar 的 md5 校验改为可选，缺失时不再拒绝加载，保证源可用性",
+  "version": "3.0.40",
+  "version_num": 130040,
+  "version_desc": "-首页 IPTV 调整到第一位，开机焦点直接落在 IPTV\n-设置精简：导航栏控制、背景壁纸、IPTV 源管理改由云端下发，电视端只保留「语言」与「直播源请求头」\n-移除主题定制页的配色/字体/字号/间距入口，加载动画统一用默认值\n-移除用不到的弹幕表情资源，安装包再减约 4.5 MB",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",

@@ -17,21 +17,23 @@ typedef SettingsGroup = ({String titleKey, List<SettingsEntry> entries, String s
 /// desktop app hosts inside one of these pages are not rows here; they are
 /// reached from their parent page, exactly as there.
 final List<SettingsGroup> settingsCatalog = <SettingsGroup>[
+  // 2026-11-17 设置精简（用户明确要求）：
+  //   导航栏控制 → 云端 navigation.groups / railMenuIds / defaultGroupId
+  //   背景设置   → 云端 navigation.wallpaper
+  //   IPTV 源管理（源列表 / 导入 / 自动同步）→ 云端源库下发
+  //   主题定制   → 只保留语言；加载动画走默认值，配色/字体/字号/间距/
+  //               页面设置一律不再暴露
+  // 电视端因此只剩「语言」与「直播源请求头」两个本地必设项：前者是离线
+  // 能力（云端管不到 UI 语言），后者是部分源的 Referer/UA 救急手段。
   (
-    titleKey: 'theme_settings',
+    titleKey: 'localization_settings',
     scope: 'all',
     entries: <SettingsEntry>[
       (
         path: AppRoutes.kSettingsTheme,
-        titleKey: 'theme_customization',
-        subtitleKey: 'theme_customization_desc',
-        icon: Remix.palette_line,
-      ),
-      (
-        path: AppRoutes.kSettingsNavigation,
-        titleKey: 'navigation_display_settings',
-        subtitleKey: 'navigation_display_settings_desc',
-        icon: Remix.menu_line,
+        titleKey: 'change_language',
+        subtitleKey: 'change_language_subtitle',
+        icon: Remix.global_line,
       ),
     ],
   ),
@@ -39,7 +41,12 @@ final List<SettingsGroup> settingsCatalog = <SettingsGroup>[
     titleKey: 'iptv_settings',
     scope: 'all',
     entries: <SettingsEntry>[
-      (path: AppRoutes.kIptv, titleKey: 'iptv_settings', subtitleKey: 'manage_iptv_sources', icon: Remix.tv_line),
+      (
+        path: AppRoutes.kIptvHeaders,
+        titleKey: 'iptv_headers_settings',
+        subtitleKey: 'iptv_headers_entry_desc',
+        icon: Remix.tv_line,
+      ),
     ],
   ),
   (
@@ -196,6 +203,8 @@ const Map<String, String> settingsSectionTitleKeys = <String, String>{
   AppRoutes.kIptvImport: 'iptv_import_source',
   AppRoutes.kIptvSync: 'auto_sync_settings',
   AppRoutes.kIptvHeaders: 'iptv_headers_settings',
+  // 主题定制页已精简成纯语言页（2026-11-17），标题跟着改，别再叫「主题定制」。
+  AppRoutes.kSettingsTheme: 'localization_settings',
   AppRoutes.kSettingsThemePicker: 'ui_theme',
   AppRoutes.kSettingsGridSpacing: 'grid_spacing_settings',
   AppRoutes.kSettingsLoadingStyle: 'change_loading_style',

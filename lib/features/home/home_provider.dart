@@ -109,14 +109,17 @@ class NavGroup {
   const NavGroup({required this.id, required this.labelKey, required this.icon, required this.children});
 }
 
-/// 三个一级块，顺序即左侧一级栏顺序。children 用菜单 id 或字面量 'settings'。
+/// 三个一级块，顺序即左侧一级栏与首页三按钮的顺序。children 用菜单 id 或字面量 'settings'。
+///
+/// 2026-11-17：IPTV 调到首位，与云端 `navigation.groups`（seed 里 iptv 也是第一）
+/// 和 `defaultGroupId=iptv` 对齐；首页开机焦点随之落在 IPTV。
 ///
 /// 2026-11-15：左侧不再展开二级菜单，一个一级块直接落地一个内容页，因此
 /// 影音块只保留点播浏览（vodBrowse）。「放映」（moviePlayback，手机推链接到
 /// 电视播放）入口已按用户要求移除；云端即使仍下发该 id 也不会渲染。
 const List<NavGroup> kNavGroups = <NavGroup>[
-  NavGroup(id: 'vod', labelKey: 'nav_group_vod', icon: Icons.movie_outlined, children: <String>['vodBrowse']),
   NavGroup(id: 'iptv', labelKey: 'nav_group_iptv', icon: Icons.live_tv_outlined, children: <String>['iptv']),
+  NavGroup(id: 'vod', labelKey: 'nav_group_vod', icon: Icons.movie_outlined, children: <String>['vodBrowse']),
   NavGroup(id: 'settings', labelKey: 'nav_group_settings', icon: Icons.settings_outlined, children: <String>['settings']),
 ];
 
