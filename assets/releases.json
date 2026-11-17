@@ -9,7 +9,7 @@
       "avatar": "https://avatars.githubusercontent.com/in/15368?v=4",
       "profile": "https://github.com/apps/github-actions"
     },
-    "changelog": "📦 SUTV v3.0.45\n本次更新内容：\n-IPTV 频道列表按云端套餐分组浏览：←→ 切分组、↑↓ 选台，列表补上台号与正在播\n-切台信息卡显示台号、分组、协议与下一档节目，没有节目单时自动退化\n-节目单改用云端下发的 EPG 地址，首次打开预热、过期后台刷新，支持离线缓存\n-TVBBox 默认站点跟随云端「设为默认」，套餐/终端可单独覆盖\n-本版为 3.0.44 的重发构建：功能一致，同时补齐内置更新记录\n📺 版本说明：\n• 默认只发布 **Impeller 渲染器**；若画面异常/黑屏，可手动触发构建并勾选 include_skia 单独生成 Skia 兼容版\n• **armeabi-v7a：绝大多数电视盒子（32 位系统），推荐先装这个**\n• arm64-v8a：仅 64 位系统设备（如 NVIDIA Shield、部分新旗舰）\n• 不再发布 x86_64（只用于模拟器）\n• 不确定选哪个：adb shell getprop ro.product.cpu.abilist，列表含 arm64-v8a 才用 arm64 包\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
+    "changelog": "📦 SUTV v3.0.45\n本次更新内容：\n-IPTV 频道列表按云端套餐分组浏览：←→ 切分组、↑↓ 选台，列表补上台号与正在播\n-切台信息卡显示台号、分组、协议与下一档节目，没有节目单时自动退化\n-节目单改用云端下发的 EPG 地址，首次打开预热、过期后台刷新，支持离线缓存\n-TVBox 默认站点跟随云端「设为默认」，套餐/终端可单独覆盖\n-本版为 3.0.44 的重发构建：功能一致，同时补齐内置更新记录\n📺 版本说明：\n• 默认只发布 **Impeller 渲染器**；若画面异常/黑屏，可手动触发构建并勾选 include_skia 单独生成 Skia 兼容版\n• **armeabi-v7a：绝大多数电视盒子（32 位系统），推荐先装这个**\n• arm64-v8a：仅 64 位系统设备（如 NVIDIA Shield、部分新旗舰）\n• 不再发布 x86_64（只用于模拟器）\n• 不确定选哪个：adb shell getprop ro.product.cpu.abilist，列表含 arm64-v8a 才用 arm64 包\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
     "files": [
       {
         "name": "SUTV-arm64-v8a-impeller",
