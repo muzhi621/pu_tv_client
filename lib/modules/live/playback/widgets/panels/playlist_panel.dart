@@ -73,7 +73,7 @@ class _PlaylistPanelState extends ConsumerState<PlaylistPanel> {
 
     return ValueListenableBuilder<int>(
       valueListenable: epg.revision,
-      builder: (context, _, __) => PlayerIndexPanel(
+      builder: (context, _, _) => PlayerIndexPanel(
         title: iptv ? i18nOr('ui_channel_list', '频道列表') : i18nOr('ui_playlist', 'Playlist'),
         rows: <PlayerPanelRow>[
           for (final LiveRoom room in rooms) PlayerPanelRow(label: room.title, subtitle: room.nick),

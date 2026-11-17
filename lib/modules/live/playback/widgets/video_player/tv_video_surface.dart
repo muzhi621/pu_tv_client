@@ -520,8 +520,7 @@ class _ChannelInfoBanner extends StatelessWidget {
         child: ValueListenableBuilder<int>(
           // 背景拉到节目单后重建一次，否则浮层会一直显示「无节目信息」。
           valueListenable: epg.revision,
-          builder: (context, _, __) {
-            final DateTime now = DateTime.now();
+          builder: (context, _, _) {
             final EpgProgramme? current = epg.currentOf(title);
             final EpgProgramme? next = epg.nextOf(title);
             return ConstrainedBox(
