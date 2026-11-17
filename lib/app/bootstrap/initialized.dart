@@ -12,8 +12,6 @@ import 'package:pure_live/app/bootstrap/app_path_manager.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:pure_live/core/common/api_proxy_policy.dart';
 import 'package:pure_live/core/platform/local_network_access.dart';
-import 'package:pure_live/player/core/ingest_ffmpeg_registry.dart';
-import 'package:pure_live/player/core/ffmpeg_ingest_starter.dart';
 import 'package:pure_live/services/remote_config/remote_config.dart';
 
 class AppInitializer {
@@ -81,10 +79,12 @@ class AppInitializer {
     // Danmaku sockets reuse the proxy policy configured for API and image traffic.
     configureWebSocketProxyRouting(ApiProxyPolicy.directiveFor);
 
-    // The DASH merge in the VOD/music transport remuxes a bilibili split
-    // audio+video pair with a local FFmpeg; it runs on the app's FFmpegKit build
-    // injected here rather than linking a second runtime into media_core_ingest.
-    configureIngestFfmpegStarter(ffmpegKitIngestStarter);
+    // 2026-11-17：不再注入 FFmpeg。它唯一的用途是 VOD/音乐传输里给 bilibili
+    // 分离音视频做 DASH 合并，而本 APK 只做 IPTV / TVBox：没有任何代码路径走到
+    // IngestStrategy.ffmpegRelay，注册表里的 starter 从未被调用。
+    // 保留它等于白背 libffmpegkit.so（未压缩 20 MB / 进包 9.45 MB），因此整条
+    // ingest-ffmpeg 链路一起移除（configureIngestFfmpegStarter 的实参为 null 时
+    // media_core_ingest 会退化为 direct，不影响普通 HLS/FLV 播放）。
 
     // Version info plus the startup update check.
     //

@@ -1,7 +1,7 @@
 {
-  "version": "3.0.40",
-  "version_num": 130040,
-  "version_desc": "-首页 IPTV 调整到第一位，开机焦点直接落在 IPTV\n-设置精简：导航栏控制、背景壁纸、IPTV 源管理改由云端下发，电视端只保留「语言」与「直播源请求头」\n-移除主题定制页的配色/字体/字号/间距入口，加载动画统一用默认值\n-移除用不到的弹幕表情资源，安装包再减约 4.5 MB",
+  "version": "3.0.41",
+  "version_num": 130041,
+  "version_desc": "-移除 FFmpeg 运行时：安装包再减约 9.4 MB（IPTV/TVBox 走不到 FFmpeg 转封装链路）\n-设置再精简：网络与代理、通用设置、备份与恢复、刷新设置整组下掉\n-IPTV 请求头（UA/Referer/Cookie）改由云端下发，电视端不再提供本地入口\n-移除已下线平台的图标资源，安装包再减约 0.65 MB",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",

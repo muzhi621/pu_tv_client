@@ -1,7 +1,7 @@
 name: pure_live
 description: 纯粹直播,一款开源的第三方多平台直播聚合播放器.
 publish_to: none
-version: 3.0.40+41
+version: 3.0.41+42
 
 environment:
   sdk: ^3.12.0
@@ -139,11 +139,6 @@ dependencies:
       url: https://github.com/liuchuancong/media_core.git
       ref: 2a45d46422b134df546f13af2b86901b4be07ec7
       path: packages/media_core_ingest
-  # FFmpeg runtime for the DASH merge relay. media_core_ingest ships no binary
-  # and the app injects one through the ingest registry; this is the same
-  # FFmpegKit build the mobile sibling uses (no media_core_recording_ffmpeg
-  # wrapper). Requires minSdk 26.
-  ffmpeg_kit_extended_flutter: 0.6.2
   media_core_danmaku:
     git:
       url: https://github.com/liuchuancong/media_core.git
@@ -174,7 +169,7 @@ dependency_overrides:
   mime: ^2.1.0 # media_core 需 mime ^2.1.0，与 alfred 的 ^1.0.0 冲突；alfred 仅用 MimeMultipartTransformer/MimeMultipart（2.x 未变），覆盖安全
   equatable: ^3.0.0 # media_core 需 equatable ^3.0.0；app 与 flutter_screenutil_plus 均为 extends Equatable + props（3.x 兼容），覆盖安全
   hooks: ^2.2.0 # Native Assets 构建 hooks 兼容
-  code_assets: ^2.1.0 # media_kit Native Assets 2 与 FFmpeg hook 兼容
+  code_assets: ^2.1.0 # media_kit 的 Native Assets 构建需要 code_assets
 
 dev_dependencies:
   flutter_test:
@@ -231,7 +226,3 @@ flutter:
     - assets/version.json
     - assets/releases.json
     - assets/fonts/fonts-manifest.json
-ffmpeg_kit_extended_config:
-  type: base
-  gpl: false
-  small: true

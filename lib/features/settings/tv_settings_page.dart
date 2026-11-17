@@ -23,8 +23,13 @@ final List<SettingsGroup> settingsCatalog = <SettingsGroup>[
   //   IPTV 源管理（源列表 / 导入 / 自动同步）→ 云端源库下发
   //   主题定制   → 只保留语言；加载动画走默认值，配色/字体/字号/间距/
   //               页面设置一律不再暴露
-  // 电视端因此只剩「语言」与「直播源请求头」两个本地必设项：前者是离线
-  // 能力（云端管不到 UI 语言），后者是部分源的 Referer/UA 救急手段。
+  // 2026-11-17 第二轮精简：
+  //   网络与代理、通用设置、备份与恢复、刷新设置 四组整组下掉；
+  //   直播源请求头改由云端 iptv.requestHeaders 下发，电视端不再提供入口。
+  //
+  // 电视端因此只剩四组：语言（离线能力，云端管不到 UI 语言）、播放器内核
+  // （与具体电视的解码能力强相关，必须本机可调）、缓存与数据（本地存储运维）、
+  // 关于（版本与更新）。
   (
     titleKey: 'localization_settings',
     scope: 'all',
@@ -34,30 +39,6 @@ final List<SettingsGroup> settingsCatalog = <SettingsGroup>[
         titleKey: 'change_language',
         subtitleKey: 'change_language_subtitle',
         icon: Remix.global_line,
-      ),
-    ],
-  ),
-  (
-    titleKey: 'iptv_settings',
-    scope: 'all',
-    entries: <SettingsEntry>[
-      (
-        path: AppRoutes.kIptvHeaders,
-        titleKey: 'iptv_headers_settings',
-        subtitleKey: 'iptv_headers_entry_desc',
-        icon: Remix.tv_line,
-      ),
-    ],
-  ),
-  (
-    titleKey: 'refresh_settings',
-    scope: 'all',
-    entries: <SettingsEntry>[
-      (
-        path: AppRoutes.kSettingsRefresh,
-        titleKey: 'refresh_settings',
-        subtitleKey: 'refresh_settings_subtitle',
-        icon: Remix.refresh_line,
       ),
     ],
   ),
@@ -74,25 +55,6 @@ final List<SettingsGroup> settingsCatalog = <SettingsGroup>[
     ],
   ),
   (
-    titleKey: 'network_proxy_settings',
-    scope: 'all',
-    entries: <SettingsEntry>[
-      (
-        path: AppRoutes.kSettingsProxy,
-        titleKey: 'custom_network_proxy',
-        subtitleKey: 'custom_network_proxy_desc',
-        icon: Remix.global_line,
-      ),
-    ],
-  ),
-  (
-    titleKey: 'general_settings',
-    scope: 'all',
-    entries: <SettingsEntry>[
-      (path: AppRoutes.kSettingsGeneral, titleKey: 'general', subtitleKey: 'general_desc', icon: Remix.settings_4_line),
-    ],
-  ),
-  (
     titleKey: 'data_manage',
     scope: 'all',
     entries: <SettingsEntry>[
@@ -101,18 +63,6 @@ final List<SettingsGroup> settingsCatalog = <SettingsGroup>[
         titleKey: 'cache_and_data',
         subtitleKey: 'cache_and_data_desc',
         icon: Remix.database_2_line,
-      ),
-    ],
-  ),
-  (
-    titleKey: 'backup_manage',
-    scope: 'all',
-    entries: <SettingsEntry>[
-      (
-        path: AppRoutes.kBackup,
-        titleKey: 'backup_recover',
-        subtitleKey: 'backup_recover_desc',
-        icon: Icons.settings_backup_restore_rounded,
       ),
     ],
   ),

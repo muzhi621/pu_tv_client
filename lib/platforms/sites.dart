@@ -109,6 +109,12 @@ class Sites {
   ///
   /// The platform-specific files are preferred over the old generic
   /// `logo.png` placeholder so every site has its own visual identity.
+  ///
+  /// 2026-11-17：这里的平台图标文件已从 `assets/images/` 删除（安装包 -0.65 MB）。
+  /// 直播/UGC 平台整体下线后，唯一会渲染这些图标的「平台显示」三个页面在设置里
+  /// 已无入口，图标纯属随包白带。`TvPlatformLogo` 对缺失资源有 `errorBuilder`
+  /// 兜底（显示 tv 图标），所以映射表保持原样也不会崩；真要恢复某个平台，
+  /// 把对应 png 放回 `assets/images/` 即可，无需改代码。
   static const Map<String, String> _logos = {
     bilibiliSite: '$_assetRoot/bilibili_2.png',
     douyuSite: '$_assetRoot/douyu.png',

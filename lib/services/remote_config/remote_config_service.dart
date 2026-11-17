@@ -286,6 +286,14 @@ class RemoteConfigService {
       debugPrint('[RemoteConfig] EPG 地址下发失败（沿用上次缓存）: $error');
     }
 
+    // IPTV 请求头（UA / Referer / Cookie）改由云端下发，电视端已无编辑入口。
+    // 单独 try：写失败只影响少数需要防盗链的源，不阻断播放。
+    try {
+      _applyIptvHeaders(document);
+    } catch (error) {
+      debugPrint('[RemoteConfig] IPTV 请求头下发失败（沿用本地值）: $error');
+    }
+
     // TVBox 直连源：同步套用上次成功缓存，网络刷新放后台。
     // 失败时 _resolvedVod 保持云端 sites，绝不阻断首帧。
     try {
@@ -434,6 +442,42 @@ class RemoteConfigService {
       showTips: false,
     );
     if (ok) await RemoteConfigStore.setIptvStamp(stamp);
+  }
+
+  /// 应用云端下发的 IPTV 请求头（UA / Referer / Cookie）。
+  ///
+  /// 这三项在本地是「最后一次生效值」，被拉流、播放兜底、手机遥控页三处共用；
+  /// 云端接管后电视端没有编辑入口，所以这里直接把云端值写进同一份状态，消费方
+  /// 无需任何改动。
+  ///
+  /// 判定规则（有意选择「非空才覆盖」）：
+  /// - `iptv.requestHeaders` 缺席（旧文档）：整段跳过。
+  /// - 某个字段为空：**保留本地值**，不写。升级到本版本后终端上可能已经有
+  ///   用户在用的 Referer/UA，云端还没配就被清空会直接打断这些源的播放；
+  ///   而「配错想撤掉」的场景，把值改成新的即可，不需要清空。
+  /// - 值未变化时不写入，避免心跳每次触发整页重建。
+  static void _applyIptvHeaders(RemoteConfigDocument document) {
+    if (!SettingsService.to.isInitialized) return;
+    final raw = document.section('iptv')['requestHeaders'];
+    if (raw is! Map) return;
+
+    String read(String key) => (raw[key] ?? '').toString().trim();
+
+    final current = SettingsService.to.iptvState;
+    final iptv = SettingsService.to.iptv;
+
+    final userAgent = read('userAgent');
+    if (userAgent.isNotEmpty && current.customIptvUserAgent != userAgent) {
+      iptv.setCustomIptvUserAgent(userAgent);
+    }
+    final referer = read('referer');
+    if (referer.isNotEmpty && current.customIptvReferer != referer) {
+      iptv.setCustomIptvReferer(referer);
+    }
+    final cookie = read('cookie');
+    if (cookie.isNotEmpty && current.customIptvCookie != cookie) {
+      iptv.setCustomIptvCookie(cookie);
+    }
   }
 
   static void _backupLocalOnce() {
