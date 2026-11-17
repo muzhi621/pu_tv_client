@@ -176,4 +176,61 @@ void main() {
       expect(grouped[config.sources[1]]!.map((s) => s.id), <String>['b:1']);
     });
   });
+
+  // 预热目标算错的后果很直接：要么漏下某个族的 jar（点开站点才卡着下载），
+  // 要么把 HTTP 站点的几十 MB 也拖下来白耗流量。所以单独固化。
+  group('爬虫包预热目标（jarTargets）', () {
+    test('同一个 jar 只出一条，HTTP 站点不参与', () {
+      final config = VodConfig.fromSection(<String, dynamic>{
+        'sources': <Map<String, dynamic>>[
+          _source(id: 'src1', jar: 'https://example.com/spider.jar'),
+        ],
+        'sites': <Map<String, dynamic>>[
+          _site(id: 'src1:ali', api: 'csp_Ali'),
+          _site(id: 'src1:bili', key: 'bili', api: 'csp_Bili'),
+          _site(id: 'src1:json', key: 'json'),
+        ],
+      });
+      final targets = config.jarTargets;
+      expect(targets.length, 1);
+      expect(targets.first.url, 'https://example.com/spider.jar');
+      expect(targets.first.md5, isEmpty);
+    });
+
+    test('站点级 jar 与源级 jar 各算一条，md5 跟着各自的包', () {
+      final config = VodConfig.fromSection(<String, dynamic>{
+        'sources': <Map<String, dynamic>>[
+          _source(id: 'src1', jar: 'https://example.com/main.jar'),
+        ],
+        'sites': <Map<String, dynamic>>[
+          // 多仓聚合里的「族 jar」：站点自带 jar 覆盖源级 jar，两条都要预热。
+          _site(
+            id: 'src1:wex',
+            api: 'csp_Wex',
+            jar: 'https://family.example.com/wex.jar',
+            jarMd5: 'wex-jar-md5-marker',
+          ),
+          _site(id: 'src1:ali', api: 'csp_Ali'),
+        ],
+      });
+      final targets = config.jarTargets;
+      expect(
+        targets.map((target) => target.url).toList(),
+        <String>[
+          'https://family.example.com/wex.jar',
+          'https://example.com/main.jar',
+        ],
+      );
+      // md5 只是原样透传给原生做缓存校验，这里不断言格式。
+      expect(targets.first.md5, 'wex-jar-md5-marker');
+      expect(targets.last.md5, isEmpty);
+    });
+
+    test('csp_ 站点没有 jar 时不产出空地址', () {
+      final config = VodConfig.fromSection(<String, dynamic>{
+        'sites': <Map<String, dynamic>>[_site(id: 'src1:ali', api: 'csp_Ali')],
+      });
+      expect(config.jarTargets, isEmpty);
+    });
+  });
 }
