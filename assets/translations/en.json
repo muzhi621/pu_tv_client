@@ -3108,5 +3108,8 @@
   "epg_no_programme": "No programmes for this day",
   "epg_entry": "TV Guide",
   "epg_now_playing": "Now playing",
-  "epg_next": "Up next"
+  "epg_next": "Up next",
+  "ui_panel_keys_group": "Up/Down select · Left/Right group · OK play",
+  "ui_ungrouped": "Ungrouped",
+  "ui_channel_groups": "Groups"
 }

@@ -3108,5 +3108,8 @@
   "epg_no_programme": "当天暂无节目",
   "epg_entry": "节目指南",
   "epg_now_playing": "正在播放",
-  "epg_next": "下一节目"
+  "epg_next": "下一节目",
+  "ui_panel_keys_group": "↑↓ 选择 · ←→ 切换分组 · OK 播放",
+  "ui_ungrouped": "未分组",
+  "ui_channel_groups": "分组"
 }

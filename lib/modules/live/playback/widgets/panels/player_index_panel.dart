@@ -39,6 +39,7 @@ class PlayerIndexPanel extends StatefulWidget {
     this.header,
     this.footer,
     this.emptyHint,
+    this.hint,
     this.width = 400,
     this.showCloseRow = true,
   });
@@ -76,6 +77,11 @@ class PlayerIndexPanel extends StatefulWidget {
 
   final Widget? footer;
   final String? emptyHint;
+
+  /// 覆盖底部按键提示。分组频道列表的 ←→ 是「切换分组」，
+  /// 与默认的「调整」不是一回事，提示必须跟着改，否则用户按了会以为没生效。
+  final String? hint;
+
   final double width;
 
   /// Appends the trailing close row.
@@ -354,9 +360,10 @@ class _PlayerIndexPanelState extends State<PlayerIndexPanel> {
               Padding(
                 padding: EdgeInsets.fromLTRB(20.ts(context), 0, 20.ts(context), 12.ts(context)),
                 child: Text(
-                  widget.onAdjustLeft != null
-                      ? i18nOr('ui_panel_keys_adjust', '↑↓ 选择 · ←→ 调整 · OK 确认')
-                      : i18nOr('ui_panel_keys', '↑↓ 选择 · OK 确认 · ← 返回'),
+                  widget.hint
+                      ?? (widget.onAdjustLeft != null
+                          ? i18nOr('ui_panel_keys_adjust', '↑↓ 选择 · ←→ 调整 · OK 确认')
+                          : i18nOr('ui_panel_keys', '↑↓ 选择 · OK 确认 · ← 返回')),
                   style: AppTextStyles.of(
                     14 * scale,
                   ).copyWith(fontWeight: FontWeight.w500, color: tvTheme.secondaryTextColor),
