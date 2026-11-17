@@ -11,6 +11,7 @@ import 'package:pure_live/core/utils/hive_pref_util.dart';
 import 'package:pure_live/modules/live/iptv/services/iptv_import_manager.dart';
 import 'package:pure_live/services/settings/settings.dart';
 import 'package:pure_live/services/vod/vod_config.dart';
+import 'package:pure_live/services/vod/vod_jar_warmer.dart';
 import 'package:pure_live/services/vod/tvbox_config_loader.dart';
 import 'remote_config_model.dart';
 import 'remote_config_store.dart';
@@ -301,6 +302,11 @@ class RemoteConfigService {
     } catch (error) {
       debugPrint('[RemoteConfig] TVBox 直连源准备失败（沿用云端站点）: $error');
     }
+
+    // 影音爬虫包预热：配置一到就把 csp_ 站点要用的 jar 下到本地，用户点开
+    // 影音时不用再等下载（见 VodJarWarmer）。内部自带节流/重试且不抛异常，
+    // 这里 fire-and-forget 即可，绝不能拖慢启动或心跳。
+    unawaited(VodJarWarmer.warm(vod));
 
     // 首页壁纸（全局背景）：独立于 navigation.managed，只看 wallpaper.enabled。
     // 与 exitDialog 同一策略——seed 的 navigation.managed 默认为 false，不应因为
@@ -604,6 +610,8 @@ class RemoteConfigService {
       if (generation != _vodRefreshGeneration) return;
       if (fresh.isNotEmpty) {
         _resolvedVod = TvboxConfigLoader.apply(base, fresh);
+        // url 模式下 jar 地址是这次解析配置才拿到的，所以补一次预热。
+        unawaited(VodJarWarmer.warm(vod));
       }
     } catch (error, stack) {
       // 刷新失败沿用缓存/云端 sites，绝不让 fire-and-forget 冒未捕获异常。

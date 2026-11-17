@@ -176,6 +176,9 @@ internal class VodSpiderBridge(
     /** siteKey -> prepareSite 串行锁（见 onMethodCall），防止并发建重复实例。 */
     private val siteLocks = ConcurrentHashMap<String, Any>()
 
+    /** jar URL -> 下载/校验锁，防止预热与 prepareSite 同时写同一个 `.part`。 */
+    private val jarLocks = ConcurrentHashMap<String, Any>()
+
     /** jar 绝对路径 -> 已加载的 ClassLoader，同一 jar 下多个站点共用一个。 */
     private val classLoaders = ConcurrentHashMap<String, DexClassLoader>()
 
@@ -247,6 +250,7 @@ internal class VodSpiderBridge(
         val action: (MethodCall) -> Any? = when (call.method) {
             "diagnostics" -> ::handleDiagnostics
             "inspectJar" -> ::handleInspectJar
+            "warmupJar" -> ::handleWarmupJar
             "prepareSite" -> ::handlePrepareSite
             "invoke" -> ::handleInvoke
             "releaseSite" -> ::handleReleaseSite
@@ -317,7 +321,9 @@ internal class VodSpiderBridge(
     private fun handleInspectJar(call: MethodCall): Map<String, Any?> {
         val url = requireUrl(call.argument<String>("url"))
         val force = call.argument<Boolean>("force") == true
-        val jar = ensureJar(url, force)
+        // md5 可选：带上配置声明的校验和，缓存判定才与 prepareSite 完全一致，
+        // 否则这里按「没声明」下完，prepareSite 一比对不符又会重下一遍。
+        val jar = ensureJar(url, force, normalizeMd5(call.argument<String>("jarMd5").orEmpty()))
 
         // 类名要同时认 .class 条目与 classes*.dex：伪装成 png/jpg 的 jar
         // 里只有 dex，只扫 .class 会一个类都列不出来，看不出「jar 到底
@@ -355,6 +361,33 @@ internal class VodSpiderBridge(
         )
     }
 
+    /**
+     * 只把 jar 落到本地缓存，不解析里面的类名（影音板块的「打开即用」预热）。
+     *
+     * 为什么不复用 [handleInspectJar]：那一条会把每个 `classes*.dex` 整个读进
+     * 内存做类名扫描，几十 MB 的加固包在电视上要几百毫秒还白占内存。预热只
+     * 关心「文件在不在、md5 对不对」，所以单开一条不扫包的路。
+     *
+     * [MethodCall.argument] 的 `jarMd5` 缺失或格式不合法时按「没声明」处理，
+     * 与 prepareSite 的行为一致（允许不加 md5 的配置正常预热）。
+     */
+    private fun handleWarmupJar(call: MethodCall): Map<String, Any?> {
+        val url = requireUrl(call.argument<String>("url"))
+        val md5 = normalizeMd5(call.argument<String>("jarMd5").orEmpty())
+        // 命中判定与 ensureJar 内部保持一致：先看缓存，再看 md5。
+        val target = File(jarDir(), "${sha1(url)}.jar")
+        val cached = target.isFile && target.length() > 0L &&
+            (md5.isEmpty() || md5Of(target) == md5)
+        val jar = ensureJar(url, false, md5)
+        return mapOf(
+            "ok" to true,
+            "jarPath" to jar.absolutePath,
+            "bytes" to jar.length(),
+            // cached=true 表示这次没走网络，Dart 侧据此打日志、不提示用户。
+            "cached" to cached,
+        )
+    }
+
     // ------------------------------------------------------------ 站点准备
 
     /**
@@ -377,11 +410,7 @@ internal class VodSpiderBridge(
         // 仍兼容 TVBox 配置里的 `url;md5;<hash>`：提供合法 32 位十六进制时继续做完整性
         // 校验；缺失或格式不合法时按空处理——ensureJar 对空 want 会跳过 md5 比对直接加载。
         // 若要恢复强制校验，改回「长度≠32 或含非 hex 即 throw jar_md5_missing」即可。
-        val jarMd5 = if (rawMd5.length == 32 && rawMd5.all { it in '0'..'9' || it in 'a'..'f' }) {
-            rawMd5
-        } else {
-            ""
-        }
+        val jarMd5 = normalizeMd5(rawMd5)
         val force = call.argument<Boolean>("force") == true
 
         if (!force) {
@@ -625,8 +654,18 @@ internal class VodSpiderBridge(
      * [expectedMd5] 是配置 `url;md5;<hash>` 声明的校验和（#61）：缓存文件
      * 对不上就当过期重下，下载结果对不上直接失败——第三方 jar URL 被原地
      * 换包是常态，缓存又永不过期，没有校验就只能靠清缓存自救。
+     *
+     * **同一 URL 必须串行**：预热（warmupJar）和「点开站点」（prepareSite）
+     * 可能同时要同一个包，两条路都写 `${sha1}.jar.part`，并发写会把包写坏、
+     * 再原子改名成一份损坏的 jar。按 URL 取锁，后到的那条等前一条下完直接
+     * 命中缓存。
      */
-    private fun ensureJar(url: String, force: Boolean, expectedMd5: String = ""): File {
+    private fun ensureJar(url: String, force: Boolean, expectedMd5: String = ""): File =
+        synchronized(jarLocks.computeIfAbsent(url) { Any() }) {
+            ensureJarLocked(url, force, expectedMd5)
+        }
+
+    private fun ensureJarLocked(url: String, force: Boolean, expectedMd5: String): File {
         val want = expectedMd5.trim().lowercase()
         val target = File(jarDir(), "${sha1(url)}.jar")
         if (!force && target.isFile && target.length() > 0L) {
@@ -722,6 +761,18 @@ internal class VodSpiderBridge(
             }
             digest.digest().joinToString("") { "%02x".format(it) }
         }
+
+    /**
+     * 归一化配置里声明的 jar md5：只认 32 位十六进制，其余一律当「没声明」。
+     *
+     * 统一转小写是必须的：[md5Of] 输出小写十六进制，配置里大写 md5 如果原样
+     * 比对会永远不相等，于是每次加载都判定缓存过期、反复重下同一个包。
+     */
+    private fun normalizeMd5(raw: String): String {
+        val value = raw.trim().lowercase()
+        if (value.length != 32) return ""
+        return if (value.all { it in '0'..'9' || it in 'a'..'f' }) value else ""
+    }
 
     private fun ensureReadOnly(file: File) {
         if (file.canWrite()) {

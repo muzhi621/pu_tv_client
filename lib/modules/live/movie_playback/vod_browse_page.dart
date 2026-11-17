@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dpad/dpad.dart';
 import 'package:pure_live/exports/exports.dart';
 import 'package:pure_live/modules/live/movie_playback/vod_detail_page.dart';
 import 'package:pure_live/services/remote_config/remote_config.dart';
+import 'package:pure_live/services/vod/vod_jar_warmer.dart';
 
 /// 影音板块的点播浏览页。
 ///
@@ -45,6 +48,12 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
   bool _busy = false;
   String _error = '';
 
+  /// 正在为当前站点准备爬虫包（首次打开 csp_ 站点时会下载 jar）。
+  ///
+  /// 只用于把「转圈」变成「带解释的转圈」：否则用户看到的就是白屏转圈十几
+  /// 秒，以为是卡死。
+  bool _preparing = false;
+
   /// 空态里正在执行「重新获取配置」。
   bool _syncing = false;
 
@@ -57,6 +66,8 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
     if (_site != null) {
       _loadHome();
     }
+    // 其余站点的 jar 在后台预下：切站点时就不用再等下载了。
+    unawaited(VodJarWarmer.warm(_config));
     // 后台同步（心跳 / 回前台）拿到新配置时自动重建：否则页面停在启动瞬间
     // 读到的空配置上，用户只能靠杀进程重进——那正是「下发成功但没内容」的体感。
     RemoteConfigService.appliedRevision.addListener(_onRemoteConfigApplied);
@@ -80,6 +91,7 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
       _page = null;
       _error = '';
     });
+    unawaited(VodJarWarmer.warm(next));
     _loadHome();
   }
 
@@ -110,8 +122,12 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
     final site = _site;
     final engine = _engine;
     if (site == null || engine == null) return;
+    // 首次进这个 csp_ 站点时，jar 可能还没预热完，这一步会在原生侧同步下载。
+    // 拿它做「准备中」提示的依据：刷新同一个站点时 _home 已有值，不再提示。
+    final preparing = site.requiresSpiderJar && _home == null;
     setState(() {
       _busy = true;
+      _preparing = preparing;
       _error = '';
       _tid = '';
       _keyword = '';
@@ -124,6 +140,7 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
       setState(() {
         _home = home;
         _busy = false;
+        _preparing = false;
         if (home.isEmpty) _error = i18n('vod_site_empty');
       });
     } catch (error) {
@@ -131,6 +148,7 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
       setState(() {
         _home = null;
         _busy = false;
+        _preparing = false;
         _error = _messageOf(error);
       });
     }
@@ -210,9 +228,10 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
           .map((site) => TvSelectItem<VodSite>(
                 title: site.name,
                 value: site,
-                subtitle: site.requiresSpiderJar
-                    ? '${site.spiderKey} · ${i18n('vod_need_jar')}'
-                    : site.api,
+                // 爬虫站点只显示 spider 名：原来那句「需要爬虫 jar」是给开发
+                // 者看的，会在用户点之前就让他以为「还得先下载个东西」。
+                // jar 现在由 VodJarWarmer 在后台预热，用户不需要知道这件事。
+                subtitle: site.requiresSpiderJar ? site.spiderKey : site.api,
               ))
           .toList(),
     );
@@ -376,9 +395,7 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
   }
 
   Widget _buildContent(TvThemeData tvTheme) {
-    if (_busy) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (_busy) return _buildBusy(tvTheme);
     final items = _visibleItems;
     if (_error.isNotEmpty && items.isEmpty) {
       return Padding(
@@ -429,6 +446,37 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
           ),
         ),
       ],
+    );
+  }
+
+  /// 忙碌态。首次打开需要爬虫包的站点时多给一句解释，否则用户只看到白屏
+  /// 转圈，会以为是卡死（jar 在原生侧同步下载，最大可到几十 MB）。
+  Widget _buildBusy(TvThemeData tvTheme) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(),
+          if (_preparing) ...[
+            SizedBox(height: 20.ts(context)),
+            Text(
+              i18n('vod_preparing'),
+              style: AppTextStyles.t18.copyWith(
+                color: tvTheme.primaryTextColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(height: 8.ts(context)),
+            Text(
+              i18n('vod_preparing_hint'),
+              style: AppTextStyles.t16.copyWith(
+                color: tvTheme.secondaryTextColor,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

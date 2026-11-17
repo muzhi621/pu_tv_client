@@ -66,6 +66,22 @@ class VodConfig {
     return null;
   }
 
+  /// 预热用：所有 `csp_` 站点真正依赖的 jar（按 URL 去重）。
+  ///
+  /// 站点级 jar 覆盖源级 jar 的规则不在这里重写，一律走 [jarFor]，避免两处
+  /// 判定漂移——多仓聚合里各族站点自带 jar，漏掉哪一条都会让预热白做。
+  List<VodJarTarget> get jarTargets {
+    final seen = <String>{};
+    final out = <VodJarTarget>[];
+    for (final site in sites) {
+      if (!site.requiresSpiderJar) continue;
+      final String url = jarFor(site) ?? '';
+      if (url.isEmpty || !seen.add(url)) continue;
+      out.add(VodJarTarget(url: url, md5: spiderMd5For(site) ?? ''));
+    }
+    return out;
+  }
+
   /// 与 [jarFor] 同一条 jar 的 md5 校验和（配置里 `url;md5;<hash>` 的 hash）。
   String? spiderMd5For(VodSite site) {
     if (site.jar.isNotEmpty) return site.jarMd5.isEmpty ? null : site.jarMd5;
@@ -87,6 +103,20 @@ class VodConfig {
     }
     return grouped;
   }
+}
+
+/// 预热目标：一条 spider jar 地址 + 配置声明的 md5（可能为空）。
+///
+/// 单独建类而不是用 record，是因为它要跨 `vod_config` / `vod_jar_warmer` /
+/// 平台通道三层传递，具名字段读起来比 `(url, md5)` 元组清楚。
+class VodJarTarget {
+  const VodJarTarget({required this.url, this.md5 = ''});
+
+  final String url;
+  final String md5;
+
+  @override
+  String toString() => 'VodJarTarget($url, md5: ${md5.isEmpty ? '-' : md5})';
 }
 
 class VodSource {

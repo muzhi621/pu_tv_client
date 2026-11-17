@@ -80,6 +80,31 @@ class VodSpiderChannel {
     );
   }
 
+  /// 只把 jar 落到本地缓存（预热用），**不解析**里面的类名。
+  ///
+  /// 与 [inspectJar] 的区别很实在：inspectJar 会把每个 `classes*.dex` 全读一遍
+  /// 做类名扫描，几十 MB 的加固包在电视上要几百毫秒、还要白占内存。预热只需要
+  /// 「文件在不在、md5 对不对」，所以单开一条轻量通道。
+  ///
+  /// [jarMd5] 必须带配置里声明的校验和：缓存判定要和 [prepareSite] 完全一致，
+  /// 否则这里按「无 md5」下完，prepareSite 一比对不符又要重下一遍。
+  static Future<VodJarWarmup> warmupJar({
+    required String url,
+    String jarMd5 = '',
+  }) async {
+    final raw = await _invokeMap('warmupJar', <String, dynamic>{
+      'url': url,
+      'jarMd5': jarMd5,
+    });
+    if (raw == null || raw['ok'] != true) {
+      return VodJarWarmup.failed(_failureOf(raw));
+    }
+    return VodJarWarmup(
+      bytes: _asInt(raw['bytes']),
+      cached: raw['cached'] == true,
+    );
+  }
+
   /// 为一个站点建实例并完成 init。同一 `siteKey` 重复调用会复用已有实例，
   /// `force: true` 则销毁重建（换 ext 或 jar 更新后用）。
   ///
@@ -321,6 +346,24 @@ class VodCachedJar {
   final String name;
   final int bytes;
   final bool readOnly;
+}
+
+/// 预热结果：jar 是否已在本地、多大、这次有没有走网络。
+class VodJarWarmup {
+  const VodJarWarmup({this.failure, this.bytes = 0, this.cached = false});
+
+  factory VodJarWarmup.failed(VodSpiderFailure? failure) => VodJarWarmup(
+        failure: failure ??
+            const VodSpiderFailure(code: 'unknown', message: 'jar 预热失败'),
+      );
+
+  final VodSpiderFailure? failure;
+  final int bytes;
+
+  /// true 表示命中本地缓存，这次没有下载。
+  final bool cached;
+
+  bool get ok => failure == null;
 }
 
 class VodHostDiagnostics {
