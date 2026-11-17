@@ -293,6 +293,87 @@ class RemoteConfigService {
     } catch (error) {
       debugPrint('[RemoteConfig] TVBox 直连源准备失败（沿用云端站点）: $error');
     }
+
+    // 首页壁纸（全局背景）：独立于 navigation.managed，只看 wallpaper.enabled。
+    // 与 exitDialog 同一策略——seed 的 navigation.managed 默认为 false，不应因为
+    // 想下发一张壁纸就整节接管导航白名单。
+    try {
+      _applyWallpaper(document);
+    } catch (error) {
+      debugPrint('[RemoteConfig] 壁纸下发失败（沿用本地壁纸）: $error');
+    }
+  }
+
+  /// 应用云端壁纸到全局背景。
+  ///
+  /// - enabled + 合法 http(s) 地址：首次应用前保存本地背景快照，再设置为
+  ///   networkImage，并按云端配置覆盖模糊 / 遮罩 / boxFit。
+  /// - 关闭或无地址：若之前应用过云端壁纸（存在快照），还原用户本地背景。
+  ///
+  /// 幂等：以 URL + 样式签名做 stamp，心跳/前台恢复重复 apply 时跳过，
+  /// 避免反复 setNetworkImage 触发图片重下载与电视上的闪屏。
+  static void _applyWallpaper(RemoteConfigDocument document) {
+    // 极早期（迁移未完成）SettingsService 可能未就绪，跳过；下次心跳会补上。
+    if (!SettingsService.to.isInitialized) return;
+    // 不提前 return：wallpaper 节缺失（旧文档）时 _sub 返回 {}，下方 active=false，
+    // 会走到还原分支——这样云端后来撤掉壁纸配置时，本地背景也能恢复。
+    final wallpaper = _sub('navigation', 'wallpaper');
+
+    final enabled = rcBool(wallpaper['enabled'], false);
+    final rawUrl = rcString(wallpaper['imageUrl'], '');
+    final url = rawUrl.trim();
+    final isHttpUrl = url.startsWith('http://') || url.startsWith('https://');
+    final active = enabled && isHttpUrl;
+
+    if (!active) {
+      final snapshot = RemoteConfigStore.readWallpaperSnapshot();
+      if (snapshot != null) {
+        SettingsService.to.bg.importFromJson(snapshot);
+        RemoteConfigStore.clearWallpaperSnapshot();
+        _appliedWallpaperStamp = '';
+      }
+      return;
+    }
+
+    final boxFit = _boxFitFromString(rcString(wallpaper['boxFit'], 'cover'));
+    final blurSigma = rcInt(wallpaper['blurSigma'], 0).clamp(0, 60).toDouble();
+    final maskOpacity = rcInt(wallpaper['maskOpacityPercent'], 35).clamp(0, 100) / 100.0;
+    final stamp = '$url|$boxFit|$blurSigma|$maskOpacity';
+    if (_appliedWallpaperStamp == stamp) return;
+
+    // 首次应用前存本地快照（before 覆盖），关闭下发时还原。
+    RemoteConfigStore.saveWallpaperSnapshotOnce(SettingsService.to.bg.toJson());
+    final bg = SettingsService.to.bg;
+    bg.setNetworkImage(url);
+    bg.setBoxFit(boxFit);
+    bg.setBlurSigma(blurSigma);
+    bg.setMaskOpacity(maskOpacity);
+    _appliedWallpaperStamp = stamp;
+  }
+
+  /// 进程内记录上次应用的壁纸签名；冷启动时从缓存文档 apply 会重新设置一次，
+  /// 但那时本地背景已被上次下发写成同一张图，setNetworkImage 是幂等的。
+  static String _appliedWallpaperStamp = '';
+
+  /// 云端 boxFit 字符串到 Flutter BoxFit 的安全映射，非法值回退 cover。
+  static BoxFit _boxFitFromString(String value) {
+    switch (value) {
+      case 'contain':
+        return BoxFit.contain;
+      case 'fill':
+        return BoxFit.fill;
+      case 'fitWidth':
+        return BoxFit.fitWidth;
+      case 'fitHeight':
+        return BoxFit.fitHeight;
+      case 'scaleDown':
+        return BoxFit.scaleDown;
+      case 'none':
+        return BoxFit.none;
+      case 'cover':
+      default:
+        return BoxFit.cover;
+    }
   }
 
 

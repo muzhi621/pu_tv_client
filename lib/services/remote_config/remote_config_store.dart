@@ -21,6 +21,8 @@ class RemoteConfigKeys {
   static const String lastIptvStamp = 'remoteConfigLastIptvStamp';
   /// 云端 sections.iptv.epgUrl（XMLTV 源地址），由 EPG 模块消费。
   static const String epgUrl = 'remoteConfigEpgUrl';
+  /// 首次应用云端壁纸前保存的本地背景配置 JSON，关闭下发时用于还原。
+  static const String wallpaperSnapshot = 'remoteConfigWallpaperSnapshot';
 
   const RemoteConfigKeys._();
 }
@@ -154,5 +156,28 @@ class RemoteConfigStore {
     } catch (_) {
       return null;
     }
+  }
+
+  /// 首次应用云端壁纸前，保存一份用户本地背景配置；关闭下发时还原。
+  /// 用 once 语义：多次心跳重复 apply 不应覆盖最初的本地配置。
+  static void saveWallpaperSnapshotOnce(Map<String, dynamic> snapshot) {
+    final existing = HivePrefUtil.getString(RemoteConfigKeys.wallpaperSnapshot);
+    if (existing != null && existing.isNotEmpty) return;
+    HivePrefUtil.setString(RemoteConfigKeys.wallpaperSnapshot, jsonEncode(snapshot));
+  }
+
+  static Map<String, dynamic>? readWallpaperSnapshot() {
+    final raw = HivePrefUtil.getString(RemoteConfigKeys.wallpaperSnapshot);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static void clearWallpaperSnapshot() {
+    HivePrefUtil.remove(RemoteConfigKeys.wallpaperSnapshot);
   }
 }
