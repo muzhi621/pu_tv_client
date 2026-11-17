@@ -750,6 +750,45 @@ class RemoteConfigService {
   static List<String> get updateMirrorUrls =>
       updateManaged ? rcStringList(_section('update')['mirrorUrls']) : <String>[];
 
+  /// 更新源：cloud / github / mirror / custom / upload。
+  ///
+  /// 老配置没有这个字段，按 cloud 处理 —— 行为与原来完全一致（终端只访问本域名）。
+  /// 非法取值也回落 cloud，避免一个手抖的字符串把检查更新整条掐断。
+  static String get updateSource {
+    if (!updateManaged) return 'cloud';
+    final value = rcString(_section('update')['source'], 'cloud').trim();
+    return const <String>['cloud', 'github', 'mirror', 'custom', 'upload'].contains(value)
+        ? value
+        : 'cloud';
+  }
+
+  /// 自定义清单地址（custom / upload 用它；cloud 模式也可以覆盖默认端点）。
+  static String get updateManifestUrl =>
+      updateManaged ? rcString(_section('update')['manifestUrl'], '').trim() : '';
+
+  /// GitHub 反代前缀（source=mirror 时拼在 GitHub 地址前面）。
+  static String get updateMirrorPrefix {
+    if (!updateManaged) return '';
+    final value = rcString(_section('update')['mirrorPrefix'], '').trim();
+    if (value.isEmpty || !value.startsWith('https://')) return '';
+    return value.endsWith('/') ? value : '$value/';
+  }
+
+  /// 按 ABI 的安装包直链（留空 = 用清单里的 release 资产）。
+  ///
+  /// 填了就是「终端只认这个地址」：适合把 APK 放到自己的 CDN/网盘，彻底不依赖 GitHub。
+  static Map<String, String> get updateDownloadUrls {
+    if (!updateManaged) return const <String, String>{};
+    final raw = _section('update')['downloads'];
+    if (raw is! Map) return const <String, String>{};
+    final result = <String, String>{};
+    for (final abi in const <String>['arm64-v8a', 'armeabi-v7a']) {
+      final value = rcString(raw[abi], '').trim();
+      if (value.startsWith('http')) result[abi] = value;
+    }
+    return result;
+  }
+
   static bool get updateAllowUserOverride =>
       updateManaged ? rcBool(_section('update')['allowUserOverride'], true) : true;
 

@@ -6,6 +6,8 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:path/path.dart' as path;
 import 'package:pure_live/core/models/release_model/release_model.dart';
+import 'package:pure_live/core/utils/version_util.dart';
+import 'package:pure_live/services/remote_config/remote_config_service.dart';
 
 enum AppUpdatePhase { idle, checking, upToDate, available, downloading, readyToInstall, failed }
 
@@ -41,6 +43,45 @@ const List<String> appUpdateAssetMirrors = [
     'https://git.yylx.win/',
     'https://g.blfrp.cn/',
   ];
+
+/// 当前该用哪一组下载镜像前缀。
+///
+/// 云端清单下发的优先：反代经常挂，放在云端就能一次换掉全部终端的镜像，不用发版；
+/// 云端清单没拿到（离线 / 云端不可达）时才用 APK 内置列表。
+List<String> effectiveAssetMirrors() {
+  final cloud = VersionUtil.cloudDownloadPrefixes;
+  if (cloud.isNotEmpty) return cloud;
+  // 云端把更新源指到某个反代时，下载也走同一家：清单和包在同一个域名下，
+  // 能用就是都能用，免得清单拿到了、包还在原地打转。
+  final prefix = RemoteConfigService.updateMirrorPrefix;
+  if (RemoteConfigService.updateSource == 'mirror' && prefix.isNotEmpty) {
+    return <String>[prefix];
+  }
+  return appUpdateAssetMirrors;
+}
+
+/// 云端清单里的 `assets` 数组 → 可下载的 APK 资产。
+///
+/// 字段与 GitHub Releases API 一致（`name` / `url` / `size` / `digest`），所以云端
+/// 代取之后客户端不必再请求 api.github.com。非 APK 条目直接丢弃。
+List<ReleaseAssetInfo> parseAssetList(Object? raw) {
+  if (raw is! List) return const <ReleaseAssetInfo>[];
+  final result = <ReleaseAssetInfo>[];
+  for (final entry in raw) {
+    if (entry is! Map) continue;
+    final name = '${entry['name'] ?? ''}'.trim();
+    final url = '${entry['url'] ?? ''}'.trim();
+    if (name.isEmpty || !url.startsWith('http')) continue;
+    if (!isApkAsset(name, url)) continue;
+    result.add(ReleaseAssetInfo(
+      name: name,
+      url: url,
+      sizeBytes: (entry['size'] as num?)?.toInt() ?? 0,
+      sha256: parseAssetDigest(entry['digest']),
+    ));
+  }
+  return result;
+}
 
 
 class AppUpdateRecord {
@@ -356,8 +397,8 @@ String _truncateUtf8(String value, int maxBytes) {
 }
 
 /// The mirror prefix [url] already carries, '' when it is the plain github url.
-String _mirrorPrefixOf(String url) {
-  for (final String mirror in appUpdateAssetMirrors) {
+String _mirrorPrefixOf(String url, List<String> mirrors) {
+  for (final String mirror in mirrors) {
     if (url.startsWith(mirror)) return mirror;
   }
   return '';
@@ -368,17 +409,20 @@ String _mirrorPrefixOf(String url) {
 /// [url] is either a plain release url or one already behind a mirror — the
 /// download page builds its sources that way. The picked source goes first when
 /// [preferGivenUrl] ("source 3" really means source 3), the remaining mirrors
-/// follow, and the plain origin is always last.
+/// follow, and the plain origin is always last. [mirrors] 为 null 时用
+/// [effectiveAssetMirrors]（云端下发优先）；传空列表表示只走原始地址
+/// （用户显式选择「直连 GitHub，不走镜像」）。
 ///
 /// Every candidate is built from the github url the given one wraps: a proxy
 /// prefix stacked on an already prefixed url (`proxy/proxy/github.com/…`) is a
 /// request no proxy can serve, which used to leave the fallback chain dead.
-List<String> downloadCandidates(String url, {bool preferGivenUrl = false}) {
-  final String used = _mirrorPrefixOf(url);
+List<String> downloadCandidates(String url, {bool preferGivenUrl = false, List<String>? mirrors}) {
+  final List<String> pool = mirrors ?? effectiveAssetMirrors();
+  final String used = _mirrorPrefixOf(url, pool);
   final String origin = used.isEmpty ? url : url.substring(used.length);
   return <String>[
     if (preferGivenUrl) url,
-    for (final String mirror in appUpdateAssetMirrors)
+    for (final String mirror in pool)
       if (mirror != used) '$mirror$origin',
     origin,
   ];

@@ -7,6 +7,7 @@ import 'package:flutter_screenutil_plus/flutter_screenutil_plus.dart';
 import 'package:pure_live/services/app_update/app_update_service.dart';
 import 'package:pure_live/services/app_settings/app_settings_controller.dart';
 import 'package:pure_live/features/settings/pages/widgets/app_download_sections.dart';
+import 'package:pure_live/core/utils/version_util.dart';
 
 /// The download page behind the update page's current-version row - the TV twin of the mobile
 /// app's version update page: a platform card with one section per ABI, every
@@ -182,7 +183,9 @@ class AppDownloadPage extends ConsumerWidget {
   ) {
     final String? origin = controller.resolveAssetUrl(abi);
     if (origin == null || !origin.startsWith('http')) return const <String>[];
-    if (useOrigin) return <String>[origin];
-    return <String>[for (final String mirror in appUpdateAssetMirrors) '$mirror$origin', origin];
+    // ABI 直链是用户指定的完整地址（自己的 CDN/网盘），套镜像前缀只会拼出坏地址。
+    if (useOrigin || VersionUtil.isCustomDownloadUrl(origin)) return <String>[origin];
+    // 镜像前缀以云端清单下发的为准（可在云端换源），没有时用 APK 内置列表。
+    return <String>[for (final String mirror in effectiveAssetMirrors()) '$mirror$origin', origin];
   }
 }

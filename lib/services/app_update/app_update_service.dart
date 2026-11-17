@@ -8,8 +8,8 @@ import 'package:pure_live/core/common/api_proxy_policy.dart';
 import 'dart:io';
 import 'package:pure_live/core/i18n/locale_helper.dart';
 import 'package:pure_live/core/platform/file_utils.dart';
-import 'package:pure_live/services/settings/settings.dart';
 import 'package:pure_live/core/utils/version_util.dart';
+import 'package:pure_live/services/remote_config/remote_config_service.dart';
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:pure_live/core/utils/hive_pref_util.dart';
@@ -242,14 +242,29 @@ class AppUpdateController extends _$AppUpdateController {
   /// of the proxies (the same prefixes the download path uses, in front of
   /// `api.github.com`). Returns null when no candidate answered.
   Future<List<ReleaseAssetInfo>?> _fetchLatestReleaseAssets() async {
+    // 云端清单已经带回了最新 release 的资产（含 size 与 digest），直接用：
+    // 这一步原来是更新页最常见的失败点——国内直连 api.github.com 基本不通。
+    // 直连 / 镜像模式下云端资产作废：那是上一轮云端清单留下的，
+    // 用它们会把「按 GitHub 拿最新」变成「按旧清单拿」。
+    final source = RemoteConfigService.updateSource;
+    final cloudAssets = (source == 'github' || source == 'mirror')
+        ? const <ReleaseAssetInfo>[]
+        : parseAssetList(VersionUtil.cloudAssets);
+    if (cloudAssets.isNotEmpty) {
+      final abis = cloudAssets.map((a) => a.abi).whereType<String>().toSet().toList()..sort();
+      _patchState(latestAssets: cloudAssets, abis: abis.isNotEmpty ? abis : null);
+      return cloudAssets;
+    }
+
     final api =
         'https://api.github.com/repos/${VersionUtil.updateOwner}/${VersionUtil.updateRepository}/releases?per_page=10';
+    final mirrors = effectiveAssetMirrors();
     final candidates = <String>[
-      if (SettingsService.to.appState.useGitHubOriginForUpdates) api,
-      for (final mirror in appUpdateAssetMirrors) '$mirror$api',
+      if (VersionUtil.prefersDirectGitHub) api,
+      for (final mirror in mirrors) '$mirror$api',
       // The origin last for the mirrored list: it is the slowest path from a
       // TV box, but a correct answer beats a fast failure.
-      if (!SettingsService.to.appState.useGitHubOriginForUpdates) api,
+      if (!VersionUtil.prefersDirectGitHub) api,
     ];
     for (final url in candidates) {
       final dio = _dioForApi();
@@ -316,10 +331,31 @@ class AppUpdateController extends _$AppUpdateController {
   Future<void> loadHistory() async {
     if (state.historyLoading) return;
     _patchState(historyLoading: true, historyError: null);
+
+    // 云端清单里的 releases 与仓库的 releases.json 同形，直接用，省掉一次 GitHub 访问。
+    if (VersionUtil.cloudReleases.isNotEmpty) {
+      try {
+        final releases = parseReleaseHistoryPayload(VersionUtil.cloudReleases);
+        if (releases.isNotEmpty) {
+          _patchState(history: releases, historyLoading: false);
+          return;
+        }
+      } catch (_) {
+        // 云端历史解析失败就落到下面走 GitHub，不影响版本检查本身。
+      }
+    }
+
     try {
       final mirror = VersionUtil.mirror;
-      final useOrigin = SettingsService.to.appState.useGitHubOriginForUpdates;
-      final sources = useOrigin ? [mirror.rawUrl('assets/releases.json')] : mirror.mirrors('assets/releases.json');
+      final useOrigin = VersionUtil.prefersDirectGitHub;
+      final prefix = RemoteConfigService.updateMirrorPrefix;
+      final sources = useOrigin
+          ? <String>[mirror.rawUrl('assets/releases.json')]
+          // mirror 模式：云端指定的反代放最前面，后面照旧跟上内置镜像。
+          : <String>[
+              if (prefix.isNotEmpty) '$prefix${mirror.rawUrl('assets/releases.json')}',
+              ...mirror.mirrors('assets/releases.json'),
+            ];
       final url = await RaceHttp.findFastestUrl([
         for (final s in sources) '$s?ts=${DateTime.now().millisecondsSinceEpoch}',
       ]);
@@ -397,6 +433,11 @@ class AppUpdateController extends _$AppUpdateController {
   String? resolveAssetUrl([String? abiOverride]) {
     final String abi = (abiOverride ?? state.selectedAbi).trim().toLowerCase();
     final String renderer = state.rendererVariant;
+
+    // 云端按 ABI 配了直链就以它为准：APK 放在自己的 CDN/网盘时，终端根本不碰
+    // GitHub，也不该再被套上反代前缀。
+    final String configured = VersionUtil.downloadUrlForAbi(abi);
+    if (configured.isNotEmpty) return configured;
 
     final List<({String name, String url})> published = <({String name, String url})>[
       for (final ReleaseAssetInfo asset in state.latestAssets)
@@ -578,7 +619,16 @@ class AppUpdateController extends _$AppUpdateController {
     }
 
     final fileName = safeDownloadFileName(url);
-    final candidates = downloadCandidates(url, preferGivenUrl: preferGivenUrl);
+    // 用户显式选了「直连 GitHub，不走镜像」时只留原始地址；否则云端下发的镜像
+    // 优先（反代挂了在云端改一次就全终端生效，不用等发版）。
+    // ABI 直链是用户指定的完整地址（自己的 CDN/网盘），套前缀只会拼出坏地址。
+    final bool directOnly = VersionUtil.prefersDirectGitHub
+        || VersionUtil.isCustomDownloadUrl(url);
+    final candidates = downloadCandidates(
+      url,
+      preferGivenUrl: preferGivenUrl,
+      mirrors: directOnly ? const <String>[] : effectiveAssetMirrors(),
+    );
 
     _cancelToken = CancelToken();
     // The APK download is an interface request like any other: behind a

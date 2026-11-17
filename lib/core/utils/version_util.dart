@@ -86,12 +86,112 @@ class VersionUtil {
 
   static final GitHubMirror mirror = GitHubMirror(owner: updateOwner, repo: updateRepository, branch: 'main');
 
+  /// 终端取「云端清单」的候选地址，由云端下发的更新源决定。
+  ///
+  /// - `cloud`（默认）：`manifestUrl` 或本域名 `/api/update`，由云端出网代取 GitHub；
+  /// - `upload`：编辑器上传到云端的清单，读 `/api/update/manifest`；
+  /// - `custom`：只认 `manifestUrl`（没填时退回云端端点，别让检查更新直接失败）；
+  /// - `github` / `mirror`：不走云端清单，直接问 GitHub（见 [_versionUrls]）。
+  ///
+  /// 空列表 = 这次不该走云端清单，调用方退回内置 GitHub 镜像。
+  static List<String> get cloudManifestUrls {
+    final source = RemoteConfigService.updateSource;
+    if (source == 'github' || source == 'mirror') return const <String>[];
+
+    final custom = sanitizeRemoteUrl(RemoteConfigService.updateManifestUrl);
+    if (custom.isNotEmpty) return <String>[custom];
+
+    // 云端只是「一个清单端点」时：用户另填了完整的 version.json URL 列表，
+    // 说明他明确指定了来源，保持老行为（不抢这份活）。
+    if (source == 'cloud' && RemoteConfigService.updateMirrorUrls.isNotEmpty) {
+      return const <String>[];
+    }
+
+    final base = _endpointBase;
+    if (base.isEmpty) return const <String>[];
+    if (source == 'upload') return <String>['$base/api/update/manifest'];
+    return <String>['$base/api/update'];
+  }
+
+  static String get _endpointBase =>
+      RemoteConfigStore.endpoint.trim().replaceAll(RegExp(r'/+$'), '');
+
+  /// 云端下发的外部地址只接受 http(s)、无空白、有长度上限。
+  ///
+  /// 配置本身需要写令牌才能改，但清单地址直接决定终端向谁要版本与下载前缀，
+  /// 收窄 scheme 的成本很低，没必要留 `file:` / `javascript:` 这种可能性。
+  static String sanitizeRemoteUrl(String raw) {
+    final value = raw.trim();
+    if (value.isEmpty || value.length > 500) return '';
+    if (!value.startsWith('https://') && !value.startsWith('http://')) return '';
+    if (RegExp(r'[\s\u0000-\u001f\u007f]').hasMatch(value)) return '';
+    return value;
+  }
+
+  /// 是否只走 GitHub 原始地址（云端 `source=github`，或用户显式选择直连）。
+  ///
+  /// 云端 `source=github` 时听云端的；否则看设置页开关（云端禁止本地覆盖时忽略用户）。
+  ///
+  /// 更新页取资产、下载历史也要认这个值：只让「检查更新」直连、下载仍走反代，
+  /// 会出现版本号拿到了、包却下不动的情况。
+  static bool get prefersDirectGitHub => _directGitHub;
+
+  static bool get _directGitHub {
+    if (RemoteConfigService.updateSource == 'github') return true;
+    if (!RemoteConfigService.updateAllowUserOverride) return false;
+    return SettingsService.to.appState.useGitHubOriginForUpdates;
+  }
+
+  /// 云端清单带回的最新 release 资产（GitHub API 字段原样）。
+  ///
+  /// 非空时更新页不再访问 api.github.com——那里既有墙也有未鉴权限额。
+  /// 只在云端清单命中时填充；直连 GitHub 的 version.json 没有这些字段。
+  static List<Map<String, dynamic>> cloudAssets = const <Map<String, dynamic>>[];
+
+  /// 云端清单带回的历史版本（与 `assets/releases.json` 同形）。
+  static List<Map<String, dynamic>> cloudReleases = const <Map<String, dynamic>>[];
+
+  /// 云端指定的下载镜像前缀；空表示沿用 APK 内置列表。
+  ///
+  /// 反代经常挂，放在云端就能一次改全部终端，不用发版。
+  static List<String> cloudDownloadPrefixes = const <String>[];
+
+  /// 最近一次命中的清单来源（`github` / `proxy` / `static`，空=非云端清单）。
+  static String cloudSource = '';
+
+  /// 云端按 ABI 下发的安装包直链；空串 = 没配，用清单里的 release 资产。
+  ///
+  /// 用于「APK 放自己的 CDN/网盘」：更新源怎么配都不影响它，终端直接下这个地址。
+  static String downloadUrlForAbi(String abi) {
+    final key = abi.trim().toLowerCase();
+    return RemoteConfigService.updateDownloadUrls[key] ?? '';
+  }
+
+  /// 这个地址是不是云端下发的 ABI 直链。
+  ///
+  /// 直链是用户指定的完整地址，不能套 GitHub 反代前缀——拼出来必然是坏地址。
+  static bool isCustomDownloadUrl(String url) {
+    final value = url.trim();
+    if (value.isEmpty) return false;
+    return RemoteConfigService.updateDownloadUrls.containsValue(value);
+  }
+
   static List<String> get _versionUrls {
+    // mirror 模式：把云端下发的反代前缀放在最前面，后面照旧跟上内置镜像，
+    // 前缀那家挂了也不会卡死（RaceHttp 会接着试）。
+    final prefix = RemoteConfigService.updateMirrorPrefix;
+    if (RemoteConfigService.updateSource == 'mirror' && prefix.isNotEmpty && !_directGitHub) {
+      return <String>[
+        '$prefix${mirror.rawUrl('assets/version.json')}',
+        ...mirror.mirrors('assets/version.json'),
+      ];
+    }
+
     // 云端下发的是完整的 version.json URL 列表，优先于内置 GitHub 镜像。
     final remote = RemoteConfigService.updateMirrorUrls;
-    if (remote.isNotEmpty) return remote;
-    return SettingsService.to.appState.useGitHubOriginForUpdates
-        ? [mirror.rawUrl('assets/version.json')]
+    if (remote.isNotEmpty && !_directGitHub) return remote;
+    return _directGitHub
+        ? <String>[mirror.rawUrl('assets/version.json')]
         : mirror.mirrors('assets/version.json');
   }
 
@@ -175,6 +275,25 @@ class VersionUtil {
       }
     }
 
+    // 云端清单优先且单独走一次：它带回了版本号、release 资产、历史与下载镜像，
+    // 一次请求就够，不必再让终端去连 api.github.com。
+    // 例外都在 cloudManifestUrls 里判掉了：直连 GitHub、mirror 模式、自己指定了
+    // version.json 列表——这几种情况不抢它们的活。
+    final cloud = _directGitHub || cloudManifestUrls.isEmpty
+        ? null
+        : await _fetchCloudManifest();
+    if (cloud != null) {
+      try {
+        _applyVersionData(cloud);
+        _cachedVersionJson = cloud;
+        _setHasNewVersion(hasNewVersion());
+        debugPrint('🏁 Update manifest from cloud (${cloudSource.isEmpty ? 'cloud' : cloudSource})');
+        return true;
+      } catch (e) {
+        debugPrint('⚠️ Cloud manifest unusable, falling back to GitHub: $e');
+      }
+    }
+
     try {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final urls = _versionUrls.map((e) => '$e?ts=$timestamp').toList();
@@ -205,7 +324,58 @@ class VersionUtil {
     }
   }
 
+  /// 拉云端更新清单；没配端点、超时或解析失败时返回 null 交给 GitHub 兜底。
+  ///
+  /// 不加 `?ts=` 时间戳：这个端点由 CDN 缓存，加上时间戳等于每次都穿透到函数，
+  /// 白白浪费一次 GitHub 访问。清单只在发版时变，缓存几分钟没有副作用。
+  static Future<Map<String, dynamic>?> _fetchCloudManifest() async {
+    final urls = cloudManifestUrls;
+    if (urls.isEmpty) return null;
+    try {
+      final data = await RaceHttp.fetchJson(
+        urls,
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 8));
+      if (data == null) return null;
+      // 云端没给出可用版本号 = 这份清单没用，别让后面的解析把「检查更新」判成成功。
+      final version = data['version']?.toString().trim() ?? '';
+      if (version.isEmpty) return null;
+      return data;
+    } catch (error) {
+      debugPrint('⚠️ Cloud manifest unavailable, falling back to GitHub: $error');
+      return null;
+    }
+  }
+
+  /// 记录云端清单附带的三份附加信息（资产 / 历史 / 下载镜像）。
+  ///
+  /// 每次都按 data 整体赋值（缺字段即清空）：来源可能是云端、也可能退化成
+  /// GitHub 直连的 version.json，后者没有这些字段，留着上一轮的值会把旧资产
+  /// 当成新版本的。
+  static void _applyCloudExtras(Map<String, dynamic> data) {
+    cloudSource = data['source']?.toString().trim() ?? '';
+    cloudAssets = _mapEntries(data['assets']);
+    cloudReleases = _mapEntries(data['releases']);
+    final prefixes = data['downloadPrefixes'];
+    cloudDownloadPrefixes = prefixes is List
+        ? prefixes
+            .map((item) => item.toString().trim())
+            .where((item) => item.startsWith('https://'))
+            .toList(growable: false)
+        : const <String>[];
+  }
+
+  static List<Map<String, dynamic>> _mapEntries(Object? raw) {
+    if (raw is! List) return const <Map<String, dynamic>>[];
+    final result = <Map<String, dynamic>>[];
+    for (final entry in raw) {
+      if (entry is Map) result.add(Map<String, dynamic>.from(entry));
+    }
+    return result;
+  }
+
   static void _applyVersionData(Map<String, dynamic> data) {
+    _applyCloudExtras(data);
     final selected = selectPlatformVersionData(data, platform: _currentPlatformKey);
     final parsedVersion = selected['version']?.toString().trim() ?? '';
     if (parsedVersion.isEmpty) {
@@ -317,6 +487,12 @@ class VersionUtil {
     downloadUrl = '';
     latestAndroidAbis = const {};
     latestWindowsMsixAvailable = false;
+    // 清单没拿到就别留着上一份资产/历史：那属于另一个版本，混着用会给出
+    // 对不上号的下载地址与校验和。
+    cloudAssets = const <Map<String, dynamic>>[];
+    cloudReleases = const <Map<String, dynamic>>[];
+    cloudDownloadPrefixes = const <String>[];
+    cloudSource = '';
     _setHasNewVersion(false);
   }
 }

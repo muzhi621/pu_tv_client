@@ -12,6 +12,7 @@ import 'package:pure_live/services/settings/settings.dart';
 import 'package:pure_live/core/models/release_model/release_model.dart';
 import 'package:pure_live/core/theme/index.dart';
 import 'package:pure_live/core/utils/hive_pref_util.dart';
+import 'package:pure_live/core/utils/version_util.dart';
 import 'package:pure_live/core/widgets/index.dart';
 
 /// The online-update version history, plus the device record above it.
@@ -189,6 +190,79 @@ void main() {
         expect(plain || singleProxy, isTrue, reason: 'a proxy in front of a proxy cannot serve: $candidate');
       }
       expect(candidates, contains(url), reason: 'the plain origin is the last resort');
+    });
+  });
+
+  group('云端清单（GET /api/update）', () {
+    const String release = 'https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.42';
+
+    tearDown(() {
+      VersionUtil.cloudDownloadPrefixes = const <String>[];
+    });
+
+    test('清单地址只接受 http(s)，空白与控制字符一律丢弃', () {
+      // 这个地址决定终端向谁要版本号与下载前缀，收窄 scheme 的成本很低。
+      expect(VersionUtil.sanitizeRemoteUrl(' https://cdn.example.com/m.json '),
+          'https://cdn.example.com/m.json');
+      expect(VersionUtil.sanitizeRemoteUrl('http://192.168.1.9:8080/api/update'),
+          'http://192.168.1.9:8080/api/update',
+          reason: '内网自建要能用 http');
+      expect(VersionUtil.sanitizeRemoteUrl('ftp://x/y.json'), isEmpty);
+      expect(VersionUtil.sanitizeRemoteUrl('file:///etc/passwd'), isEmpty);
+      expect(VersionUtil.sanitizeRemoteUrl('https://a.example.com/a b.json'), isEmpty);
+      expect(VersionUtil.sanitizeRemoteUrl('https://a.example.com/\nX'), isEmpty);
+      expect(VersionUtil.sanitizeRemoteUrl(''), isEmpty);
+      expect(VersionUtil.sanitizeRemoteUrl('https://a.example.com/${'x' * 400}.json'), isEmpty,
+          reason: '超长地址直接拒，避免把配置当请求走私通道');
+    });
+
+    test('下载镜像以云端下发的为准，没有时才用内置列表', () {
+      expect(effectiveAssetMirrors(), appUpdateAssetMirrors, reason: '没拿到云端清单时行为不变');
+
+      VersionUtil.cloudDownloadPrefixes = const <String>['https://cdn.example.com/'];
+      expect(effectiveAssetMirrors(), <String>['https://cdn.example.com/']);
+
+      final candidates = downloadCandidates('$release/SUTV-arm64-v8a-impeller.apk');
+      expect(candidates, <String>[
+        'https://cdn.example.com/$release/SUTV-arm64-v8a-impeller.apk',
+        '$release/SUTV-arm64-v8a-impeller.apk',
+      ]);
+    });
+
+    test('显式直连时只留原始地址，不套任何前缀', () {
+      VersionUtil.cloudDownloadPrefixes = const <String>['https://cdn.example.com/'];
+      final candidates = downloadCandidates(
+        '$release/SUTV-arm64-v8a-impeller.apk',
+        mirrors: const <String>[],
+      );
+      expect(candidates, <String>['$release/SUTV-arm64-v8a-impeller.apk']);
+    });
+
+    test('云端资产只保留 APK，digest 归一化成十六进制', () {
+      final String sha = List<String>.filled(64, 'a').join();
+      final List<ReleaseAssetInfo> assets = parseAssetList(<dynamic>[
+        <String, dynamic>{
+          'name': 'SUTV-arm64-v8a-impeller.apk',
+          'url': '$release/SUTV-arm64-v8a-impeller.apk',
+          'size': 26992940,
+          'digest': 'sha256:${sha.toUpperCase()}',
+        },
+        <String, dynamic>{
+          'name': 'source.zip',
+          'url': '$release/source.zip',
+          'size': 1024,
+        },
+        // 云端被改坏时的脏数据：不能进下载候选
+        <String, dynamic>{'name': 'x.apk', 'url': 'ftp://x/y.apk'},
+      ]);
+
+      expect(assets.length, 1);
+      expect(assets.first.name, 'SUTV-arm64-v8a-impeller.apk');
+      expect(assets.first.abi, 'arm64-v8a');
+      expect(assets.first.renderer, 'impeller');
+      expect(assets.first.sizeBytes, 26992940);
+      expect(assets.first.sha256, sha.toLowerCase(), reason: 'digest 大小写不该影响校验');
+      expect(parseAssetList(null), isEmpty);
     });
   });
 
