@@ -372,16 +372,15 @@ internal class VodSpiderBridge(
             ?: throw IllegalArgumentException("缺少 api")
         val jarUrl = requireUrl(call.argument<String>("jarUrl"))
         val ext = call.argument<String>("ext").orEmpty()
-        val jarMd5 = call.argument<String>("jarMd5").orEmpty().trim()
-        // 2026-11-16 审查阻断项：md5 从可选改为必填。HTTPS 挡传输层中间人，
-        // md5 挡缓存投毒/源站被换包；缺一不可。诊断接口 inspect 不加载 dex，
-        // 故不强制，但凡是 prepare（会 DexClassLoader 加载）必须有校验和。
-        if (jarMd5.length != 32 || !jarMd5.all { it in '0'..'9' || it in 'a'..'f' }) {
-            throw BridgeException(
-                "jar_md5_missing",
-                "spider jar 缺少合法的 32 位 md5 校验和，已拒绝加载。请在资源库该源的 jar 地址后补上 ;md5;<32位十六进制>。",
-                null,
-            )
+        val rawMd5 = call.argument<String>("jarMd5").orEmpty().trim()
+        // 2026-11-17 业务要求：为保证源可用性，取消「md5 必填」。
+        // 仍兼容 TVBox 配置里的 `url;md5;<hash>`：提供合法 32 位十六进制时继续做完整性
+        // 校验；缺失或格式不合法时按空处理——ensureJar 对空 want 会跳过 md5 比对直接加载。
+        // 若要恢复强制校验，改回「长度≠32 或含非 hex 即 throw jar_md5_missing」即可。
+        val jarMd5 = if (rawMd5.length == 32 && rawMd5.all { it in '0'..'9' || it in 'a'..'f' }) {
+            rawMd5
+        } else {
+            ""
         }
         val force = call.argument<Boolean>("force") == true
 
@@ -1098,11 +1097,15 @@ internal class VodSpiderBridge(
         val value = raw?.trim().orEmpty()
         val parsed = runCatching { URI(value) }.getOrNull()
             ?: throw BridgeException("jar_url_invalid", "jarUrl 不是合法地址：「$value」", null)
-        // 强制 HTTPS：明文下载 jar 可被中间人替换成任意 dex。
-        if (!"https".equals(parsed.scheme, ignoreCase = true)) {
+        // 2026-11-17 业务要求：为保证源可用性，取消「强制 HTTPS」，允许 http 明文下载。
+        // 原审查项（2026-11-16）的顾虑是明文 jar 可被中间人替换成任意 dex；现按业务
+        // 需要放开，仍保留 URL 合法性、禁止账号密码、私网/环回拦截等兜底。若要恢复
+        // 强制 HTTPS，把此处改回 `if (scheme != "https")` 即可。
+        val scheme = parsed.scheme?.lowercase().orEmpty()
+        if (scheme != "http" && scheme != "https") {
             throw BridgeException(
                 "jar_url_insecure",
-                "spider jar 只支持 HTTPS 地址，已拒绝明文/非 http(s) 地址「$value」。请在资源库里改用 https 源。",
+                "spider jar 仅支持 http/https 地址，收到「$value」。",
                 null,
             )
         }
@@ -1211,10 +1214,10 @@ internal class VodSpiderBridge(
             }
             "jar_not_readonly" -> "jar 未能置为只读，Android 14+ 会拒绝 DexClassLoader 加载。"
             "jar_md5_mismatch" -> "jar 与配置声明的 md5 不一致。等源站镜像同步，或在资源库里更新该源的 jar 地址。"
-            "jar_md5_missing" -> "配置未声明 jar 的 md5。安全策略要求每个 spider jar 都带 32 位 md5 校验和，请更新云端资源库。"
-            "jar_url_insecure" -> "jar 地址必须用 HTTPS。明文 HTTP 下载可被中间人替换，已出于安全原因拒绝。"
+            "jar_md5_missing" -> "配置未声明 jar 的 md5。当前策略已放宽为可选，此提示一般不再出现。"
+            "jar_url_insecure" -> "jar 地址仅支持 http/https 协议，请检查资源库该源的 jar 地址。"
             "jar_url_private" -> "jar 地址指向本机或内网，已被安全策略拒绝。"
-            "jar_url_invalid" -> "jar 地址不合法（需为不含账号密码的 https URL）。"
+            "jar_url_invalid" -> "jar 地址不合法（需为不含账号密码的 http(s) URL）。"
             else -> null
         }
         return mapOf(
