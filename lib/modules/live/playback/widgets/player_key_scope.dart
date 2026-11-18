@@ -175,9 +175,11 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
         AndroidTvKeys.keyCodeDpadRight => LogicalKeyboardKey.arrowRight,
         AndroidTvKeys.keyCodeDpadCenter ||
         AndroidTvKeys.keyCodeEnter ||
-        AndroidTvKeys.keyCodeNumpadEnter ||
-        AndroidTvKeys.keyCodeMenu =>
+        AndroidTvKeys.keyCodeNumpadEnter =>
           LogicalKeyboardKey.select,
+        // 菜单键单独成一个逻辑键：以前它和 OK 共用 select，遥控器按菜单键
+        // 只会弹控制条，永远开不出频道列表（电视上「菜单键呼出列表」落空）。
+        AndroidTvKeys.keyCodeMenu => LogicalKeyboardKey.contextMenu,
         _ => null,
       };
 
@@ -186,6 +188,7 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
         LogicalKeyboardKey.arrowDown => PhysicalKeyboardKey.arrowDown,
         LogicalKeyboardKey.arrowLeft => PhysicalKeyboardKey.arrowLeft,
         LogicalKeyboardKey.arrowRight => PhysicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.contextMenu => PhysicalKeyboardKey.contextMenu,
         _ => PhysicalKeyboardKey.enter,
       };
 
@@ -245,6 +248,22 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     final state = ref.read(livePlayControllerProvider(widget.args));
     final controller = ref.read(livePlayControllerProvider(widget.args).notifier);
     final key = event.logicalKey;
+
+    // 遥控器菜单键 = 频道列表的专用开关，放在所有状态分支之前，保证失败
+    // 浮层、控制条、侧栏开着时它都优先响应（以前菜单键被当成 OK，只弹控制条）。
+    // 再按一次收起；点播没有频道列表，保留「菜单键弹控制条」的旧行为。
+    if (key == LogicalKeyboardKey.contextMenu) {
+      if (widget.args.vod) {
+        controller.showControls();
+        return KeyEventResult.handled;
+      }
+      if (state.showSidePanel) {
+        controller.toggleSidePanel();
+      } else {
+        unawaited(_openChannelList(controller));
+      }
+      return KeyEventResult.handled;
+    }
 
     // A panel with its own index handling consumes its keys first; what reaches
     // here while a panel is open is Left/Escape, which closes it (room info has no
