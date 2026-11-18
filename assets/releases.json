@@ -18,10 +18,22 @@
         "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.47/SUTV-arm64-v8a-impeller.apk"
       },
       {
+        "name": "SUTV-arm64-v8a-skia",
+        "size": "25.76mb",
+        "downloads": 0,
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.47/SUTV-arm64-v8a-skia.apk"
+      },
+      {
         "name": "SUTV-armeabi-v7a-impeller",
         "size": "24.81mb",
         "downloads": 0,
         "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.47/SUTV-armeabi-v7a-impeller.apk"
+      },
+      {
+        "name": "SUTV-armeabi-v7a-skia",
+        "size": "24.81mb",
+        "downloads": 0,
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.47/SUTV-armeabi-v7a-skia.apk"
       }
     ]
   },
@@ -1026,37 +1038,37 @@
       {
         "name": "PureLive-TV-arm64-v8a-impeller",
         "size": "93.21mb",
-        "downloads": 5156,
+        "downloads": 5200,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-arm64-v8a-impeller.apk"
       },
       {
         "name": "PureLive-TV-arm64-v8a-skia",
         "size": "93.21mb",
-        "downloads": 1755,
+        "downloads": 1769,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-arm64-v8a-skia.apk"
       },
       {
         "name": "PureLive-TV-armeabi-v7a-impeller",
         "size": "78.92mb",
-        "downloads": 3459,
+        "downloads": 3480,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-armeabi-v7a-impeller.apk"
       },
       {
         "name": "PureLive-TV-armeabi-v7a-skia",
         "size": "78.92mb",
-        "downloads": 1824,
+        "downloads": 1828,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-armeabi-v7a-skia.apk"
       },
       {
         "name": "PureLive-TV-x86_64-impeller",
         "size": "95.97mb",
-        "downloads": 589,
+        "downloads": 590,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-x86_64-impeller.apk"
       },
       {
         "name": "PureLive-TV-x86_64-skia",
         "size": "95.97mb",
-        "downloads": 364,
+        "downloads": 365,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-x86_64-skia.apk"
       }
     ]
@@ -1426,7 +1438,7 @@
       {
         "name": "arm64-v8a",
         "size": "51.82mb",
-        "downloads": 10025,
+        "downloads": 10036,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.20/app-arm64-v8a-release.apk"
       },
       {
@@ -1438,19 +1450,19 @@
       {
         "name": "armeabi-v7a",
         "size": "50.6mb",
-        "downloads": 7235,
+        "downloads": 7240,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.20/app-armeabi-v7a-release.apk"
       },
       {
         "name": "armeabi-v7a-without-exo",
         "size": "44.87mb",
-        "downloads": 1530,
+        "downloads": 1533,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.20/app-armeabi-v7a-without-exo.apk"
       },
       {
         "name": "x86_64",
         "size": "53.72mb",
-        "downloads": 1393,
+        "downloads": 1395,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.20/app-x86_64-release.apk"
       },
       {
@@ -1658,7 +1670,7 @@
       {
         "name": "arm64-v8a",
         "size": "32.84mb",
-        "downloads": 2602,
+        "downloads": 2603,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.14/app-arm64-v8a-release.apk"
       },
       {
@@ -1670,7 +1682,7 @@
       {
         "name": "x86_64",
         "size": "34.64mb",
-        "downloads": 659,
+        "downloads": 660,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.14/app-x86_64-release.apk"
       }
     ]
