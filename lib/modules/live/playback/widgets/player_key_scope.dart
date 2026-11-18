@@ -260,15 +260,17 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     // buttons and handle left/right/OK on their own node. These must pass
     // through: the page would otherwise eat OK as "show controls" and left/right
     // as channel switch and follow, leaving the overlay buttons unreachable
-    // (their autofocus loses to the node this scope already holds). Up/Down stay
-    // here - hopping to the next room is the fastest way past a dead one.
+    // (their autofocus loses to the node this scope already holds).
+    //
+    // ↑/↓ 在失败态也要能开频道列表——这是播不动的流里唯一的出路。以前这里
+    // 把它改成「盲切上一台/下一台」，加上 ←/→/OK 都被浮层按钮占用，整个
+    // 失败页没有任何按键能开列表，用户只能返回。切台交给列表里的 OK，
+    // 用户能先看见前后有哪些台再决定去哪。
     if (state.hasBlockingOverlay) {
-      if (key == LogicalKeyboardKey.arrowUp) {
-        _switchChannel(-1);
-        return KeyEventResult.handled;
-      }
-      if (key == LogicalKeyboardKey.arrowDown) {
-        _switchChannel(1);
+      if (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.arrowDown) {
+        // 点播没有频道列表（离线浮层只有它自己的按钮），别把按键吞掉。
+        if (widget.args.vod) return KeyEventResult.ignored;
+        unawaited(_openChannelList(controller));
         return KeyEventResult.handled;
       }
       return KeyEventResult.ignored;

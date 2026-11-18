@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:pure_live/player/index.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:pure_live/exports/package_export.dart';
@@ -104,6 +106,15 @@ class _TvVideoSurfaceState extends ConsumerState<TvVideoSurface> {
   /// field without this check.
   LivePlayerFacade? get _playerManagerOrNull =>
       GlobalPlayerService.instance.initialized ? GlobalPlayerService.instance.livePlayer : null;
+
+  /// 失败页的「频道列表」入口：IPTV 的换台表要现从数据源补齐，
+  /// 不等它就直接开面板，会开出一张只有当前频道、切不动的列表。
+  Future<void> _openChannelListFromFailure() async {
+    final controller = ref.read(livePlayControllerProvider(widget.args).notifier);
+    await controller.ensureChannelList();
+    if (!mounted) return;
+    controller.openPanel(LivePlayPanel.playlist);
+  }
 
   @override
   void initState() {
@@ -266,17 +277,21 @@ class _TvVideoSurfaceState extends ConsumerState<TvVideoSurface> {
       ),
     ];
 
-    if (showError) {
+    // 频道列表是由外层页面画在视频层之上的；失败浮层若还留着，它的焦点节点
+    // 会和列表里的焦点抢方向键。列表一开就先撤掉浮层，关掉列表后错误信息
+    // 仍在 state 里，浮层会自己回来。
+    if (showError && !state.showSidePanel) {
       children.add(
         Positioned.fill(
           child: PlaybackFailureOverlay(
             message: state.errorMessage ?? i18n('multiview_play_failed'),
             onRetry: controller.retry,
             onRefreshRoom: controller.refreshRoom,
+            onOpenChannelList: () => unawaited(_openChannelListFromFailure()),
           ),
         ),
       );
-    } else if (state.isOffline) {
+    } else if (state.isOffline && !state.showSidePanel) {
       children.add(Positioned.fill(child: NotLivingVideoWidget(args: widget.args)));
     } else if (state.showControls) {
       // Flush to the bottom edge: the bar's own black band is the anchor, and

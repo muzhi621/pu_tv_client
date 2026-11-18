@@ -1,6 +1,7 @@
 import 'package:pure_live/exports/package_export.dart';
 
-/// Playback failure overlay with two actions: retry and refresh room.
+/// Playback failure overlay with three actions: retry, refresh room and the
+/// channel list.
 ///
 /// Focus model: this overlay **owns a focus node and handles its own keys**,
 /// exactly like the control bar does. The player page is key-handled by one
@@ -9,15 +10,23 @@ import 'package:pure_live/exports/package_export.dart';
 /// `autofocus` inside the buttons cannot win here either: Flutter honours one
 /// autofocus per scope and the page's handler node already holds it.
 ///
-/// Steering is by selected index (0 = retry, 1 = refresh room): ←/→ move,
-/// OK activates. Up/Down stay with the page — switching channels is
-/// the quickest way out of a room that will not play.
+/// Steering is by selected index (0 = retry, 1 = refresh room, 2 = channel
+/// list): ←/→ move, OK activates. Up/Down are left to the page, where they
+/// open the channel list directly — on a dead stream the list is the way out,
+/// and a blind up/down switch would just land on another dead channel.
 class PlaybackFailureOverlay extends StatefulWidget {
   final String message;
   final VoidCallback onRetry;
   final VoidCallback onRefreshRoom;
+  final VoidCallback onOpenChannelList;
 
-  const PlaybackFailureOverlay({super.key, required this.message, required this.onRetry, required this.onRefreshRoom});
+  const PlaybackFailureOverlay({
+    super.key,
+    required this.message,
+    required this.onRetry,
+    required this.onRefreshRoom,
+    required this.onOpenChannelList,
+  });
 
   @override
   State<PlaybackFailureOverlay> createState() => _PlaybackFailureOverlayState();
@@ -54,8 +63,10 @@ class _PlaybackFailureOverlayState extends State<PlaybackFailureOverlay> {
   void _activate() {
     if (_index == 0) {
       widget.onRetry();
-    } else {
+    } else if (_index == 1) {
       widget.onRefreshRoom();
+    } else {
+      widget.onOpenChannelList();
     }
   }
 
@@ -70,11 +81,11 @@ class _PlaybackFailureOverlayState extends State<PlaybackFailureOverlay> {
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.arrowRight) {
-      setState(() => _index = _index == 0 ? 1 : 0);
+      final int step = key == LogicalKeyboardKey.arrowRight ? 1 : -1;
+      setState(() => _index = (_index + step + 3) % 3);
       return KeyEventResult.handled;
     }
-    // ↑/↓ stay with the page: switching channels is the quickest exit from a
-    // room that will not play.
+    // ↑/↓ 留给页面：失败态下它负责直接打开频道列表。
     return KeyEventResult.ignored;
   }
 
@@ -107,7 +118,7 @@ class _PlaybackFailureOverlayState extends State<PlaybackFailureOverlay> {
             ),
             SizedBox(height: 10.ts(context)),
             Text(
-              i18nOr('ui_panel_keys_adjust', '←→ 选择 · OK 确认'),
+              i18nOr('ui_failure_keys_hint', '←→ 选择 · OK 确认 · ↑↓ 打开频道列表'),
               style: AppTextStyles.t14.copyWith(fontWeight: FontWeight.w500, color: tvTheme.secondaryTextColor),
             ),
             SizedBox(height: 20.ts(context)),
@@ -117,7 +128,6 @@ class _PlaybackFailureOverlayState extends State<PlaybackFailureOverlay> {
                 _pill(
                   tvTheme,
                   index: 0,
-                  background: tvTheme.focusColor,
                   label: i18n('ui_retry_playback'),
                   icon: Icons.refresh,
                   onTap: widget.onRetry,
@@ -126,10 +136,17 @@ class _PlaybackFailureOverlayState extends State<PlaybackFailureOverlay> {
                 _pill(
                   tvTheme,
                   index: 1,
-                  background: Colors.white.withValues(alpha: 0.12),
                   label: i18n('ui_refresh_room'),
                   icon: Icons.travel_explore,
                   onTap: widget.onRefreshRoom,
+                ),
+                SizedBox(width: 16.ts(context)),
+                _pill(
+                  tvTheme,
+                  index: 2,
+                  label: i18n('ui_channel_list'),
+                  icon: Icons.playlist_play,
+                  onTap: widget.onOpenChannelList,
                 ),
               ],
             ),
@@ -144,12 +161,16 @@ class _PlaybackFailureOverlayState extends State<PlaybackFailureOverlay> {
   Widget _pill(
     TvThemeData tvTheme, {
     required int index,
-    required Color background,
     required String label,
     required IconData icon,
     required VoidCallback onTap,
   }) {
     final bool selected = _index == index;
+    // 高亮必须跟着 [selected] 走：原来把背景色写死在调用处，←/→ 移动后
+    // 三个按钮只有边框在变，蓝色仍留在第一项，看着像没选中。
+    final Color background = selected
+        ? tvTheme.focusColor
+        : Colors.white.withValues(alpha: 0.12);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
