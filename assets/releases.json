@@ -1,5 +1,43 @@
 [
   {
+    "version": "3.0.49",
+    "title": "v3.0.49",
+    "date": "2026-11-19",
+    "github": "https://github.com/muzhi621/pu_tv_client/releases/tag/v3.0.49",
+    "author": {
+      "name": "github-actions[bot]",
+      "avatar": "https://avatars.githubusercontent.com/in/15368?v=4",
+      "profile": "https://github.com/apps/github-actions"
+    },
+    "changelog": "📦 SUTV v3.0.49\n本次更新内容：\n-修复兼容包（-skia 包）安装后启动黑屏：去掉 Flutter 3.50 已移除的旧 Skia 渲染开关，改由引擎自动选择渲染后端\n-两个包都保持 Impeller 自动选择，Vulkan 驱动异常时引擎自动降级 GLES\n📺 版本说明：\n• 每次发版同步发布 Impeller 与兼容版两个包（各含 arm64-v8a / armeabi-v7a），共 4 个 APK\n• 兼容版沿用 `-skia` 文件名，但不再用已废弃、会黑屏的旧 Skia 渲染器；两版都走引擎自动选择后端，Vulkan 异常时自动降级 GLES\n• **armeabi-v7a：绝大多数电视盒子（32 位系统），推荐先装这个**\n• arm64-v8a：仅 64 位系统设备（如 NVIDIA Shield、部分新旗舰）\n• 不再发布 x86_64（只用于模拟器）\n• 不确定选哪个：adb shell getprop ro.product.cpu.abilist，列表含 arm64-v8a 才用 arm64 包\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
+    "files": [
+      {
+        "name": "SUTV-arm64-v8a-impeller",
+        "size": "25.77mb",
+        "downloads": 0,
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.49/SUTV-arm64-v8a-impeller.apk"
+      },
+      {
+        "name": "SUTV-arm64-v8a-skia",
+        "size": "25.77mb",
+        "downloads": 0,
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.49/SUTV-arm64-v8a-skia.apk"
+      },
+      {
+        "name": "SUTV-armeabi-v7a-impeller",
+        "size": "24.81mb",
+        "downloads": 0,
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.49/SUTV-armeabi-v7a-impeller.apk"
+      },
+      {
+        "name": "SUTV-armeabi-v7a-skia",
+        "size": "24.81mb",
+        "downloads": 0,
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.49/SUTV-armeabi-v7a-skia.apk"
+      }
+    ]
+  },
+  {
     "version": "3.0.48",
     "title": "v3.0.48",
     "date": "2026-11-19",
@@ -14,13 +52,13 @@
       {
         "name": "SUTV-arm64-v8a-impeller",
         "size": "25.77mb",
-        "downloads": 0,
+        "downloads": 1,
         "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.48/SUTV-arm64-v8a-impeller.apk"
       },
       {
         "name": "SUTV-arm64-v8a-skia",
         "size": "25.77mb",
-        "downloads": 0,
+        "downloads": 1,
         "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.48/SUTV-arm64-v8a-skia.apk"
       },
       {
@@ -1076,37 +1114,37 @@
       {
         "name": "PureLive-TV-arm64-v8a-impeller",
         "size": "93.21mb",
-        "downloads": 5267,
+        "downloads": 5272,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-arm64-v8a-impeller.apk"
       },
       {
         "name": "PureLive-TV-arm64-v8a-skia",
         "size": "93.21mb",
-        "downloads": 1778,
+        "downloads": 1779,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-arm64-v8a-skia.apk"
       },
       {
         "name": "PureLive-TV-armeabi-v7a-impeller",
         "size": "78.92mb",
-        "downloads": 3505,
+        "downloads": 3506,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-armeabi-v7a-impeller.apk"
       },
       {
         "name": "PureLive-TV-armeabi-v7a-skia",
         "size": "78.92mb",
-        "downloads": 1833,
+        "downloads": 1834,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-armeabi-v7a-skia.apk"
       },
       {
         "name": "PureLive-TV-x86_64-impeller",
         "size": "95.97mb",
-        "downloads": 593,
+        "downloads": 595,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-x86_64-impeller.apk"
       },
       {
         "name": "PureLive-TV-x86_64-skia",
         "size": "95.97mb",
-        "downloads": 366,
+        "downloads": 368,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-x86_64-skia.apk"
       }
     ]
