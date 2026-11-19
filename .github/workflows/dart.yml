@@ -96,13 +96,25 @@ jobs:
       #
       # 云端配置地址与只读令牌通过 dart-define 编译进包：地址有代码内默认值，
       # 令牌放 GitHub Secret（不写进公开仓库），未配置时为空 = 不发 Authorization 头。
+      # 两个 flavor 在同一工作区连续构建时，Gradle/Flutter 的中间产物
+      # （flutter_assets、增量 AOT 快照、merge 后的 manifest）存在被第二次构建
+      # 复用的风险。这里把第一个包先挪出输出目录、清场后再构建第二个，
+      # 确保两个 APK 各自干净，不会互相串味。
       - name: 打包APK（Impeller 渲染器）
         run: >
           flutter build apk --release --flavor impeller --split-per-abi
           --target-platform android-arm,android-arm64
-          --android-skip-build-dependency-validation --obfuscate --split-debug-info=${{ runner.temp }}/pu_tv_symbols
+          --android-skip-build-dependency-validation --obfuscate --split-debug-info=${{ runner.temp }}/pu_tv_symbols_impeller
           --dart-define=PURE_LIVE_CONFIG_URL=${{ vars.PURE_LIVE_CONFIG_URL || 'https://tv.1008618.xyz' }}
           --dart-define=PURE_LIVE_CONFIG_TOKEN=${{ secrets.PURE_LIVE_CONFIG_TOKEN }}
+
+      - name: 暂存 Impeller 产物并清场
+        run: |
+          mkdir -p "$RUNNER_TEMP/keep_impeller"
+          cp build/app/outputs/flutter-apk/app-*-release.apk "$RUNNER_TEMP/keep_impeller/"
+          ls -lh "$RUNNER_TEMP/keep_impeller/"
+          flutter clean
+          flutter pub get
 
       # skia flavor 保留独立构建出口，但不覆盖渲染器开关：Flutter 3.50 的 release
       # 已移除旧 Skia 后端，写 EnableImpeller=false 会启动黑屏；强制后端的
@@ -112,9 +124,14 @@ jobs:
         run: >
           flutter build apk --release --flavor skia --split-per-abi
           --target-platform android-arm,android-arm64
-          --android-skip-build-dependency-validation --obfuscate --split-debug-info=${{ runner.temp }}/pu_tv_symbols
+          --android-skip-build-dependency-validation --obfuscate --split-debug-info=${{ runner.temp }}/pu_tv_symbols_skia
           --dart-define=PURE_LIVE_CONFIG_URL=${{ vars.PURE_LIVE_CONFIG_URL || 'https://tv.1008618.xyz' }}
           --dart-define=PURE_LIVE_CONFIG_TOKEN=${{ secrets.PURE_LIVE_CONFIG_TOKEN }}
+
+      - name: 合并两批产物
+        run: |
+          cp "$RUNNER_TEMP/keep_impeller/"*.apk build/app/outputs/flutter-apk/
+          ls -lh build/app/outputs/flutter-apk/*.apk
 
       - name: 重命名 APK 文件
         run: |
@@ -184,10 +201,10 @@ jobs:
             📺 版本说明：
             • 每次发版同步发布 Impeller 与兼容版两个包（各含 arm64-v8a / armeabi-v7a），共 4 个 APK
             • 兼容版沿用 `-skia` 文件名，但不再用已废弃、会黑屏的旧 Skia 渲染器；两版都走引擎自动选择后端，Vulkan 异常时自动降级 GLES
-            • **armeabi-v7a：绝大多数电视盒子（32 位系统），推荐先装这个**
-            • arm64-v8a：仅 64 位系统设备（如 NVIDIA Shield、部分新旗舰）
+            • **armeabi-v7a：32 位电视盒子（老盒子居多）用这个**
+            • **arm64-v8a：64 位设备必须用这个**——手机、近几年的新盒子、NVIDIA Shield 等。装错架构会在启动瞬间闪退且没有任何日志
+            • 不确定设备架构：`adb shell getprop ro.product.cpu.abilist`，列出 `arm64-v8a` 就必须装 arm64 包
             • 不再发布 x86_64（只用于模拟器）
-            • 不确定选哪个：adb shell getprop ro.product.cpu.abilist，列表含 arm64-v8a 才用 arm64 包
 
             本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。
           prerelease: false
