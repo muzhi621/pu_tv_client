@@ -12,7 +12,13 @@ class TvDialogUtils {
   static ProviderContainer? get _container =>
       SettingsService.to.isInitialized ? SettingsService.to.container : null;
 
-  static Future<T?> show<T>({required BuildContext context, required WidgetBuilder builder}) async {
+  /// [barrierDismissible] 交给调用方决定：TV 上弹窗必须由按钮/返回键关闭，
+  /// 但触屏设备上「点空白处没反应」会被当成界面卡死。
+  static Future<T?> show<T>({
+    required BuildContext context,
+    required WidgetBuilder builder,
+    bool barrierDismissible = false,
+  }) async {
     _container?.read(tvDialogLockProvider.notifier).lock();
 
     // The row/button that had the keyboard before the dialog opened. Restoring
@@ -25,7 +31,8 @@ class TvDialogUtils {
 
     final result = await showGeneralDialog<T>(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: barrierDismissible,
+      // barrierDismissible 需要非空 label，否则无障碍语义会丢。
       barrierLabel: 'TvDialogBarrier',
       barrierColor: Colors.black.withAlpha(150),
       transitionDuration: const Duration(milliseconds: 300),
