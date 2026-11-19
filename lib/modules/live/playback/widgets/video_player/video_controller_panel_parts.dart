@@ -346,6 +346,23 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
     _zone = _Zone.bar;
   });
 
+  /// 打开左侧频道列表（控制条上的「频道列表」按钮）。
+  ///
+  /// 先把换台表补齐再开：IPTV 的列表来自数据库，不等它会开出一张只有当前
+  /// 频道的空列表。打开前收起控制条——两层浮层同时压着画面时，按钮会互相
+  /// 抢焦点，这也是「菜单看着在、点不动」的原因。
+  Future<void> _openChannelList() async {
+    final controller = ref.read(livePlayControllerProvider(widget.args).notifier);
+    await controller.ensureChannelList();
+    if (!mounted) return;
+    if (controller.channelRooms.length <= 1) {
+      ToastUtil.show(i18nOr('ui_no_switchable_channel', 'No channel available to switch to'));
+      return;
+    }
+    controller.dismissOverlays();
+    controller.openPanel(LivePlayPanel.playlist);
+  }
+
   /// Bottom bar: the transport, the danmaku group (toggle/settings/filter), the
   /// three value pickers, then the channel actions.
   ///
@@ -375,6 +392,15 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
     final bool iptvLive = widget.args.platform == Sites.iptvSite && !vod;
 
     return <_PanelAction>[
+      // 频道列表入口（直播专用）：遥控器上 OK 直接开列表，但**手机上只有触摸**，
+      // 没有这颗按钮就再也进不去列表了。放在第一位，遥控器也不用多走几格。
+      if (!vod)
+        _PanelAction(
+          icon: Icons.format_list_bulleted_rounded,
+          label: i18n('ui_channel_list'),
+          active: state.showSidePanel && state.panel == LivePlayPanel.playlist,
+          onSelect: () => unawaited(_openChannelList()),
+        ),
       if (!vod && !iptvLive)
         _PanelAction(
           icon: isFavorite ? Icons.favorite : Icons.favorite_border,
@@ -677,6 +703,12 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
                         // The row being applied carries the ring; the list stays
                         // open so the options can still be compared.
                         loading: switching && option.active,
+                        // 手指点这一行 = 遥控器把索引移到它再按 OK。
+                        onTap: () {
+                          ref.read(livePlayControllerProvider(widget.args).notifier).keepControlsAlive();
+                          setState(() => _optionIndex = index);
+                          option.apply();
+                        },
                       ),
                     );
                   },
@@ -719,6 +751,16 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
               accent: tvTheme.focusColor,
               tinted: action.active,
               loading: action.loading,
+              // 手指点这颗按钮 = 遥控器把索引移过来再按 OK：先高亮再执行，
+              // 让「我点的是哪一颗」在视觉上确认一次。
+              onTap: () {
+                ref.read(livePlayControllerProvider(widget.args).notifier).keepControlsAlive();
+                setState(() {
+                  _zone = _Zone.bar;
+                  _barIndex = index;
+                });
+                action.onSelect();
+              },
             ),
           );
         },
@@ -765,6 +807,7 @@ class _Pill extends StatelessWidget {
     this.tinted = false,
     this.trailing,
     this.loading = false,
+    this.onTap,
   });
 
   // Pill geometry lives here so the bar can be retuned in one place.
@@ -786,6 +829,11 @@ class _Pill extends StatelessWidget {
   /// Replaces the glyph with a small ring: the value is being applied, the
   /// picture and the rest of the bar are untouched.
   final bool loading;
+
+  /// 触摸点击。遥控器路径不经过它（那条路径靠 [_VideoControllerPanelState]
+  /// 的索引 + onKeyEvent），手机上则必须能点——整条控制条原本对指针事件
+  /// 完全无反应，用户看到的就是「菜单出来了但按钮都点不动」。
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -809,7 +857,7 @@ class _Pill extends StatelessWidget {
     // like the home page's back/menu buttons instead of only changing fill.
     final BorderRadius radius = BorderRadius.circular((_height / 3).sp * TvTextScale.factorOf(context));
 
-    return AnimatedContainer(
+    final Widget pill = AnimatedContainer(
       duration: TvFocusStyle.focusDuration(selected),
       curve: TvFocusStyle.curve,
       height: _height.ts(context),
@@ -846,6 +894,11 @@ class _Pill extends StatelessWidget {
         ],
       ),
     );
+
+    if (onTap == null) return pill;
+    // opaque：药丸只在文字处有内容，透明区域也必须能点到，否则手机上点
+    // 按钮边缘一律落空、又被外层「点击画面」判成收起菜单。
+    return GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: pill);
   }
 }
 

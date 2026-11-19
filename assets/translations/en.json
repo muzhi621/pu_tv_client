@@ -15,7 +15,7 @@
   "account_password_lock": "Account PIN lock",
   "account_delete": "Delete account",
   "ui_panel_keys_adjust": "Up/Down select · Left/Right adjust · OK confirm",
-  "ui_failure_keys_hint": "Left/Right select · OK confirm · Up/Down open channel list",
+  "ui_failure_keys_hint": "Left/Right select · OK confirm · Up/Down switch · Menu for list",
   "about": "About",
   "action_ban": "Ban Upload",
   "action_delete_account": "Delete Account",

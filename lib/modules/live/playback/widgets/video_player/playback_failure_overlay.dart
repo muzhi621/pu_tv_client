@@ -118,7 +118,7 @@ class _PlaybackFailureOverlayState extends State<PlaybackFailureOverlay> {
             ),
             SizedBox(height: 10.ts(context)),
             Text(
-              i18nOr('ui_failure_keys_hint', '←→ 选择 · OK 确认 · ↑↓ 打开频道列表'),
+              i18nOr('ui_failure_keys_hint', '←→ 选择 · OK 确认 · ↑↓ 换台 · 菜单键开频道列表'),
               style: AppTextStyles.t14.copyWith(fontWeight: FontWeight.w500, color: tvTheme.secondaryTextColor),
             ),
             SizedBox(height: 20.ts(context)),

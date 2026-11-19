@@ -60,8 +60,9 @@ class PlayerGestureScope extends InheritedWidget {
 /// d-pad layer. Keys reach it through one [Focus], so nothing can steal focus or
 /// leave the player with a dead remote.
 ///
-/// * nothing open: OK shows the controls, Up/Down switch channel directly,
-///   Left double-presses to follow, Right / Menu open the channel list
+/// * nothing open: **OK opens the channel list**, **Menu shows the control
+///   bar**, Up/Down switch channel directly, Left double-presses to follow,
+///   Right opens the channel list
 /// * a side panel open: keys belong to that panel (they are focus based)
 /// * controls visible: the control layer's own [Focus] handles them first —
 ///   events bubble from the primary focus outwards, so this handler stays out of
@@ -268,18 +269,26 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     final controller = ref.read(livePlayControllerProvider(widget.args).notifier);
     final key = event.logicalKey;
 
-    // 遥控器菜单键 = 频道列表的专用开关，放在所有状态分支之前，保证失败
-    // 浮层、控制条、侧栏开着时它都优先响应（以前菜单键被当成 OK，只弹控制条）。
-    // 再按一次收起；点播没有频道列表，保留「菜单键弹控制条」的旧行为。
+    // 遥控器菜单键 = **下方控制条**的开关（2026-11-19 用户约定：OK 开频道列表、
+    // 菜单键开控制条）。以前两者反着来，导致「按 OK 只弹一条控制条、菜单键
+    // 才开列表」，与电视用户的手感不符。
+    // 控制条已经开着时再按一次就是收起；这跟遥控器上的「菜单」语义一致。
+    // 点播没有频道列表，OK 也走控制条，所以这一支对点播同样成立。
     if (key == LogicalKeyboardKey.contextMenu) {
-      if (widget.args.vod) {
-        controller.showControls();
+      // 失败/离线浮层会顶掉控制条（它是整屏的），此时按菜单键开控制条等于
+      // 按键石沉大海：改为直接开频道列表，与浮层上那颗「频道列表」按钮一致，
+      // 也是用户此刻唯一有用的去处。
+      if (state.hasBlockingOverlay) {
+        if (!widget.args.vod) unawaited(_openChannelList(controller));
         return KeyEventResult.handled;
       }
-      if (state.showSidePanel) {
-        controller.toggleSidePanel();
+      if (state.showControls) {
+        controller.dismissOverlays();
       } else {
-        unawaited(_openChannelList(controller));
+        // 两层同时开着会互相抢焦点（控制条按下没反应就是这个原因），
+        // 开控制条前先把侧栏收掉。
+        if (state.showSidePanel) controller.toggleSidePanel();
+        controller.showControls();
       }
       return KeyEventResult.handled;
     }
@@ -357,8 +366,14 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
       return KeyEventResult.ignored;
     }
 
+    // 直播纯画面态按 OK = 打开左侧频道列表（用户约定）。
+    // 点播没有换台概念，仍沿用「OK 唤出控制条」。
     if (_isConfirm(key)) {
-      controller.showControls();
+      if (widget.args.vod) {
+        controller.showControls();
+      } else {
+        unawaited(_openChannelList(controller));
+      }
       return KeyEventResult.handled;
     }
 
@@ -639,8 +654,8 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
         // 完全没有反应。按键事件在手机上根本不会产生（没有物理方向键），
         // 所以触摸必须自己把语义做出来。
         //
-        // 手势的语义与按键对齐：单击 = OK（唤出控制条 + 左侧频道列表），
-        // 直播上下滑 = ↑↓（换台），点播左右滑 = 快进 / 后退。不复用按键派发，
+        // 手势的语义与按键对齐：单击 = 下方控制条（同菜单键），直播上下滑 =
+        // ↑↓（换台），点播左右滑 = 快进 / 后退。不复用按键派发，
         // 因为按键那条链要先过焦点判定，而触摸场景下没有可依靠的焦点。
         child: PlayerGestureScope(
           onTap: _onTap,
@@ -666,12 +681,12 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
 
   // ---------------------------------------------------------------- 触摸
 
-  /// 单击：控制条/频道列表开着就收起，没开就唤出——与遥控器 OK 键一致。
+  /// 单击：控制条/频道列表开着就收起，没开就唤出下方控制条——与遥控器菜单键
+  /// 一致。
   ///
-  /// 直播时把**左侧频道列表**一起带出来：点屏幕的意图基本都是"我要换台"，
-  /// 只弹一条控制条等于让用户再找一次入口。列表里高亮停在当前频道上，点一行
-  /// 或按 OK 就切过去，这就是酷9 的那套交互。
-  void _onTap() => unawaited(_handleTap());
+  /// 只开控制条这一层：频道列表从控制条自己的「频道列表」按钮进，两层同时
+  /// 出现会互相抢焦点（表现就是菜单看着在、按钮点不动）。
+  void _onTap() => _handleTap();
 
   /// 双击画面 = 暂停 / 播放（手机上的主要暂停入口）。
   ///
@@ -685,7 +700,7 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     unawaited(controller.togglePlayPause());
   }
 
-  Future<void> _handleTap() async {
+  void _handleTap() {
     if (!mounted) return;
     final state = ref.read(livePlayControllerProvider(widget.args));
     final controller = ref.read(livePlayControllerProvider(widget.args).notifier);
@@ -702,13 +717,12 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
       return;
     }
 
+    // 手机上点一下画面 = 唤出**下方控制条**，与遥控器菜单键同义。
+    //
+    // 以前这里还会顺手把左侧频道列表一起打开，结果两层浮层同时压在画面上：
+    // 控制条的按钮点不动（焦点在列表里），用户以为菜单坏了。列表改为从控制条
+    // 上的「频道列表」按钮进入，一次只开一层。
     controller.showControls();
-    if (widget.args.vod) return;
-    // 只有一个台时开列表没有意义，还会让人以为"点出了一张空面板"。
-    // 直播的列表可能还在补（IPTV 的换台表来自数据库），等它到位再判。
-    await controller.ensureChannelList();
-    if (!mounted) return;
-    if (controller.channelRooms.length > 1) controller.openPanel(LivePlayPanel.playlist);
   }
 
   /// 拖动起点：记住起点，滑动位移按它算。
