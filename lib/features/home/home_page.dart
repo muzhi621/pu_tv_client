@@ -44,6 +44,23 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// 同一时间只允许一个 IPTV 启动流程：解析库要查 sqlite，快速连点会叠两个播放页。
   bool _launchingIptv = false;
 
+  /// 退出确认框正在弹出/已弹出。
+  ///
+  /// 弹窗淡入有 300ms，这段时间里连按两次返回、或遥控器连发，第二次返回仍
+  /// 会落到首页的 PopScope 上；不拦住就会叠出第二个、第三个确认框，每个都要
+  /// 按一次返回才关得掉，看上去就是「弹了个框，怎么按都卡住」。
+  bool _exitDialogOpen = false;
+
+  Future<void> _confirmExit() async {
+    if (_exitDialogOpen) return;
+    _exitDialogOpen = true;
+    try {
+      await showExitConfirmDialog(context, ref);
+    } finally {
+      _exitDialogOpen = false;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -133,7 +150,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        showExitConfirmDialog(context, ref);
+        unawaited(_confirmExit());
       },
       child: TvScaffold(
         // 遥控器开机焦点落在第一个按钮上（kNavGroups 首位 = IPTV）。

@@ -50,43 +50,48 @@ class _ExitConfirmDialog extends StatelessWidget {
       confirmText: i18n('exit_yes'),
       cancelText: i18n('exit_no'),
       onConfirm: () => exit(0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            i18nOr('exit_confirm_message', '感谢使用纯粹直播 TV，期待下次再见。'),
-            textAlign: TextAlign.center,
-            style: AppTextStyles.t22.copyWith(height: 1.5, color: tvTheme.primaryTextColor),
-          ),
-          SizedBox(height: 24.ts(context)),
-          Center(
-            child: Container(
-              width: 260.ts(context),
-              height: 260.ts(context),
-              padding: EdgeInsets.all(12.ts(context)),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16.ts(context))),
-              child: Image.asset('assets/images/wechat.png', fit: BoxFit.contain),
+      // 正文和捐赠区放进滚动区：卡片高度已被 TvDialog 限制在屏幕内，文案长
+      // 或字体调大时只有这里滚动，下面的「确定 / 取消」永远留在屏幕上——手机
+      // 横屏高度只有 300 多逻辑像素，以前整块内容直接画到屏幕外，按钮点不到。
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              i18nOr('exit_confirm_message', '感谢使用纯粹直播 TV，期待下次再见。'),
+              textAlign: TextAlign.center,
+              style: AppTextStyles.t22.copyWith(height: 1.5, color: tvTheme.primaryTextColor),
             ),
-          ),
-          SizedBox(height: 20.ts(context)),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.favorite_rounded, size: 24.ts(context), color: tvTheme.focusColor),
-              SizedBox(width: 8.ts(context)),
-              Text(
-                i18n('support_donate'),
-                style: AppTextStyles.t22.copyWith(fontWeight: FontWeight.w700, color: tvTheme.primaryTextColor),
+            SizedBox(height: 24.ts(context)),
+            Center(
+              child: Container(
+                width: 260.ts(context),
+                height: 260.ts(context),
+                padding: EdgeInsets.all(12.ts(context)),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16.ts(context))),
+                child: Image.asset('assets/images/wechat.png', fit: BoxFit.contain),
               ),
-            ],
-          ),
-          SizedBox(height: 12.ts(context)),
-          Text(
-            i18nOr('exit_donate_message', '项目全程开源免费，无任何付费门槛。若是本应用给您带来便利，欢迎微信扫码请开发者喝瓶牛奶，支持后续更新维护。'),
-            textAlign: TextAlign.center,
-            style: AppTextStyles.t20.copyWith(height: 1.5, color: tvTheme.secondaryTextColor),
-          ),
-        ],
+            ),
+            SizedBox(height: 20.ts(context)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.favorite_rounded, size: 24.ts(context), color: tvTheme.focusColor),
+                SizedBox(width: 8.ts(context)),
+                Text(
+                  i18n('support_donate'),
+                  style: AppTextStyles.t22.copyWith(fontWeight: FontWeight.w700, color: tvTheme.primaryTextColor),
+                ),
+              ],
+            ),
+            SizedBox(height: 12.ts(context)),
+            Text(
+              i18nOr('exit_donate_message', '项目全程开源免费，无任何付费门槛。若是本应用给您带来便利，欢迎微信扫码请开发者喝瓶牛奶，支持后续更新维护。'),
+              textAlign: TextAlign.center,
+              style: AppTextStyles.t20.copyWith(height: 1.5, color: tvTheme.secondaryTextColor),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -141,45 +146,48 @@ class _CloudExitConfirmDialog extends StatelessWidget {
       // cancelText 为 null 时 TvDialog 不渲染「取消」按钮，confirm 按钮仍 autofocus。
       cancelText: dismissible ? resolvedCancel : null,
       onConfirm: () => exit(0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            resolvedBody,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.t22.copyWith(height: 1.5, color: tvTheme.primaryTextColor),
-          ),
-          if (showDonate) ...<Widget>[
-            SizedBox(height: 24.ts(context)),
-            Center(
-              child: Container(
-                width: 260.ts(context),
-                height: 260.ts(context),
-                padding: EdgeInsets.all(12.ts(context)),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16.ts(context))),
-                child: _buildQrImage(),
-              ),
-            ),
-            SizedBox(height: 20.ts(context)),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.favorite_rounded, size: 24.ts(context), color: tvTheme.focusColor),
-                SizedBox(width: 8.ts(context)),
-                Text(
-                  resolvedCaption,
-                  style: AppTextStyles.t22.copyWith(fontWeight: FontWeight.w700, color: tvTheme.primaryTextColor),
-                ),
-              ],
-            ),
-            SizedBox(height: 12.ts(context)),
+      // 同本地弹窗：只有正文区域滚动，按钮固定在卡片底部。
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             Text(
-              resolvedDonateBody,
+              resolvedBody,
               textAlign: TextAlign.center,
-              style: AppTextStyles.t20.copyWith(height: 1.5, color: tvTheme.secondaryTextColor),
+              style: AppTextStyles.t22.copyWith(height: 1.5, color: tvTheme.primaryTextColor),
             ),
+            if (showDonate) ...<Widget>[
+              SizedBox(height: 24.ts(context)),
+              Center(
+                child: Container(
+                  width: 260.ts(context),
+                  height: 260.ts(context),
+                  padding: EdgeInsets.all(12.ts(context)),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16.ts(context))),
+                  child: _buildQrImage(),
+                ),
+              ),
+              SizedBox(height: 20.ts(context)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.favorite_rounded, size: 24.ts(context), color: tvTheme.focusColor),
+                  SizedBox(width: 8.ts(context)),
+                  Text(
+                    resolvedCaption,
+                    style: AppTextStyles.t22.copyWith(fontWeight: FontWeight.w700, color: tvTheme.primaryTextColor),
+                  ),
+                ],
+              ),
+              SizedBox(height: 12.ts(context)),
+              Text(
+                resolvedDonateBody,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.t20.copyWith(height: 1.5, color: tvTheme.secondaryTextColor),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
