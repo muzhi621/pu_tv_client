@@ -6,7 +6,12 @@ import 'package:pure_live/services/remote_config/remote_config.dart';
 Future<void> showExitConfirmDialog(BuildContext context, WidgetRef _) async {
   // 云端未接管（enabled == false）：完全沿用原有弹窗，UI / 文案 / 二维码一字不改。
   if (!RemoteConfigService.exitDialogEnabled) {
-    await TvDialogUtils.show<bool>(context: context, builder: (_) => const _ExitConfirmDialog());
+    await TvDialogUtils.show<bool>(
+      context: context,
+      // 触屏上点空白处也要能关掉：否则用户只会看到一张按不动的卡片。
+      barrierDismissible: true,
+      builder: (_) => const _ExitConfirmDialog(),
+    );
     return;
   }
 
@@ -22,6 +27,8 @@ Future<void> showExitConfirmDialog(BuildContext context, WidgetRef _) async {
     await RemoteConfigService.markExitDialogShown();
     await TvDialogUtils.show<bool>(
       context: context,
+      // 云端把弹窗设成不可取消时，点遮罩也不能消失。
+      barrierDismissible: RemoteConfigService.exitDialogDismissible,
       builder: (_) => _CloudExitConfirmDialog(
         title: RemoteConfigService.exitDialogTitle,
         body: RemoteConfigService.exitDialogBody,
