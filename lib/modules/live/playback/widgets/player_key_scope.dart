@@ -60,8 +60,8 @@ class PlayerGestureScope extends InheritedWidget {
 /// d-pad layer. Keys reach it through one [Focus], so nothing can steal focus or
 /// leave the player with a dead remote.
 ///
-/// * nothing open: OK shows the controls, Up/Down open the channel list on the
-///   left, Left double-presses to follow, Right opens the channel list
+/// * nothing open: OK shows the controls, Up/Down switch channel directly,
+///   Left double-presses to follow, Right / Menu open the channel list
 /// * a side panel open: keys belong to that panel (they are focus based)
 /// * controls visible: the control layer's own [Focus] handles them first —
 ///   events bubble from the primary focus outwards, so this handler stays out of
@@ -99,6 +99,18 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
   /// The window rapid presses have to accumulate within.
   static const Duration _channelDebounceWindow = Duration(milliseconds: 300);
 
+  /// 播放失败后自动切到下一台的等待时间（「超时换源」，固定 10 秒）。
+  static const Duration _failureAutoSwitchDelay = Duration(seconds: 10);
+  Timer? _failureAutoSwitchTimer;
+  String? _autoSwitchError;
+
+  /// 频道列表空闲自动隐藏（20 秒无操作）。
+  static const Duration _panelIdleDelay = Duration(seconds: 20);
+  Timer? _panelIdleTimer;
+
+  /// 退出确认弹窗是否已弹出：弹窗打开时再按一次返回 = 直接回首页。
+  bool _exitDialogShown = false;
+
   // ------------------------------------------------------------ 触摸手势
 
   /// 横向/纵向拖动超过这个像素数才算一次有效滑动（低于它当作误触）。
@@ -132,6 +144,8 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     _nativeKeyToken = 0;
     _leftTapTimer?.cancel();
     _channelDebounce?.cancel();
+    _failureAutoSwitchTimer?.cancel();
+    _panelIdleTimer?.cancel();
     _focusNode.dispose();
     super.dispose();
   }
@@ -163,6 +177,7 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
   /// 原生转发的按键 → 复用既有按键逻辑，不另写一套语义。
   void _onNativeKeyDown(int androidKeyCode) {
     if (!mounted) return;
+    _noteUserActivity();
     final LogicalKeyboardKey? key = _logicalKeyOf(androidKeyCode);
     if (key == null) return;
     _dispatchNativeKey(key);
@@ -223,6 +238,9 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
   bool _onGlobalKey(KeyEvent event) {
     if (!mounted) return false;
 
+    // 任意遥控按键都算「有操作」，重置列表空闲计时（面板内按键也能覆盖）。
+    _noteUserActivity();
+
     // 只接管当前路由：上一页还在栈里时不能抢它的按键。
     if (ModalRoute.of(context)?.isCurrent == false) return false;
 
@@ -244,6 +262,7 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
 
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
     if (event is KeyUpEvent) return KeyEventResult.ignored;
+    _noteUserActivity();
 
     final state = ref.read(livePlayControllerProvider(widget.args));
     final controller = ref.read(livePlayControllerProvider(widget.args).notifier);
@@ -281,15 +300,13 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     // as channel switch and follow, leaving the overlay buttons unreachable
     // (their autofocus loses to the node this scope already holds).
     //
-    // ↑/↓ 在失败态也要能开频道列表——这是播不动的流里唯一的出路。以前这里
-    // 把它改成「盲切上一台/下一台」，加上 ←/→/OK 都被浮层按钮占用，整个
-    // 失败页没有任何按键能开列表，用户只能返回。切台交给列表里的 OK，
-    // 用户能先看见前后有哪些台再决定去哪。
+    // 失败/离线态：↑↓ 直接换台（用户要求上下键永远是换台），菜单键和浮层上
+    // 的「频道列表」按钮仍能开列表——开列表的通道齐备，所以这里不再把 ↑↓
+    // 劫持成开列表。10 秒自动换台由下面的失败监听负责。
     if (state.hasBlockingOverlay) {
       if (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.arrowDown) {
-        // 点播没有频道列表（离线浮层只有它自己的按钮），别把按键吞掉。
         if (widget.args.vod) return KeyEventResult.ignored;
-        unawaited(_openChannelList(controller));
+        _switchChannel(key == LogicalKeyboardKey.arrowUp ? -1 : 1);
         return KeyEventResult.handled;
       }
       return KeyEventResult.ignored;
@@ -345,12 +362,9 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
       return KeyEventResult.handled;
     }
 
-    // ↑↓ 唤出左侧频道列表（酷9 的交互）：列表打开时高亮停在当前频道上，
-    // 之后的 ↑↓ 在列表里移动、OK 切台、← 收起。比"按一下就立刻换台"更适合
-    // 动辄上百个台的 IPTV 包——用户能先看见自己在哪一个台、前后还有哪些台，
-    // 而不是盲按到画面黑一下才知道换成了什么。
+    // ↑↓ 直接换台：按一下就切上一台/下一台，带 300ms 连按累积。
     if (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.arrowDown) {
-      unawaited(_openChannelList(controller));
+      _switchChannel(key == LogicalKeyboardKey.arrowUp ? -1 : 1);
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowLeft) {
@@ -362,6 +376,123 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
+  }
+
+  /// 监听播放失败态：进入失败时启动 10 秒自动换台，恢复/离开时取消。
+  ///
+  /// 只盯 IPTV 直播（点播没有换台概念）。失败自动换台固定启用（10 秒）。
+  /// 用 errorMessage 的内容做签名，避免同一个错误反复重设计时器。
+  void _watchFailureForAutoSwitch(LivePlayState state) {
+    if (!mounted || widget.args.vod) return;
+    final String? err = state.hasBlockingOverlay ? (state.errorMessage ?? state.detailError) : null;
+    if (err == null || err.isEmpty) {
+      // 播放恢复：撤掉待执行的自动换台。
+      if (_autoSwitchError != null) {
+        _failureAutoSwitchTimer?.cancel();
+        _failureAutoSwitchTimer = null;
+        _autoSwitchError = null;
+      }
+      return;
+    }
+    if (_autoSwitchError == err) return;
+    _autoSwitchError = err;
+    _failureAutoSwitchTimer?.cancel();
+    _failureAutoSwitchTimer = Timer(_failureAutoSwitchDelay, () {
+      _failureAutoSwitchTimer = null;
+      if (!mounted) return;
+      final current = ref.read(livePlayControllerProvider(widget.args));
+      // 仍在同一个错误里才换，避免刚恢复就被旧定时器带走。
+      if (!current.hasBlockingOverlay) return;
+      ToastUtil.show(i18n('auto_switch_hint'));
+      unawaited(_commitChannelSwitchDelta(1));
+    });
+  }
+
+  /// 频道列表空闲计时：任何遥控/触摸操作都重置，20 秒无操作自动收起。
+  void _noteActivityAndWatchPanel(LivePlayState state) {
+    if (!mounted) return;
+    if (!state.showSidePanel) {
+      _panelIdleTimer?.cancel();
+      _panelIdleTimer = null;
+      return;
+    }
+    _panelIdleTimer?.cancel();
+    _panelIdleTimer = Timer(_panelIdleDelay, () {
+      _panelIdleTimer = null;
+      if (!mounted) return;
+      final current = ref.read(livePlayControllerProvider(widget.args));
+      if (current.showSidePanel) {
+        ref.read(livePlayControllerProvider(widget.args).notifier).toggleSidePanel();
+      }
+    });
+  }
+
+  /// 任意按键算一次活动：重置频道列表的空闲计时（列表打开时才有意义）。
+  void _noteUserActivity() {
+    if (_panelIdleTimer == null) return;
+    final state = ref.read(livePlayControllerProvider(widget.args));
+    if (state.showSidePanel) _noteActivityAndWatchPanel(state);
+  }
+
+  /// 不走防抖、立即切一台（自动换台用）。
+  Future<void> _commitChannelSwitchDelta(int delta) async {
+    final controller = ref.read(livePlayControllerProvider(widget.args).notifier);
+    await controller.ensureChannelList();
+    if (!mounted) return;
+    final target = controller.relativeChannel(delta);
+    if (target == null) return;
+    final rooms = controller.channelRooms;
+    LivePlayRoute(LivePlayArgs.fromRoom(target, playlist: rooms, showChannelBanner: true)).replace(context);
+  }
+
+  /// 退出确认弹窗：确认或「弹窗打开时再按一次返回」都回 APK 首页。
+  ///
+  /// 焦点默认落在「确定」（TvDialog 的 confirm 按钮 autofocus），因此 OK 键
+  /// 直接确认退出；弹窗自己用 PopScope 接管第二次返回，避免播放页的 PopScope
+  /// 收不到（弹窗是新的 route）。
+  void _showExitToHomeDialog() {
+    if (!mounted) return;
+    _exitDialogShown = true;
+
+    void goHome() {
+      if (!mounted) return;
+      // 先关弹窗路由，再回首页；HomeRoute().go 会清空整个栈。
+      Navigator.of(context).maybePop();
+      HomeRoute().go(context);
+    }
+
+    TvDialogUtils.show<bool>(
+      context: context,
+      builder: (dialogContext) => PopScope<bool>(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          goHome();
+        },
+        child: TvDialog(
+          title: i18n('confirm_exit'),
+          confirmText: i18n('exit_yes'),
+          cancelText: i18n('exit_no'),
+          onConfirm: goHome,
+          onCancel: () {
+            final nav = Navigator.of(dialogContext);
+            if (nav.canPop()) nav.pop();
+          },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                i18n('exit_confirm_message'),
+                textAlign: TextAlign.center,
+                style: AppTextStyles.t22.copyWith(color: context.tvTheme.primaryTextColor, height: 1.5),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ).whenComplete(() {
+      _exitDialogShown = false;
+    });
   }
 
   /// 打开左侧频道列表，必要时先把列表补齐。
@@ -470,7 +601,11 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     // 面板 / 控制条 / 浮层的开关决定原生通道是否接管。只在状态真的切换时才
     // 发一次平台调用（[_syncNativeCapture] 内部做了去重），本组件不因状态
     // 变化重建，画面层不受影响。
-    ref.listen(livePlayControllerProvider(widget.args), (_, _) => _syncNativeCapture());
+    ref.listen(livePlayControllerProvider(widget.args), (_, next) {
+      _syncNativeCapture();
+      _watchFailureForAutoSwitch(next);
+      _noteActivityAndWatchPanel(next);
+    });
 
     return PopScope(
       // Back closes what is on screen before it leaves the player: an option
@@ -490,7 +625,10 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
           controller.dismissOverlays();
           return;
         }
-        if (mounted) Navigator.of(context).pop();
+        // 纯视频态返回键：第一次弹确认框（焦点默认在确认），弹窗打开时
+        // 第二次返回由弹窗自己的 PopScope 直接回首页，这里只在未弹时触发。
+        if (_exitDialogShown) return;
+        _showExitToHomeDialog();
       },
       child: Focus(
         focusNode: _focusNode,

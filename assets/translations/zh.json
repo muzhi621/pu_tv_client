@@ -3112,5 +3112,10 @@
   "epg_next": "下一节目",
   "ui_panel_keys_group": "↑↓ 选择 · ←→ 切换分组 · OK 播放",
   "ui_ungrouped": "未分组",
-  "ui_channel_groups": "分组"
+  "ui_channel_groups": "分组",
+  "auto_switch_hint": "超时自动换台",
+  "decoder_system": "系统解码",
+  "decoder_hw": "硬件解码",
+  "decoder_sw": "软件解码",
+  "decoder_reenter_hint": "解码方式已切换"
 }

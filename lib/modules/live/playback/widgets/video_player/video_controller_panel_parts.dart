@@ -29,7 +29,7 @@ class VideoControllerPanel extends ConsumerStatefulWidget {
 enum _Zone { bar, options }
 
 /// The option list shown next to the bar, if any.
-enum _OptionsPanel { none, quality, line, fit, kernel }
+enum _OptionsPanel { none, quality, line, fit, kernel, decoder }
 
 class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
   static const double _barHeight = 62;
@@ -222,6 +222,19 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
               apply: () => unawaited(_switchKernel(key)),
             ),
         ];
+      case _OptionsPanel.decoder:
+        // 解码方式三档：都落在 mpv 真实支持的 --hwdec 值上。切换写设置并打开
+        // customPlayerOutput（否则 resolvePreferredHardwareDecoder 不读用户值），
+        // 重新进入频道生效——与设置页的解码节完全同一套机制，不是空壳。
+        final int active = _currentDecoder();
+        return <({String label, VoidCallback apply, bool active})>[
+          for (int i = 0; i < 3; i++)
+            (
+              label: _decoderLabel(i),
+              active: i == active,
+              apply: () => _applyDecoder(i),
+            ),
+        ];
       case _OptionsPanel.none:
         return const <({String label, VoidCallback apply, bool active})>[];
     }
@@ -238,6 +251,7 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
     _OptionsPanel.line => i18n('multiview_line_selector'),
     _OptionsPanel.fit => i18n('ui_aspect_ratio'),
     _OptionsPanel.kernel => i18n('kernel_switch'),
+    _OptionsPanel.decoder => i18n('hardware_decoder'),
     _OptionsPanel.none => '',
   };
 
@@ -270,6 +284,7 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
         // Open on the kernel that is in use, so OK on the row the list opens on
         // is the reset the user is looking for.
         _OptionsPanel.kernel => PlayerConsts.engines.keys.toList(growable: false).indexOf(_activeEngineKey()),
+        _OptionsPanel.decoder => _currentDecoder(),
         _OptionsPanel.none => 0,
       };
     });
@@ -288,6 +303,42 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
     final PlayerEngine? running = GlobalPlayerService.instance.livePlayer?.currentEngine;
 
     return running == null ? preferred : PlayerConsts.keyOf(running);
+  }
+
+  /// 当前解码档位：0 系统自动 / 1 硬解 / 2 软解。
+  ///
+  /// 只读到三档的粒度：设置页能选更细的 mediacodec-copy / vulkan 等，这里
+  /// 归到最接近的一档，选中的那档点亮即可；选系统档会写回 auto-safe。
+  int _currentDecoder() {
+    final String key = ref.read(playerSettingsControllerProvider).videoHardwareDecoder;
+    return switch (key) {
+      'mediacodec' || 'mediacodec-copy' || 'vulkan' || 'vulkan-copy' => 1,
+      'no' => 2,
+      _ => 0,
+    };
+  }
+
+  String _decoderLabel(int which) => switch (which) {
+        0 => i18n('decoder_system'),
+        1 => i18n('decoder_hw'),
+        _ => i18n('decoder_sw'),
+      };
+
+  /// 写解码设置：三档映射到 mpv 真实支持的 hwdec 值，并打开专家输出，
+  /// 否则 [GlobalPlayerService.resolvePreferredHardwareDecoder] 不读用户值。
+  /// 与设置页解码节同一机制：outputSettingsDispatcher 会把 hwdec 变更即时
+  /// 应用到当前播放（custom-output 从关变开时重建引擎），无需重进频道。
+  void _applyDecoder(int which) {
+    final String key = switch (which) {
+      1 => 'mediacodec',
+      2 => 'no',
+      _ => 'auto-safe',
+    };
+    final settings = ref.read(playerSettingsControllerProvider);
+    ref.read(playerSettingsControllerProvider.notifier).updateSettings(
+          settings.copyWith(videoHardwareDecoder: key, customPlayerOutput: true),
+        );
+    ToastUtil.show(i18n('decoder_reenter_hint'));
   }
 
   void _closePanel() => setState(() {
@@ -385,6 +436,14 @@ class _VideoControllerPanelState extends ConsumerState<VideoControllerPanel> {
         label: _fitLabel(state),
         active: _panel == _OptionsPanel.fit,
         onSelect: () => _openPanel(_OptionsPanel.fit, state),
+      ),
+      // 解码方式：IPTV 直播也要能切。切的是 mpv 的 --hwdec（系统/硬解/软解），
+      // 与设置页共享同一份 videoHardwareDecoder，切换即时作用于当前播放。
+      _PanelAction(
+        icon: Icons.deblur_rounded,
+        label: _decoderLabel(_currentDecoder()),
+        active: _panel == _OptionsPanel.decoder,
+        onSelect: () => _openPanel(_OptionsPanel.decoder, state),
       ),
       // Audio-only mode: the surface swaps the picture for the room card while
       // the stream keeps playing. The button writes the same setting the

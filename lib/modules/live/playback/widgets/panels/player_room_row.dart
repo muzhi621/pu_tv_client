@@ -30,6 +30,7 @@ class PlayerRoomRow extends ConsumerWidget {
     this.large = false,
     this.indexLabel,
     this.nowPlaying,
+    this.nextProgram,
   });
 
   final LiveRoom room;
@@ -46,6 +47,9 @@ class PlayerRoomRow extends ConsumerWidget {
   /// 该频道正在播的节目（EPG）。有就顶掉副标题里的分组名——
   /// 「正在播什么」比「属于哪个分组」有用得多，而分组名已经由台标兜着。
   final String? nowPlaying;
+
+  /// 该频道下一档节目（EPG）。有就作为副标题第二行显示「下一 xxx」。
+  final String? nextProgram;
 
   /// Whether the room is followed.
   final bool favorite;
@@ -91,6 +95,8 @@ class PlayerRoomRow extends ConsumerWidget {
     final String nick = room.nick.trim();
     final String playing = (nowPlaying ?? '').trim();
     final String subtitle = playing.isNotEmpty ? playing : nick;
+    // 下一档节目，作为副标题第二行显示「下一 xxx」。
+    final String nextLine = (nextProgram ?? '').trim();
 
     final Color foreground = selected ? Colors.white : tvTheme.primaryTextColor;
     final Color muted = selected ? Colors.white70 : tvTheme.secondaryTextColor;
@@ -192,6 +198,16 @@ class PlayerRoomRow extends ConsumerWidget {
                     style: AppTextStyles.of(nickSize).copyWith(
                       fontWeight: FontWeight.w500,
                       color: playing.isNotEmpty ? tvTheme.focusColor : muted,
+                    ),
+                  ),
+                if (nextLine.isNotEmpty)
+                  Text(
+                    '${i18n('epg_next')} $nextLine',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.of((large ? 13.0 : 11.0) * scale).copyWith(
+                      fontWeight: FontWeight.w400,
+                      color: muted,
                     ),
                   ),
               ],

@@ -142,6 +142,7 @@ class _PlaylistPanelState extends ConsumerState<PlaylistPanel> {
             // 台号用**全局**下标，分组只是展示层级，不改台号，观众按记忆找台不会错位。
             indexLabel: iptv ? members[i] + 1 : null,
             nowPlaying: iptv ? _nowPlaying(epg, room) : null,
+            nextProgram: iptv ? _nextProgram(epg, room) : null,
           );
         },
       ),
@@ -196,6 +197,13 @@ class _PlaylistPanelState extends ConsumerState<PlaylistPanel> {
   /// 该频道正在播的节目名；没有节目单/没匹配到返回 null（行内回退分组名）。
   String? _nowPlaying(EpgPlaybackService epg, LiveRoom room) {
     final EpgProgramme? programme = epg.currentOf(room.title);
+    if (programme == null) return null;
+    return programme.title.trim().isEmpty ? null : programme.title.trim();
+  }
+
+  /// 该频道下一档节目名（EPG）。没有节目单/没匹配到返回 null。
+  String? _nextProgram(EpgPlaybackService epg, LiveRoom room) {
+    final EpgProgramme? programme = epg.nextOf(room.title);
     if (programme == null) return null;
     return programme.title.trim().isEmpty ? null : programme.title.trim();
   }
