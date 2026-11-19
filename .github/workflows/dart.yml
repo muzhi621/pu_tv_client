@@ -104,9 +104,9 @@ jobs:
           --dart-define=PURE_LIVE_CONFIG_URL=${{ vars.PURE_LIVE_CONFIG_URL || 'https://tv.1008618.xyz' }}
           --dart-define=PURE_LIVE_CONFIG_TOKEN=${{ secrets.PURE_LIVE_CONFIG_TOKEN }}
 
-      # Impeller 是首选渲染器，Skia 是老设备/异常画面的兼容兜底；两者都随每次
-      # 发版一起出包，终端可按机型自行选择，不再依赖手动勾选。
-      - name: 打包APK（Skia 兼容渲染器）
+      # Impeller 默认走 Vulkan；skia flavor 强制走 Impeller 的 OpenGL 后端做兼容
+      # 兜底（不启用已废弃、会黑屏的旧 Skia 退路）。两者随每次发版一起出包。
+      - name: 打包APK（OpenGL 兼容渲染器）
         run: >
           flutter build apk --release --flavor skia --split-per-abi
           --target-platform android-arm,android-arm64
@@ -180,8 +180,8 @@ jobs:
             本次更新内容：
             ${{ steps.version.outputs.desc }}
             📺 版本说明：
-            • 每次发版同步发布 **Impeller（首选）** 与 **Skia（兼容兜底）** 两种渲染器，共 4 个 APK
-            • 画面异常/黑屏的设备改用 Skia 包，正常设备用 Impeller 即可
+            • 每次发版同步发布 **Impeller（Vulkan 首选）** 与 **OpenGL 兼容版** 两个渲染器，共 4 个 APK
+            • Vulkan 驱动异常导致花屏/黑屏的设备改用 `-skia` 兼容包（内部为 Impeller OpenGL 后端），正常设备用 Impeller 即可
             • **armeabi-v7a：绝大多数电视盒子（32 位系统），推荐先装这个**
             • arm64-v8a：仅 64 位系统设备（如 NVIDIA Shield、部分新旗舰）
             • 不再发布 x86_64（只用于模拟器）

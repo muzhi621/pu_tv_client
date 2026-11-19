@@ -108,10 +108,11 @@ android {
 
     // Two renderer variants share one applicationId, so a device treats them
     // as the same app and the user simply picks which APK to install:
-    //   impeller — engine default renderer, no manifest override
-    //   skia     — legacy renderer for boxes where Impeller misbehaves
-    //   (the EnableImpeller opt-out lives in src/skia/AndroidManifest.xml and
-    //   only merges into the skia variant)
+    //   impeller — engine default renderer (Vulkan on API 29+)
+    //   skia     — compatibility variant: Impeller forced to its OpenGL ES backend
+    //   (the ImpellerBackend=opengl opt-in lives in src/skia/AndroidManifest.xml and
+    //   only merges into the skia variant; the old EnableImpeller=false legacy-Skia
+    //   path was dropped because Flutter 3.50 removed it and it black-screens.)
     flavorDimensions += "renderer"
     productFlavors {
         create("impeller") { dimension = "renderer" }

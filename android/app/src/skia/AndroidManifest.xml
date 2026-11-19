@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Merged only into the skia variant: opts the app out of Impeller so the
-         legacy renderer runs on boxes where Impeller misbehaves. Flutter logs
-         a deprecation notice for this entry; that is inherent to the variant. -->
+    <!-- Merged only into the skia variant. Keeps Impeller enabled but forces its
+         OpenGL ES backend: on boxes with broken Vulkan drivers this avoids the
+         Vulkan artifacts, without taking the deprecated `--enable-impeller=false`
+         (legacy Skia) path that Flutter 3.50 removed and that black-screens. -->
     <application>
         <meta-data
-            android:name="io.flutter.embedding.android.EnableImpeller"
-            android:value="false" />
+            android:name="io.flutter.embedding.android.ImpellerBackend"
+            android:value="opengl" />
     </application>
 </manifest>

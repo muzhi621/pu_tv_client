@@ -1,7 +1,7 @@
 {
-  "version": "3.0.48",
-  "version_num": 130048,
-  "version_desc": "-IPTV 播放页遥控器上下键改为直接换台，菜单键呼出频道列表，OK 键呼出底部控制条\n-底部控制条新增解码切换（系统解码/硬件解码/软件解码）\n-播放失败 10 秒自动换下一台；频道列表 20 秒无操作自动收起\n-返回键首次弹出退出确认（默认落在确认），再按返回或 OK 直接回首页\n-频道列表显示下一节目（EPG），云端 EPG 地址正常下发",
+  "version": "3.0.49",
+  "version_num": 130049,
+  "version_desc": "-修复兼容版（-skia 包）安装后启动黑屏：该包改用 Impeller 的 OpenGL 后端，不再走 Flutter 3.50 已移除的旧 Skia 退路\n-Vulkan 驱动异常导致花屏/黑屏的设备可改用 -skia 兼容包；正常设备用 Impeller 包即可",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",

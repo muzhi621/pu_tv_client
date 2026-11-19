@@ -9,8 +9,7 @@
             "flutterMode": "debug",
             "toolArgs": [
                 "--flavor",
-                "skia",
-                "--no-enable-impeller"
+                "skia"
             ]
         },
         {
@@ -22,7 +21,6 @@
             "toolArgs": [
                 "--flavor",
                 "skia",
-                "--no-enable-impeller",
                 "--dart-define-from-file=.pure_live_TV_build_defines.env"
             ]
         },

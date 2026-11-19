@@ -131,8 +131,8 @@ A third-party live stream aggregator built with Flutter, designed for Android TV
 
 | 渲染器 | 说明 |
 | --- | --- |
-| `-impeller` | 新渲染器，**推荐优先尝试** |
-| `-skia` | 旧渲染器，画面异常 / 黑屏 / 文字发虚时改用此版 |
+| `-impeller` | Impeller 默认后端（Vulkan），**推荐优先尝试** |
+| `-skia` | 兼容版：Impeller 强制走 OpenGL 后端，Vulkan 驱动异常 / 花屏时改用此版（文件名沿用 `-skia`） |
 
 ### 系统要求
 
@@ -212,7 +212,7 @@ A third-party live stream aggregator built with Flutter, designed for Android TV
 
 ### 🖼️ 画面发虚 / 黑屏？
 
-- 文字发虚、画面模糊但界面正常：先切换到 **Skia 渲染器** 版本验证是否为 Impeller 兼容问题
+- 花屏、渲染异常但界面正常：先切换到 **`-skia` 兼容版**（Impeller OpenGL 后端）验证是否为 Vulkan 驱动问题
 - 黑屏有声音：设置 → 播放器，切换播放内核
 - 老设备卡顿：设置 → 通用，开启密集布局并降低弹幕数量
 
@@ -229,7 +229,7 @@ A third-party live stream aggregator built with Flutter, designed for Android TV
 | 安装提示解析包错误 | 选错了架构，电视盒子优先选 `arm64-v8a` |
 | 提示"未安装"且无报错 | 系统低于 Android 7.0，请改用 v2.0.20 |
 | 安装后被杀毒软件拦截 | 开源软件无签名白名单所致，自行斟酌后放行 |
-| 播放黑屏 / 花屏 | 切换渲染器（Impeller ↔ Skia）或播放内核（MPV ↔ FVP ↔ EXO ↔ IJK） |
+| 播放黑屏 / 花屏 | 切换渲染器（Vulkan ↔ OpenGL 兼容版）或播放内核（MPV ↔ FVP ↔ EXO ↔ IJK） |
 | 在线更新下载失败 | 更新页有多条镜像下载源，可手动切换；也可直接到 Releases 下载 |
 
 ---
@@ -255,7 +255,7 @@ flutter pub get
 flutter build apk --release --flavor impeller --split-per-abi \
   --target-platform android-arm,android-arm64,android-x64
 
-# Skia 渲染器（兼容模式）
+# 兼容版（Impeller OpenGL 后端，文件名仍沿用 -skia）
 flutter build apk --release --flavor skia --split-per-abi \
   --target-platform android-arm,android-arm64,android-x64
 ```
