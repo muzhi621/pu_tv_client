@@ -11,11 +11,6 @@ on:
         description: 'Branch or tag to build (leave empty to use the triggering ref)'
         required: false
         default: ''
-      include_skia:
-        description: '额外构建 Skia 兼容版（仅当 Impeller 画面异常/黑屏时勾选）'
-        required: false
-        type: boolean
-        default: false
   push:
     tags:
       - "v*"
@@ -31,10 +26,9 @@ jobs:
     # Android only: nothing here needs the macOS toolchain, and a Linux runner
     # costs a tenth of a macOS minute and is usually faster for Gradle.
     runs-on: ubuntu-latest
-    # One renderer flavor x two ABIs with R8 on a cold Gradle cache can take
-    # well over an hour on a fresh runner; keep a hard ceiling but give the
-    # first release build enough room to finish.
-    timeout-minutes: 90
+    # 两种渲染器 x 两个 ABI 共 4 个包，第二个 flavor 复用同一 Gradle 缓存但 R8
+    # 仍要各跑一遍；给足冷缓存下的时间，避免发布到一半被超时掐断。
+    timeout-minutes: 180
     permissions:
       contents: write
 
@@ -102,7 +96,7 @@ jobs:
       #
       # 云端配置地址与只读令牌通过 dart-define 编译进包：地址有代码内默认值，
       # 令牌放 GitHub Secret（不写进公开仓库），未配置时为空 = 不发 Authorization 头。
-      - name: 打包APK（Impeller 渲染器，默认唯一产物）
+      - name: 打包APK（Impeller 渲染器）
         run: >
           flutter build apk --release --flavor impeller --split-per-abi
           --target-platform android-arm,android-arm64
@@ -110,9 +104,9 @@ jobs:
           --dart-define=PURE_LIVE_CONFIG_URL=${{ vars.PURE_LIVE_CONFIG_URL || 'https://tv.1008618.xyz' }}
           --dart-define=PURE_LIVE_CONFIG_TOKEN=${{ secrets.PURE_LIVE_CONFIG_TOKEN }}
 
-      # Skia 仅作兼容兜底：tag 发版不构建，手动触发时勾选 include_skia 才出包。
-      - name: 打包APK（Skia 渲染器，按需）
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.include_skia == 'true' }}
+      # Impeller 是首选渲染器，Skia 是老设备/异常画面的兼容兜底；两者都随每次
+      # 发版一起出包，终端可按机型自行选择，不再依赖手动勾选。
+      - name: 打包APK（Skia 兼容渲染器）
         run: >
           flutter build apk --release --flavor skia --split-per-abi
           --target-platform android-arm,android-arm64
@@ -186,7 +180,8 @@ jobs:
             本次更新内容：
             ${{ steps.version.outputs.desc }}
             📺 版本说明：
-            • 默认只发布 **Impeller 渲染器**；若画面异常/黑屏，可手动触发构建并勾选 include_skia 单独生成 Skia 兼容版
+            • 每次发版同步发布 **Impeller（首选）** 与 **Skia（兼容兜底）** 两种渲染器，共 4 个 APK
+            • 画面异常/黑屏的设备改用 Skia 包，正常设备用 Impeller 即可
             • **armeabi-v7a：绝大多数电视盒子（32 位系统），推荐先装这个**
             • arm64-v8a：仅 64 位系统设备（如 NVIDIA Shield、部分新旗舰）
             • 不再发布 x86_64（只用于模拟器）
