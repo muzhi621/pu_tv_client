@@ -1,7 +1,7 @@
 {
   "version": "3.0.49",
   "version_num": 130049,
-  "version_desc": "-修复兼容版（-skia 包）安装后启动黑屏：该包改用 Impeller 的 OpenGL 后端，不再走 Flutter 3.50 已移除的旧 Skia 退路\n-Vulkan 驱动异常导致花屏/黑屏的设备可改用 -skia 兼容包；正常设备用 Impeller 包即可",
+  "version_desc": "-修复兼容包（-skia 包）安装后启动黑屏：去掉 Flutter 3.50 已移除的旧 Skia 渲染开关，改由引擎自动选择渲染后端\n-两个包都保持 Impeller 自动选择，Vulkan 驱动异常时引擎自动降级 GLES",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",

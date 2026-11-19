@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Merged only into the skia variant. Keeps Impeller enabled but forces its
-         OpenGL ES backend: on boxes with broken Vulkan drivers this avoids the
-         Vulkan artifacts, without taking the deprecated `--enable-impeller=false`
-         (legacy Skia) path that Flutter 3.50 removed and that black-screens. -->
-    <application>
-        <meta-data
-            android:name="io.flutter.embedding.android.ImpellerBackend"
-            android:value="opengl" />
-    </application>
+    <!-- 兼容版 flavor 保留独立构建出口，但不覆盖任何渲染器开关。
+         Flutter 3.50 已移除 Android 旧 Skia 后端：这里若写 EnableImpeller=false，
+         渲染会落到 kSkiaOpenGLES 并在启动时黑屏。
+         强制后端的 ImpellerBackend 仅在 Debug/Profile 生效（引擎 #ifndef
+         FLUTTER_RELEASE），release 包无效，故不能用来指定 GLES。
+         留空即走引擎默认 kImpellerAutoselect：Vulkan 正常时用 Vulkan，
+         驱动不可用时引擎自动降级到 Impeller 的 OpenGL ES 后端。 -->
+    <application />
 </manifest>
