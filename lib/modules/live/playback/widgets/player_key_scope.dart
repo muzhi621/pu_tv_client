@@ -60,9 +60,9 @@ class PlayerGestureScope extends InheritedWidget {
 /// d-pad layer. Keys reach it through one [Focus], so nothing can steal focus or
 /// leave the player with a dead remote.
 ///
-/// * nothing open: **OK opens the channel list**, **Menu shows the control
-///   bar**, Up/Down switch channel directly, Left double-presses to follow,
-///   Right opens the channel list
+/// * nothing open: **OK opens the channel list**, **Menu (or Right) shows the
+///   control bar**, Up/Down switch channel directly, Left double-presses to
+///   follow
 /// * a side panel open: keys belong to that panel (they are focus based)
 /// * controls visible: the control layer's own [Focus] handles them first —
 ///   events bubble from the primary focus outwards, so this handler stays out of
@@ -386,8 +386,11 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
       _handleFollowDoublePress();
       return KeyEventResult.handled;
     }
+    // 右键也开控制条：有些电视盒子的遥控器没有「菜单」键，OK 又被频道列表
+    // 占用，没有这条冗余入口就再也调不出播放/暂停、解码切换。以前右键是开
+    // 列表，和 OK 功能重叠，现在正好让给它。
     if (key == LogicalKeyboardKey.arrowRight) {
-      unawaited(_openChannelList(controller));
+      controller.showControls();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
