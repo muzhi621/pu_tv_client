@@ -109,9 +109,6 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
   static const Duration _panelIdleDelay = Duration(seconds: 20);
   Timer? _panelIdleTimer;
 
-  /// 退出确认弹窗是否已弹出：弹窗打开时再按一次返回 = 直接回首页。
-  bool _exitDialogShown = false;
-
   // ------------------------------------------------------------ 触摸手势
 
   /// 横向/纵向拖动超过这个像素数才算一次有效滑动（低于它当作误触）。
@@ -463,56 +460,6 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     LivePlayRoute(LivePlayArgs.fromRoom(target, playlist: rooms, showChannelBanner: true)).replace(context);
   }
 
-  /// 退出确认弹窗：确认或「弹窗打开时再按一次返回」都回 APK 首页。
-  ///
-  /// 焦点默认落在「确定」（TvDialog 的 confirm 按钮 autofocus），因此 OK 键
-  /// 直接确认退出；弹窗自己用 PopScope 接管第二次返回，避免播放页的 PopScope
-  /// 收不到（弹窗是新的 route）。
-  void _showExitToHomeDialog() {
-    if (!mounted) return;
-    _exitDialogShown = true;
-
-    void goHome() {
-      if (!mounted) return;
-      // 先关弹窗路由，再回首页；HomeRoute().go 会清空整个栈。
-      Navigator.of(context).maybePop();
-      HomeRoute().go(context);
-    }
-
-    TvDialogUtils.show<bool>(
-      context: context,
-      builder: (dialogContext) => PopScope<bool>(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, _) {
-          if (didPop) return;
-          goHome();
-        },
-        child: TvDialog(
-          title: i18n('confirm_exit'),
-          confirmText: i18n('exit_yes'),
-          cancelText: i18n('exit_no'),
-          onConfirm: goHome,
-          onCancel: () {
-            final nav = Navigator.of(dialogContext);
-            if (nav.canPop()) nav.pop();
-          },
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                i18n('exit_confirm_message'),
-                textAlign: TextAlign.center,
-                style: AppTextStyles.t22.copyWith(color: context.tvTheme.primaryTextColor, height: 1.5),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ).whenComplete(() {
-      _exitDialogShown = false;
-    });
-  }
-
   /// 打开左侧频道列表，必要时先把列表补齐。
   ///
   /// IPTV 的换台表来自数据库（见 [LivePlayController.ensureChannelList]），
@@ -643,10 +590,10 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
           controller.dismissOverlays();
           return;
         }
-        // 纯视频态返回键：第一次弹确认框（焦点默认在确认），弹窗打开时
-        // 第二次返回由弹窗自己的 PopScope 直接回首页，这里只在未弹时触发。
-        if (_exitDialogShown) return;
-        _showExitToHomeDialog();
+        // 纯视频态返回键：直接回首页，不弹退出确认框——退出确认只属于
+        // APK 首页（HomePage 的 PopScope）。播放页返回是普通的页面返回，
+        // 让用户再确认一次「是否退出应用」既答非所问又会误关播放器。
+        HomeRoute().go(context);
       },
       child: Focus(
         focusNode: _focusNode,
