@@ -1,5 +1,43 @@
 [
   {
+    "version": "3.0.55",
+    "title": "v3.0.55",
+    "date": "2026-11-20",
+    "github": "https://github.com/muzhi621/pu_tv_client/releases/tag/v3.0.55",
+    "author": {
+      "name": "github-actions[bot]",
+      "avatar": "https://avatars.githubusercontent.com/in/15368?v=4",
+      "profile": "https://github.com/apps/github-actions"
+    },
+    "changelog": "📦 SUTV v3.0.55\n本次更新内容：\n-退出弹窗恢复 3.0.47 的完整样式：微信二维码 + 捐赠文案正常显示\n-退出弹窗改为云端接管：标题/正文/二维码/文案可在线配置，无需重装 APK\n-播放页返回直接回首页；只有 APK 首页退出才弹确认框\n📺 版本说明：\n• 每次发版同步发布 Impeller 与兼容版两个包（各含 arm64-v8a / armeabi-v7a），共 4 个 APK\n• 兼容版沿用 `-skia` 文件名，但不再用已废弃、会黑屏的旧 Skia 渲染器；两版都走引擎自动选择后端，Vulkan 异常时自动降级 GLES\n• **armeabi-v7a：32 位电视盒子（老盒子居多）用这个**\n• **arm64-v8a：64 位设备必须用这个**——手机、近几年的新盒子、NVIDIA Shield 等。装错架构会在启动瞬间闪退且没有任何日志\n• 不确定设备架构：`adb shell getprop ro.product.cpu.abilist`，列出 `arm64-v8a` 就必须装 arm64 包\n• 不再发布 x86_64（只用于模拟器）\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
+    "files": [
+      {
+        "name": "SUTV-arm64-v8a-impeller",
+        "size": "25.78mb",
+        "downloads": 0,
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.55/SUTV-arm64-v8a-impeller.apk"
+      },
+      {
+        "name": "SUTV-arm64-v8a-skia",
+        "size": "25.78mb",
+        "downloads": 0,
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.55/SUTV-arm64-v8a-skia.apk"
+      },
+      {
+        "name": "SUTV-armeabi-v7a-impeller",
+        "size": "24.82mb",
+        "downloads": 0,
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.55/SUTV-armeabi-v7a-impeller.apk"
+      },
+      {
+        "name": "SUTV-armeabi-v7a-skia",
+        "size": "24.82mb",
+        "downloads": 0,
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.55/SUTV-armeabi-v7a-skia.apk"
+      }
+    ]
+  },
+  {
     "version": "3.0.54",
     "title": "v3.0.54",
     "date": "2026-11-20",
@@ -14,25 +52,25 @@
       {
         "name": "SUTV-arm64-v8a-impeller",
         "size": "25.78mb",
-        "downloads": 0,
+        "downloads": 1,
         "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.54/SUTV-arm64-v8a-impeller.apk"
       },
       {
         "name": "SUTV-arm64-v8a-skia",
         "size": "25.78mb",
-        "downloads": 0,
+        "downloads": 1,
         "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.54/SUTV-arm64-v8a-skia.apk"
       },
       {
         "name": "SUTV-armeabi-v7a-impeller",
         "size": "24.82mb",
-        "downloads": 0,
+        "downloads": 1,
         "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.54/SUTV-armeabi-v7a-impeller.apk"
       },
       {
         "name": "SUTV-armeabi-v7a-skia",
         "size": "24.82mb",
-        "downloads": 0,
+        "downloads": 1,
         "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.54/SUTV-armeabi-v7a-skia.apk"
       }
     ]
@@ -41,7 +79,7 @@
     "version": "3.0.53",
     "title": "v3.0.53",
     "date": "2026-11-20",
-    "github": "https://github.com/muzhi621/pu_tv_client/releases/tag/v3.0.53",
+    "github": "https://github.com/muzhi621/pu_tv_client/releases/tag/untagged-3547f69c9eeab9635b6f",
     "author": {
       "name": "github-actions[bot]",
       "avatar": "https://avatars.githubusercontent.com/in/15368?v=4",
@@ -53,25 +91,25 @@
         "name": "SUTV-arm64-v8a-impeller",
         "size": "25.78mb",
         "downloads": 1,
-        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.53/SUTV-arm64-v8a-impeller.apk"
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/untagged-3547f69c9eeab9635b6f/SUTV-arm64-v8a-impeller.apk"
       },
       {
         "name": "SUTV-arm64-v8a-skia",
         "size": "25.78mb",
         "downloads": 2,
-        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.53/SUTV-arm64-v8a-skia.apk"
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/untagged-3547f69c9eeab9635b6f/SUTV-arm64-v8a-skia.apk"
       },
       {
         "name": "SUTV-armeabi-v7a-impeller",
         "size": "24.82mb",
         "downloads": 1,
-        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.53/SUTV-armeabi-v7a-impeller.apk"
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/untagged-3547f69c9eeab9635b6f/SUTV-armeabi-v7a-impeller.apk"
       },
       {
         "name": "SUTV-armeabi-v7a-skia",
         "size": "24.82mb",
         "downloads": 1,
-        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.53/SUTV-armeabi-v7a-skia.apk"
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/untagged-3547f69c9eeab9635b6f/SUTV-armeabi-v7a-skia.apk"
       }
     ]
   },
@@ -1304,7 +1342,7 @@
       {
         "name": "PureLive-TV-arm64-v8a-impeller",
         "size": "93.21mb",
-        "downloads": 5380,
+        "downloads": 5382,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-arm64-v8a-impeller.apk"
       },
       {
