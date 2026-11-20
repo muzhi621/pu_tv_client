@@ -1,5 +1,43 @@
 [
   {
+    "version": "3.0.53",
+    "title": "v3.0.53",
+    "date": "2026-11-20",
+    "github": "https://github.com/muzhi621/pu_tv_client/releases/tag/v3.0.53",
+    "author": {
+      "name": "github-actions[bot]",
+      "avatar": "https://avatars.githubusercontent.com/in/15368?v=4",
+      "profile": "https://github.com/apps/github-actions"
+    },
+    "changelog": "📦 SUTV v3.0.53\n本次更新内容：\n-IPTV/点播播放页按返回键直接回首页，不再弹「是否退出应用」确认框\n-退出确认只保留在 APK 首页：首页按返回才弹，播放页返回是页面导航，不该问是否退出\n-播放页有浮层时仍先逐层关闭（频道列表 → 控制条/房间卡），关完再按返回才回首页\n📺 版本说明：\n• 每次发版同步发布 Impeller 与兼容版两个包（各含 arm64-v8a / armeabi-v7a），共 4 个 APK\n• 兼容版沿用 `-skia` 文件名，但不再用已废弃、会黑屏的旧 Skia 渲染器；两版都走引擎自动选择后端，Vulkan 异常时自动降级 GLES\n• **armeabi-v7a：32 位电视盒子（老盒子居多）用这个**\n• **arm64-v8a：64 位设备必须用这个**——手机、近几年的新盒子、NVIDIA Shield 等。装错架构会在启动瞬间闪退且没有任何日志\n• 不确定设备架构：`adb shell getprop ro.product.cpu.abilist`，列出 `arm64-v8a` 就必须装 arm64 包\n• 不再发布 x86_64（只用于模拟器）\n\n本软件为开源项目,无广告，无病毒，若安装时出现病毒误报，可自行斟酌。",
+    "files": [
+      {
+        "name": "SUTV-arm64-v8a-impeller",
+        "size": "25.78mb",
+        "downloads": 0,
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.53/SUTV-arm64-v8a-impeller.apk"
+      },
+      {
+        "name": "SUTV-arm64-v8a-skia",
+        "size": "25.78mb",
+        "downloads": 0,
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.53/SUTV-arm64-v8a-skia.apk"
+      },
+      {
+        "name": "SUTV-armeabi-v7a-impeller",
+        "size": "24.82mb",
+        "downloads": 0,
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.53/SUTV-armeabi-v7a-impeller.apk"
+      },
+      {
+        "name": "SUTV-armeabi-v7a-skia",
+        "size": "24.82mb",
+        "downloads": 0,
+        "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.53/SUTV-armeabi-v7a-skia.apk"
+      }
+    ]
+  },
+  {
     "version": "3.0.52",
     "title": "v3.0.52",
     "date": "2026-11-19",
@@ -14,25 +52,25 @@
       {
         "name": "SUTV-arm64-v8a-impeller",
         "size": "25.78mb",
-        "downloads": 0,
+        "downloads": 1,
         "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.52/SUTV-arm64-v8a-impeller.apk"
       },
       {
         "name": "SUTV-arm64-v8a-skia",
         "size": "25.78mb",
-        "downloads": 0,
+        "downloads": 2,
         "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.52/SUTV-arm64-v8a-skia.apk"
       },
       {
         "name": "SUTV-armeabi-v7a-impeller",
         "size": "24.82mb",
-        "downloads": 0,
+        "downloads": 1,
         "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.52/SUTV-armeabi-v7a-impeller.apk"
       },
       {
         "name": "SUTV-armeabi-v7a-skia",
         "size": "24.82mb",
-        "downloads": 0,
+        "downloads": 1,
         "url": "https://github.com/muzhi621/pu_tv_client/releases/download/v3.0.52/SUTV-armeabi-v7a-skia.apk"
       }
     ]
@@ -1228,37 +1266,37 @@
       {
         "name": "PureLive-TV-arm64-v8a-impeller",
         "size": "93.21mb",
-        "downloads": 5301,
+        "downloads": 5379,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-arm64-v8a-impeller.apk"
       },
       {
         "name": "PureLive-TV-arm64-v8a-skia",
         "size": "93.21mb",
-        "downloads": 1786,
+        "downloads": 1820,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-arm64-v8a-skia.apk"
       },
       {
         "name": "PureLive-TV-armeabi-v7a-impeller",
         "size": "78.92mb",
-        "downloads": 3530,
+        "downloads": 3561,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-armeabi-v7a-impeller.apk"
       },
       {
         "name": "PureLive-TV-armeabi-v7a-skia",
         "size": "78.92mb",
-        "downloads": 1841,
+        "downloads": 1849,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-armeabi-v7a-skia.apk"
       },
       {
         "name": "PureLive-TV-x86_64-impeller",
         "size": "95.97mb",
-        "downloads": 601,
+        "downloads": 605,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-x86_64-impeller.apk"
       },
       {
         "name": "PureLive-TV-x86_64-skia",
         "size": "95.97mb",
-        "downloads": 368,
+        "downloads": 374,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.7/PureLive-TV-x86_64-skia.apk"
       }
     ]
@@ -1278,31 +1316,31 @@
       {
         "name": "PureLive-TV-arm64-v8a-impeller",
         "size": "93.99mb",
-        "downloads": 159,
+        "downloads": 162,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.6/PureLive-TV-arm64-v8a-impeller.apk"
       },
       {
         "name": "PureLive-TV-arm64-v8a-skia",
         "size": "93.99mb",
-        "downloads": 100,
+        "downloads": 104,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.6/PureLive-TV-arm64-v8a-skia.apk"
       },
       {
         "name": "PureLive-TV-armeabi-v7a-impeller",
         "size": "78.85mb",
-        "downloads": 210,
+        "downloads": 213,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.6/PureLive-TV-armeabi-v7a-impeller.apk"
       },
       {
         "name": "PureLive-TV-armeabi-v7a-skia",
         "size": "78.85mb",
-        "downloads": 86,
+        "downloads": 88,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.6/PureLive-TV-armeabi-v7a-skia.apk"
       },
       {
         "name": "PureLive-TV-x86_64-impeller",
         "size": "95.91mb",
-        "downloads": 31,
+        "downloads": 39,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.6/PureLive-TV-x86_64-impeller.apk"
       },
       {
@@ -1328,7 +1366,7 @@
       {
         "name": "PureLive-TV-arm64-v8a-impeller",
         "size": "80.74mb",
-        "downloads": 316,
+        "downloads": 317,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.5/PureLive-TV-arm64-v8a-impeller.apk"
       },
       {
@@ -1352,7 +1390,7 @@
       {
         "name": "PureLive-TV-x86_64-impeller",
         "size": "82.48mb",
-        "downloads": 51,
+        "downloads": 52,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v3.0.5/PureLive-TV-x86_64-impeller.apk"
       },
       {
@@ -1628,25 +1666,25 @@
       {
         "name": "arm64-v8a",
         "size": "51.82mb",
-        "downloads": 10043,
+        "downloads": 10052,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.20/app-arm64-v8a-release.apk"
       },
       {
         "name": "arm64-v8a-without-exo",
         "size": "45.47mb",
-        "downloads": 1658,
+        "downloads": 1662,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.20/app-arm64-v8a-without-exo.apk"
       },
       {
         "name": "armeabi-v7a",
         "size": "50.6mb",
-        "downloads": 7248,
+        "downloads": 7251,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.20/app-armeabi-v7a-release.apk"
       },
       {
         "name": "armeabi-v7a-without-exo",
         "size": "44.87mb",
-        "downloads": 1536,
+        "downloads": 1537,
         "url": "https://github.com/liuchuancong/pure_live_TV/releases/download/v2.0.20/app-armeabi-v7a-without-exo.apk"
       },
       {
