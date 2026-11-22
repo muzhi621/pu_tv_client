@@ -255,6 +255,13 @@ class VodSiteEngine {
         step: step,
       );
     }
+    // 通道成功只代表「拿到了 JSON」，不代表业务成功。自建网关习惯用
+    // `{code:500,message}` 表达失败，HTTP 仍是 200 —— 不识别就会变成
+    // 「站点没内容」，用户完全看不到真正的报错。
+    final serverError = vodServerError(json);
+    if (serverError != null) {
+      throw VodEngineException(serverError, site: site.name, step: step);
+    }
     return json;
   }
 

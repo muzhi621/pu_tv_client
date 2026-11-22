@@ -136,6 +136,36 @@ int? vodAsInt(Object? value) {
   return null;
 }
 
+/// 从响应 JSON 里提取「服务端明确报错」的原文，没有则返回 null。
+///
+/// 采集站与自建网关的失败响应五花八门（`{code:500,message}` /
+/// `{error:"..."}` / `{code:404,msg:"not found"}`），共同点是既没有 `list`
+/// 也没有 `class`。如果只看 HTTP 状态码，就会把「200 里塞错误」的网关当成
+/// 空数据 —— 用户侧表现为「无内容、无报错」，排查只能靠抓包。
+///
+/// 判定刻意保守：**必须**有状态码/业务码 >= 400，或显式带 `error` 字段，
+/// 才算失败；`{code:1,msg:"ok",list:[]}` 这种「正常但是空」仍然当空数据，
+/// 由调用方决定要不要提示「暂无内容」。
+String? vodServerError(Map<String, dynamic> json, {int statusCode = 0}) {
+  final code = vodAsInt(json['code'] ?? json['errno'] ?? json['status']);
+  final message = vodText(
+    json['message'] ?? json['msg'] ?? json['error'] ?? json['err'],
+  );
+  final failed = statusCode >= 400 || (code != null && code >= 400);
+  // 明确失败优先于「有 class」：网关的失败响应经常是
+  // `{code:500, message, class:[正常分类], list:[]}` —— 先看 class 会把
+  // 一条真实错误当成正常数据，正好退回「无内容无报错」。
+  if (failed) {
+    if (message.isNotEmpty) return message;
+    return statusCode >= 400 ? 'HTTP $statusCode' : 'code $code';
+  }
+  final list = json['list'];
+  if (list is List && list.isNotEmpty) return null;
+  // 没有状态码也没有业务码，但显式给了 error 字段：服务端常用的失败写法。
+  if (json.containsKey('error') && message.isNotEmpty) return message;
+  return null;
+}
+
 /// 站点常把图片写成 `//img.x.com/a.jpg`，不补协议 `Image.network` 会直接失败。
 String normalizeVodPic(String pic) {
   final value = pic.trim();

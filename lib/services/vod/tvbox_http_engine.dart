@@ -38,6 +38,7 @@ export 'vod_models.dart' show
     parseVodPageJson,
     stripVodHtml,
     vodAsInt,
+    vodServerError,
     vodText;
 
 /// 引擎侧异常，带上「哪个站点、哪一步、什么原因」，方便影音页直接弹提示。
@@ -75,13 +76,29 @@ class TvboxHttpEngine {
               followRedirects: true,
               maxRedirects: 5,
               // 采集站普遍不校验状态码以外的内容，非 2xx 自己判更灵活。
-              validateStatus: (code) => code != null && code < 500,
+              // 这里全部放行，由响应体判断成功与否 —— 4xx/5xx 的 body 里
+              // 往往就是服务端给的失败原因，交给 Dio 抛掉就只剩「网络错误」。
+              validateStatus: (code) => code != null,
             ));
 
   final Dio _dio;
 
-  /// 苹果CMS 的接口动作，按新到老依次尝试。
-  static const List<String> _actions = ['detail', 'videolist', 'list'];
+  /// 各接口的标准动作，按「最可能命中」到「兜底」排列。
+  ///
+  /// 原来所有接口共用一条 `detail → videolist → list` 的链，home 也要先发两次
+  /// 必然失败的请求：苹果CMS 拿分类的标准动作就是 `ac=list`，detail 只会回
+  /// 一个空壳。慢源上每次空响应都要等满超时，白白放大成三倍等待。
+  ///
+  /// 降级仍然保留 —— 老站的动作支持确实参差不齐，但只在「服务端返回 2xx 且
+  /// 没有数据」时才降级；网络层失败（超时/连不上）直接上抛，换动作也一样。
+  static const List<String> _homeActions = ['list', 'videolist'];
+  static const List<String> _listActions = ['videolist', 'detail', 'list'];
+  static const List<String> _detailActions = ['detail', 'videolist', 'list'];
+  static const List<String> _probeActions = ['list'];
+
+  /// 一次降级链的总时间预算。单次请求已有 20s 接收超时，超过这个预算就
+  /// 不再试下一个动作，避免「三次超时串起来」把首屏拖到一分钟。
+  static const Duration _fallbackBudget = Duration(seconds: 25);
 
   /// 首页：拿分类与首页推荐。
   Future<VodHome> home(TvboxSite site) async {
@@ -91,6 +108,7 @@ class TvboxHttpEngine {
       site,
       (action) => <String, Object?>{'ac': action},
       step: 'home',
+      actions: _homeActions,
     );
     return _parseHome(payload);
   }
@@ -111,6 +129,7 @@ class TvboxHttpEngine {
         ...filters,
       },
       step: 'category',
+      actions: _listActions,
     );
     return _parsePage(payload, fallbackPage: page);
   }
@@ -121,6 +140,7 @@ class TvboxHttpEngine {
       site,
       (action) => <String, Object?>{'ac': action, 'ids': vodId},
       step: 'detail',
+      actions: _detailActions,
     );
     final list = _extractList(payload);
     if (list.isEmpty) {
@@ -139,6 +159,7 @@ class TvboxHttpEngine {
         'pg': page > 1 ? page : null,
       },
       step: 'search',
+      actions: _listActions,
     );
     return _parsePage(payload, fallbackPage: page);
   }
@@ -152,6 +173,7 @@ class TvboxHttpEngine {
       site,
       (action) => <String, Object?>{'ac': action},
       step: 'probe',
+      actions: _probeActions,
     );
     watch.stop();
     return watch.elapsed;
@@ -159,25 +181,40 @@ class TvboxHttpEngine {
 
   // ---------------------------------------------------------------- 请求
 
-  /// 按 [_actions] 顺序尝试，直到返回里有可用数据。
+  /// 按 [actions] 顺序尝试，直到返回里有可用数据。
   ///
-  /// 苹果CMS 不同版本对 action 的响应差异很大：老站遇到不认识的 action 会返回
-  /// HTTP 200 但 body 是空 JSON 或错误页，所以不能只看状态码。
+  /// 三种结局必须分开处理，它们正是「无内容无报错」与「首屏等一分钟」的根源：
+  ///
+  ///  * **服务端明确报错**（body 带 code/message/error）：立即把原文上抛。
+  ///    换 action 不会改变服务端的失败，只会把同一条错误再等两遍。
+  ///  * **网络层失败**（超时、连不上、TLS）：同样立即上抛。慢源的三倍耗时
+  ///    就来自这里 —— 以前每次超时都被当成「这个 action 不行」，接着试下一个。
+  ///  * **2xx 但没有数据**：才按下一个动作降级，这才是老站 action 不兼容的形态。
   Future<_Payload> _requestWithFallback(
     TvboxSite site,
     Map<String, Object?> Function(String action) build, {
     required String step,
+    required List<String> actions,
   }) async {
+    final watch = Stopwatch()..start();
     Object? lastError;
     _Payload? lastPayload;
-    for (final action in _actions) {
+    for (final action in actions) {
+      if (watch.elapsed > _fallbackBudget) break;
+      _Payload payload;
       try {
-        final payload = await _fetch(site, build(action), step: step);
-        if (!payload.isEmpty) return payload;
-        lastPayload = payload;
-      } catch (error) {
+        payload = await _fetch(site, build(action), step: step);
+      } on VodEngineException catch (error) {
         lastError = error;
+        if (error.cause is DioException) rethrow;
+        continue;
       }
+      final serverError = payload.serverError;
+      if (serverError != null) {
+        throw VodEngineException(serverError, site: site.name, step: step);
+      }
+      if (!payload.isEmpty) return payload;
+      lastPayload = payload;
     }
     if (lastPayload != null) return lastPayload;
     throw VodEngineException(
@@ -206,15 +243,46 @@ class TvboxHttpEngine {
           },
         ),
       );
+    } on DioException catch (error) {
+      throw VodEngineException(
+        _networkMessage(error),
+        site: site.name,
+        step: step,
+        cause: error,
+      );
     } catch (error) {
       throw VodEngineException('网络错误', site: site.name, step: step, cause: error);
     }
+    final status = response.statusCode ?? 0;
     final bytes = Uint8List.fromList(response.data ?? const <int>[]);
     if (bytes.isEmpty) {
-      return const _Payload.empty();
+      return _Payload.empty(statusCode: status);
     }
     final text = await _decode(bytes, response.headers);
-    return _Payload.parse(text, url: url);
+    return _Payload.parse(text, url: url, statusCode: status);
+  }
+
+  /// 网络层失败的人话。UI 只显示 `VodEngineException.message`，统一显示
+  /// 「网络错误」会让超时和证书失败看起来一模一样。
+  String _networkMessage(DioException error) {
+    switch (error.type) {
+      case DioExceptionType.connectionTimeout:
+        return '连接超时';
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.sendTimeout:
+        return '响应超时';
+      case DioExceptionType.connectionError:
+        return '无法连接站点';
+      case DioExceptionType.badCertificate:
+        return '证书校验失败';
+      case DioExceptionType.cancel:
+        return '请求已取消';
+      case DioExceptionType.badResponse:
+        final code = error.response?.statusCode;
+        return code == null ? '响应异常' : 'HTTP $code';
+      case DioExceptionType.unknown:
+        return '网络错误';
+    }
   }
 
   /// 解码响应体。
@@ -373,22 +441,32 @@ class TvboxHttpEngine {
 
 /// 一次响应的统一形态：可能是 JSON 也可能是 XML，解析一次后复用。
 class _Payload {
-  const _Payload._({this.json = const {}, this.xml, this.raw = '', this.url = ''});
+  const _Payload._({
+    this.json = const {},
+    this.xml,
+    this.raw = '',
+    this.url = '',
+    this.statusCode = 0,
+    this.serverError,
+  });
 
-  const _Payload.empty() : this._();
+  const _Payload.empty({int statusCode = 0}) : this._(statusCode: statusCode);
 
-  factory _Payload.parse(String text, {required String url}) {
+  factory _Payload.parse(String text, {required String url, int statusCode = 0}) {
     final trimmed = text.trim();
-    if (trimmed.isEmpty) return const _Payload.empty();
+    if (trimmed.isEmpty) return _Payload.empty(statusCode: statusCode);
     // 内容优先：type 标错在真实配置里很常见。
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
       try {
         final decoded = jsonDecode(trimmed);
         if (decoded is Map) {
+          final map = decoded.map((key, value) => MapEntry(key.toString(), value));
           return _Payload._(
-            json: decoded.map((key, value) => MapEntry(key.toString(), value)),
+            json: map,
             raw: trimmed,
             url: url,
+            statusCode: statusCode,
+            serverError: vodServerError(map, statusCode: statusCode),
           );
         }
         if (decoded is List) {
@@ -396,6 +474,7 @@ class _Payload {
             json: {'list': decoded},
             raw: trimmed,
             url: url,
+            statusCode: statusCode,
           );
         }
       } on FormatException {
@@ -404,23 +483,51 @@ class _Payload {
     }
     if (trimmed.startsWith('<')) {
       try {
-        return _Payload._(xml: XmlDocument.parse(trimmed), raw: trimmed, url: url);
+        return _Payload._(
+          xml: XmlDocument.parse(trimmed),
+          raw: trimmed,
+          url: url,
+          statusCode: statusCode,
+        );
       } on XmlException {
         // 可能是错误页 HTML，当作空响应。
       }
     }
-    return _Payload._(raw: trimmed, url: url);
+    // 既不是 JSON 也不是 XML，只有 4xx/5xx 才值得报错：有些站 200 返回
+    // 一段「无数据」的 HTML，那属于正常空响应，该走降级。
+    return _Payload._(
+      raw: trimmed,
+      url: url,
+      statusCode: statusCode,
+      serverError: statusCode >= 400 ? _plainError(trimmed, statusCode) : null,
+    );
+  }
+
+  /// 非 JSON 的错误页：去掉标签与多余空白，截断到一行能显示的长度。
+  static String _plainError(String text, int status) {
+    final plain = text
+        .replaceAll(RegExp(r'<[^>]+>'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (plain.isEmpty) return 'HTTP $status';
+    return plain.length <= 120 ? plain : '${plain.substring(0, 120)}…';
   }
 
   final Map<String, dynamic> json;
   final XmlDocument? xml;
   final String raw;
   final String url;
+  final int statusCode;
+
+  /// 服务端明确给出的失败原因。非 null 表示这次请求已经失败，调用方应直接
+  /// 上抛而不是换个 action 再试。
+  final String? serverError;
 
   bool get isJson => json.isNotEmpty;
 
   /// 有没有可用数据。空 JSON / 错误页都算空，触发下一个 action 重试。
   bool get isEmpty {
+    if (serverError != null) return true;
     if (isJson) {
       final list = json['list'];
       final hasList = list is List && list.isNotEmpty;
