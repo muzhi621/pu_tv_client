@@ -264,25 +264,23 @@ class TvboxHttpEngine {
 
   /// 网络层失败的人话。UI 只显示 `VodEngineException.message`，统一显示
   /// 「网络错误」会让超时和证书失败看起来一模一样。
+  ///
+  /// 这里刻意用 if 链而不是 switch：Dio 每新增一个 `DioExceptionType`
+  /// （5.11 就多了 transformTimeout）都会让穷尽匹配直接编译失败，把整个
+  /// 发版构建拖红 —— 一句诊断文案不值得这个代价。
   String _networkMessage(DioException error) {
-    switch (error.type) {
-      case DioExceptionType.connectionTimeout:
-        return '连接超时';
-      case DioExceptionType.receiveTimeout:
-      case DioExceptionType.sendTimeout:
-        return '响应超时';
-      case DioExceptionType.connectionError:
-        return '无法连接站点';
-      case DioExceptionType.badCertificate:
-        return '证书校验失败';
-      case DioExceptionType.cancel:
-        return '请求已取消';
-      case DioExceptionType.badResponse:
-        final code = error.response?.statusCode;
-        return code == null ? '响应异常' : 'HTTP $code';
-      case DioExceptionType.unknown:
-        return '网络错误';
+    final kind = error.type;
+    if (kind == DioExceptionType.connectionTimeout) return '连接超时';
+    if (kind == DioExceptionType.receiveTimeout ||
+        kind == DioExceptionType.sendTimeout ||
+        kind == DioExceptionType.transformTimeout) {
+      return '响应超时';
     }
+    if (kind == DioExceptionType.connectionError) return '无法连接站点';
+    if (kind == DioExceptionType.badCertificate) return '证书校验失败';
+    if (kind == DioExceptionType.cancel) return '请求已取消';
+    final code = error.response?.statusCode;
+    return code == null ? '网络错误' : 'HTTP $code';
   }
 
   /// 解码响应体。
