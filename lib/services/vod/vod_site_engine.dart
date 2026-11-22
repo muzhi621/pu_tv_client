@@ -145,14 +145,20 @@ class VodSiteEngine {
 
   /// 解析播放地址。
   ///
-  /// HTTP 站点没有这一步 —— 详情里的选集地址本身就是最终地址，所以直接
-  /// 返回直链。只有 spider 需要额外调 `playerContent`。
+  /// HTTP 站点通常没有这一步 —— 详情里的选集地址本身就是最终地址。但网关型
+  /// 站点给的是自家跳转端点（`/play?spider=…&id=…`），这里先解析成真实地址：
+  /// 一是能把服务端的失败原因显示出来，二是跳转目标常需要站点 header，只有
+  /// 客户端拿到 URL 才能连带交给播放器。
   Future<VodPlayResolved> resolvePlay(
     VodSite site, {
     required String flag,
     required String id,
   }) async {
     if (!site.requiresSpiderJar) {
+      if (TvboxHttpEngine.looksLikePlayEndpoint(id)) {
+        final resolved = await _http.resolvePlayEndpoint(site.toTvboxSite(), id);
+        return VodPlayResolved(url: resolved.url, header: resolved.header);
+      }
       return VodPlayResolved(url: id);
     }
     await _ensurePrepared(site);

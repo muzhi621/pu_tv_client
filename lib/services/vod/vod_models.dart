@@ -166,6 +166,51 @@ String? vodServerError(Map<String, dynamic> json, {int statusCode = 0}) {
   return null;
 }
 
+/// 把服务端/爬虫抛出的英文技术错误翻成人话。
+///
+/// 这些字符串来自网关型站点（OmniBox / TVBox-Worker 这类自家爬虫网关）的
+/// 真实返回：`spider not found`、`unsupported module: fs`、`fetch failed`…
+/// 它们原本是给运维看的，直接显示给用户等于什么都没说 —— 既看不懂，也不知道
+/// 下一步该做什么（换源？重进？等修复？）。
+///
+/// 只做「能对应到明确动作」的翻译，认不出来的一律原样返回：宁可显示原文，
+/// 也不要为了好看编一句错误的原因。
+String vodFriendlyMessage(String raw) {
+  final text = raw.trim();
+  if (text.isEmpty) return text;
+  final lower = text.toLowerCase();
+
+  if (lower.contains('spider not found')) {
+    return '这个源已经换过了，请返回重新进入影音';
+  }
+  if (lower.contains('unsupported module')) {
+    final module = RegExp(r'unsupported module[:：]\s*([\w\-/.]*)', caseSensitive: false)
+        .firstMatch(text)
+        ?.group(1);
+    final name = (module ?? '').trim();
+    return name.isEmpty ? '服务端缺少这个源需要的运行环境' : '这个源依赖 $name，服务端没提供';
+  }
+  if (lower.contains('fetch failed') || lower.contains('socket hang up')) {
+    return '服务端连不上源站点（网络不通或被拦）';
+  }
+  if (lower.contains('empty play url')) {
+    return '这一集没有解析出播放地址，换一集或换源试试';
+  }
+  if (lower.contains('invalid access code')) {
+    return '服务端拒绝了这次请求（访问码不对或已失效）';
+  }
+  if (lower.contains('script does not export')) {
+    return '这个源缺少对应接口，服务端还没实现';
+  }
+  if (lower.contains('python')) {
+    return '这个源是 Python 脚本，服务端只支持 JavaScript';
+  }
+  if (lower.contains('timeout') || lower.contains('timed out')) {
+    return '源站点响应超时';
+  }
+  return text;
+}
+
 /// 站点常把图片写成 `//img.x.com/a.jpg`，不补协议 `Image.network` 会直接失败。
 String normalizeVodPic(String pic) {
   final value = pic.trim();

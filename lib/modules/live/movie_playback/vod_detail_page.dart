@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:pure_live/exports/exports.dart';
 import 'package:pure_live/modules/live/movie_playback/vod_play_launcher.dart';
+import 'package:pure_live/services/remote_config/remote_config.dart';
 import 'package:pure_live/services/vod/vod_sniffer.dart';
 
 /// 单个影视条目的详情与选集。
@@ -66,6 +69,12 @@ class _VodDetailPageState extends State<VodDetailPage> {
         _busy = false;
         _error = _messageOf(error);
       });
+      // 「这个源已经换过了」说明手上的条目是旧配置生成的（云端源列表被改过）。
+      // 顺手同步一次配置：用户返回重进就是新源，不用自己去清缓存。
+      if (error is VodEngineException &&
+          error.message.toLowerCase().contains('spider not found')) {
+        unawaited(RemoteConfigService.forceSync());
+      }
     }
   }
 
@@ -396,11 +405,13 @@ class _VodDetailPageState extends State<VodDetailPage> {
     );
   }
 
+  /// 错误文案：先翻成人话，翻不动的保留原文并带上步骤，方便反馈时定位。
   String _messageOf(Object error) {
     if (error is VodEngineException) {
-      final step = error.step.isEmpty ? '' : '（${error.step}）';
-      return '${error.message}$step';
+      final text = vodFriendlyMessage(error.message);
+      final step = text == error.message && error.step.isNotEmpty ? '（${error.step}）' : '';
+      return '$text$step';
     }
-    return error.toString();
+    return vodFriendlyMessage(error.toString());
   }
 }

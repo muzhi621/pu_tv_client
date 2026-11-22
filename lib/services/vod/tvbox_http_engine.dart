@@ -38,6 +38,7 @@ export 'vod_models.dart' show
     parseVodPageJson,
     stripVodHtml,
     vodAsInt,
+    vodFriendlyMessage,
     vodServerError,
     vodText;
 
@@ -260,6 +261,166 @@ class TvboxHttpEngine {
     }
     final text = await _decode(bytes, response.headers);
     return _Payload.parse(text, url: url, statusCode: status);
+  }
+
+  // ------------------------------------------------------------ 跳转端点
+
+  /// 选集地址是不是「跳转端点」。
+  ///
+  /// 网关型站点（自建爬虫网关，如 OmniBox / TVBox-Worker）不把真实流地址写进
+  /// 详情，而是给一个自家端点，服务端收到请求才去调爬虫的 `play()` 再 302 到
+  /// 真实地址。两种写法都要认：
+  ///
+  ///  * 独立路径：`/play?spider=…&id=…&code=…`
+  ///  * 挂在数据端点上：`/spider?code=…&spider=…&id=…&ac=play`
+  ///    （后者更常见 —— 复用已鉴权的数据路由，不必新开一条可能被文件路由
+  ///    或静态页抢占的路径）
+  ///
+  /// 判定必须严格 —— 真正的流地址（`xxx.m3u8` / `.mp4`）不能被误判，否则每一
+  /// 次播放都多一次网络往返。因此要求 `id` 必填，且带 `spider` 或 `code`
+  /// （网关的鉴权/定向标识）。
+  static bool looksLikePlayEndpoint(String url) {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null) return false;
+    if (!uri.isScheme('http') && !uri.isScheme('https')) return false;
+    if (uri.pathSegments.isEmpty) return false;
+    final query = uri.queryParameters;
+    if ((query['id'] ?? '').isEmpty) return false;
+    final last = uri.pathSegments.last.toLowerCase();
+    final isPlayPath = last == 'play';
+    final isPlayAction = (query['ac'] ?? '').toLowerCase() == 'play';
+    if (!isPlayPath && !isPlayAction) return false;
+    return query.containsKey('spider') || query.containsKey('code');
+  }
+
+  /// 把跳转端点解析成真实播放地址。
+  ///
+  /// 为什么不让播放器自己跟随 302：
+  ///
+  ///  * 302 带不出 header，也带不出服务端的失败原因。端点返回
+  ///    `{code:500,message:"这一集没有拿到播放地址"}` 时，播放器只会给一句
+  ///    「播放失败」，用户既不知道原因也不知道该换源还是等修复。
+  ///  * 端点自己也可能需要 header（`Accept` 之类）才回 JSON，播放器不会带。
+  ///
+  /// 成功返回最终地址（以及端点顺手给的 header）；拿不到就返回原地址，让播放
+  /// 器再试一次 —— 解析失败不该让原本能播的地址变成播不了。
+  Future<({String url, Map<String, String> header})> resolvePlayEndpoint(
+    TvboxSite site,
+    String endpoint,
+  ) async {
+    var current = endpoint;
+    // 302 链一般只有一跳；给到 4 跳足够，同时防环。
+    for (var hop = 0; hop < 4; hop++) {
+      Response<List<int>> response;
+      try {
+        response = await _dio.get<List<int>>(
+          current,
+          options: Options(
+            // 明确要 JSON：支持该协议的网关会直接回 {url, header}，
+            // 不支持的老版本仍然 302，下面按 Location 处理。
+            headers: {
+              'User-Agent': _userAgent,
+              'Accept': 'application/json, */*',
+              // 端点若直接代理媒体流，没有 Range 会把整个文件拉下来。
+              'Range': 'bytes=0-65535',
+            },
+            followRedirects: false,
+            validateStatus: (code) => code != null,
+            responseType: ResponseType.bytes,
+          ),
+        );
+      } on DioException catch (error) {
+        throw VodEngineException(
+          _networkMessage(error),
+          site: site.name,
+          step: 'play',
+          cause: error,
+        );
+      } catch (error) {
+        throw VodEngineException('网络错误', site: site.name, step: 'play', cause: error);
+      }
+
+      final status = response.statusCode ?? 0;
+      if (status >= 300 && status < 400) {
+        final location = (response.headers.value('location') ?? '').trim();
+        if (location.isEmpty) break;
+        // 相对跳转（`/live/x.m3u8`）要基于当前地址补全。
+        final next = Uri.parse(current).resolve(location).toString();
+        // 双跳只可能发生在「网关套网关」：下一跳还是端点才继续跟。直接返回
+        // Location 而不是自己再 GET 一次 —— 目标就是媒体本身，跟过去等于把
+        // 整段流缓冲进内存。
+        if (next != current && looksLikePlayEndpoint(next)) {
+          current = next;
+          continue;
+        }
+        return (url: next, header: const <String, String>{});
+      }
+
+      final bytes = Uint8List.fromList(response.data ?? const <int>[]);
+      // 端点只该回 JSON 或跳转。真的回了媒体（比如直接给了 m3u8 正文），
+      // 说明这个地址本身就是流，不要再往下解，交给播放器。
+      if (bytes.isEmpty || bytes.length > 64 * 1024) break;
+      final text = (await _decode(bytes, response.headers)).trim();
+      if (!text.startsWith('{')) {
+        if (status >= 400) {
+          throw VodEngineException(
+            vodFriendlyMessage('HTTP $status'),
+            site: site.name,
+            step: 'play',
+          );
+        }
+        break;
+      }
+
+      Map<String, dynamic>? json;
+      try {
+        final decoded = jsonDecode(text);
+        if (decoded is Map) {
+          json = decoded.map((key, value) => MapEntry(key.toString(), value));
+        }
+      } on FormatException {
+        // 不是合法 JSON，当作端点不支持该协议。
+      }
+      if (json == null) break;
+
+      final playUrl = vodText(json['url'] ?? json['playUrl'] ?? json['play_url']);
+      final message = vodText(json['message'] ?? json['msg'] ?? json['error']);
+      final code = vodAsInt(json['code']);
+      if (playUrl.isNotEmpty) {
+        return (url: playUrl, header: _plainHeader(json['header']));
+      }
+      if (message.isNotEmpty && (status >= 400 || (code != null && code >= 400))) {
+        throw VodEngineException(
+          vodFriendlyMessage(message),
+          site: site.name,
+          step: 'play',
+        );
+      }
+      break;
+    }
+    // 解析不出最终地址：原样返回当前位置，播放器仍有机会自己跟随跳转。
+    return (url: current, header: const <String, String>{});
+  }
+
+  /// 端点返回的 header 可能是 Map 也可能是 JSON 字符串，统一成 Map<String,String>。
+  Map<String, String> _plainHeader(Object? raw) {
+    Object? source = raw;
+    if (raw is String && raw.trim().startsWith('{')) {
+      try {
+        source = jsonDecode(raw);
+      } on FormatException {
+        source = null;
+      }
+    }
+    if (source is! Map) return const <String, String>{};
+    final out = <String, String>{};
+    source.forEach((key, value) {
+      final name = key.toString().trim();
+      final text = vodText(value);
+      if (name.isEmpty || text.isEmpty) return;
+      out[name] = text;
+    });
+    return out;
   }
 
   /// 网络层失败的人话。UI 只显示 `VodEngineException.message`，统一显示

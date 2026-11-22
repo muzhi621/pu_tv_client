@@ -647,11 +647,13 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
     );
   }
 
+  /// 错误文案：先翻成人话，翻不动的保留原文并带上步骤，方便反馈时定位。
   String _messageOf(Object error) {
     if (error is VodEngineException) {
-      final step = error.step.isEmpty ? '' : '（${error.step}）';
-      return '${error.message}$step';
+      final text = vodFriendlyMessage(error.message);
+      final step = text == error.message && error.step.isNotEmpty ? '（${error.step}）' : '';
+      return '$text$step';
     }
-    return error.toString();
+    return vodFriendlyMessage(error.toString());
   }
 }
