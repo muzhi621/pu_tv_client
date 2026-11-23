@@ -4,7 +4,7 @@ import 'package:pure_live/exports/common_export.dart';
 /// Which side panel is currently shown.
 ///
 /// Only one panel is visible at a time, matching the legacy live_play app.
-enum LivePlayPanel { danmakuSettings, playlist, shield }
+enum LivePlayPanel { danmakuSettings, playlist, shield, vodSites }
 
 class LivePlayState {
   const LivePlayState({

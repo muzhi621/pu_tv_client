@@ -1,7 +1,7 @@
 {
-  "version": "3.0.58",
-  "version_num": 130058,
-  "version_desc": "-服务端「http/https Agent 组件缺失」的英文报错翻成可操作提示，不再直接显示异常原文\n-覆盖网关 shim 参数写错（htto）导致的同类报错",
+  "version": "3.0.59",
+  "version_num": 130059,
+  "version_desc": "-播放失败页只保留「重试」，移除刷新房间与频道列表按钮，遥控器 OK 直接重试\n-TVBox 播放页 OK 呼出「切换站点」列表，选中后回影音页并预选该站点\n-失败态菜单键也可直接进入频道列表 / 切换站点",
   "prerelease": false,
   "android_abis": [
     "armeabi-v7a",

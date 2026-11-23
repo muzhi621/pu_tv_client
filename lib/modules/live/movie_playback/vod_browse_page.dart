@@ -23,6 +23,12 @@ import 'package:pure_live/services/vod/vod_jar_warmer.dart';
 class VodBrowsePage extends StatefulWidget {
   const VodBrowsePage({super.key});
 
+  /// 播放器「切换站点」选中的站点 id。
+  ///
+  /// 路由只带路径不带参数（AppRoutes 是静态常量），用一次性静态字段比给
+  /// GoRoute 加 extra 更轻：这里读后立即清空，返回首页不会误回到上次站点。
+  static String? pendingSiteId;
+
   @override
   State<VodBrowsePage> createState() => _VodBrowsePageState();
 }
@@ -63,7 +69,18 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
     _config = RemoteConfigService.vod;
     _engine = VodSiteEngine(config: _config);
     // 云端可以指定「默认站点」；没指定时仍是第一个站点（与升级前一致）。
-    _site = _config.preferredSite;
+    // 从播放器切站点进来时，用户选的那个站点优先于云端默认。
+    final pending = pendingSiteId;
+    pendingSiteId = null;
+    if (pending != null) {
+      for (final site in _config.sites) {
+        if (site.id == pending) {
+          _site = site;
+          break;
+        }
+      }
+    }
+    _site ??= _config.preferredSite;
     if (_site != null) {
       _loadHome();
     }

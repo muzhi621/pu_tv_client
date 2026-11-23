@@ -272,11 +272,20 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     // 控制条已经开着时再按一次就是收起；这跟遥控器上的「菜单」语义一致。
     // 点播没有频道列表，OK 也走控制条，所以这一支对点播同样成立。
     if (key == LogicalKeyboardKey.contextMenu) {
+      // 侧栏已经开着时菜单键就是收起（与再按一次 OK 控制条同一手感）。
+      if (state.showSidePanel) {
+        if (state.panel != null) controller.togglePanel(state.panel!);
+        return KeyEventResult.handled;
+      }
       // 失败/离线浮层会顶掉控制条（它是整屏的），此时按菜单键开控制条等于
-      // 按键石沉大海：改为直接开频道列表，与浮层上那颗「频道列表」按钮一致，
-      // 也是用户此刻唯一有用的去处。
+      // 按键石沉大海：直播开频道列表，点播开「切换站点」——这正是流挂了
+      // 之后用户唯一有用的去处。
       if (state.hasBlockingOverlay) {
-        if (!widget.args.vod) unawaited(_openChannelList(controller));
+        if (widget.args.vod) {
+          _openVodSites(controller);
+        } else {
+          unawaited(_openChannelList(controller));
+        }
         return KeyEventResult.handled;
       }
       if (state.showControls) {
@@ -345,7 +354,9 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     // 想看的是时间轴。这里优先做时间轴，菜单靠 OK / 上下来唤。
     if (widget.args.vod) {
       if (_isConfirm(key)) {
-        controller.showControls();
+        // 点播没有换台：OK 直接给「切换站点」列表，让用户从这个挂掉的源
+        // 换到另一个源；控制条仍由菜单键 / 上下键唤出。
+        _openVodSites(controller);
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.arrowLeft) {
@@ -364,10 +375,10 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     }
 
     // 直播纯画面态按 OK = 打开左侧频道列表（用户约定）。
-    // 点播没有换台概念，仍沿用「OK 唤出控制条」。
+    // 点播的 OK 在上面的 vod 分支已经打开站点列表，不会再走到这里。
     if (_isConfirm(key)) {
       if (widget.args.vod) {
-        controller.showControls();
+        _openVodSites(controller);
       } else {
         unawaited(_openChannelList(controller));
       }
@@ -473,6 +484,16 @@ class _PlayerKeyScopeState extends ConsumerState<PlayerKeyScope> {
     } else {
       ToastUtil.show(i18nOr('ui_no_switchable_channel', 'No channel available to switch to'));
     }
+  }
+
+  /// 点播的 OK / 菜单键 = 打开「切换站点」列表。
+  ///
+  /// 失败浮层是整屏的，控制条画不出来；先把浮层状态收掉再开侧栏，
+  /// 否则两层会抢焦点。侧栏里的站点来自云端配置，不需要额外拉取。
+  void _openVodSites(LivePlayController controller) {
+    if (!mounted) return;
+    controller.dismissOverlays();
+    controller.openPanel(LivePlayPanel.vodSites);
   }
 
   /// Queues a channel switch by [delta] (-1 previous, 1 next).

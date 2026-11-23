@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:pure_live/player/index.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:pure_live/exports/package_export.dart';
@@ -106,15 +104,6 @@ class _TvVideoSurfaceState extends ConsumerState<TvVideoSurface> {
   /// field without this check.
   LivePlayerFacade? get _playerManagerOrNull =>
       GlobalPlayerService.instance.initialized ? GlobalPlayerService.instance.livePlayer : null;
-
-  /// 失败页的「频道列表」入口：IPTV 的换台表要现从数据源补齐，
-  /// 不等它就直接开面板，会开出一张只有当前频道、切不动的列表。
-  Future<void> _openChannelListFromFailure() async {
-    final controller = ref.read(livePlayControllerProvider(widget.args).notifier);
-    await controller.ensureChannelList();
-    if (!mounted) return;
-    controller.openPanel(LivePlayPanel.playlist);
-  }
 
   @override
   void initState() {
@@ -285,9 +274,10 @@ class _TvVideoSurfaceState extends ConsumerState<TvVideoSurface> {
         Positioned.fill(
           child: PlaybackFailureOverlay(
             message: state.errorMessage ?? i18n('multiview_play_failed'),
+            hint: widget.args.vod
+                ? i18nOr('ui_failure_vod_hint', 'OK 重试 · 菜单键切换站点')
+                : i18nOr('ui_failure_iptv_hint', 'OK 重试 · ↑↓ 换台 · 菜单键频道列表'),
             onRetry: controller.retry,
-            onRefreshRoom: controller.refreshRoom,
-            onOpenChannelList: () => unawaited(_openChannelListFromFailure()),
           ),
         ),
       );
