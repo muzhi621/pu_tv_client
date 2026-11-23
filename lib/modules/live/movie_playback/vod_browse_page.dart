@@ -70,8 +70,8 @@ class _VodBrowsePageState extends State<VodBrowsePage> {
     _engine = VodSiteEngine(config: _config);
     // 云端可以指定「默认站点」；没指定时仍是第一个站点（与升级前一致）。
     // 从播放器切站点进来时，用户选的那个站点优先于云端默认。
-    final pending = pendingSiteId;
-    pendingSiteId = null;
+    final pending = VodBrowsePage.pendingSiteId;
+    VodBrowsePage.pendingSiteId = null;
     if (pending != null) {
       for (final site in _config.sites) {
         if (site.id == pending) {
