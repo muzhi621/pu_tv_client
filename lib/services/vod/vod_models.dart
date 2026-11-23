@@ -190,6 +190,15 @@ String vodFriendlyMessage(String raw) {
     final name = (module ?? '').trim();
     return name.isEmpty ? '服务端缺少这个源需要的运行环境' : '这个源依赖 $name，服务端没提供';
   }
+  // 脚本 `new http.Agent()` 而网关 shim 没给 Agent 时会抛这个。属于服务端
+  // 运行环境缺失，用户侧能做的只有换源或等修复 —— 别把英文异常直接怼到脸上。
+  if (lower.contains('agent is not a constructor')) {
+    final which = RegExp(r'(htto|https?)\s*agent', caseSensitive: false)
+        .firstMatch(text)
+        ?.group(1);
+    final name = (which ?? '').trim();
+    return name.isEmpty ? '这个源需要的网络组件服务端没提供，换个源或等修复' : '这个源依赖 $name 组件，服务端没提供';
+  }
   if (lower.contains('fetch failed') || lower.contains('socket hang up')) {
     return '服务端连不上源站点（网络不通或被拦）';
   }

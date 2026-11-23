@@ -54,4 +54,22 @@ void main() {
     expect(vodServerError(<String, dynamic>{'list': <dynamic>[]}), isNull);
     expect(vodServerError(<String, dynamic>{}), isNull);
   });
+
+  // 蜗牛4K 截图里的原文：网关 shim 的 http.Agent 缺失，脚本构造时抛错，
+  // 错误经「爬虫取数失败：源名: ...」透传。这条要翻成人话。
+  test('http/https Agent 构造失败翻成中文提示', () {
+    expect(
+      vodFriendlyMessage('爬虫取数失败：蜗牛4K: http Agent is not a constructor'),
+      '这个源依赖 http 组件，服务端没提供',
+    );
+    // 截图里源名后的字符被显示成 htto，也要认出来
+    expect(
+      vodFriendlyMessage('蜗牛4K: htto Agent is not a constructor; (category)'),
+      '这个源依赖 htto 组件，服务端没提供',
+    );
+    expect(
+      vodFriendlyMessage('https Agent is not a constructor'),
+      '这个源依赖 https 组件，服务端没提供',
+    );
+  });
 }
